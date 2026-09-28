@@ -40,7 +40,7 @@ private struct MatchListRow: View {
         let summary = TennisSummaryFormatter.matchSummary(match, tournaments: tournaments)
         VStack(alignment: .leading, spacing: 5) {
             Label(summary.headline, systemImage: group.symbol)
-                .font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
+                .font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
             Text(match.playerTeam + " vs " + match.opponentSummary.fallback("Opponent not recorded"))
                 .font(.headline)
             if !tournament.isBlank { Text(tournament).font(.subheadline.weight(.medium)) }

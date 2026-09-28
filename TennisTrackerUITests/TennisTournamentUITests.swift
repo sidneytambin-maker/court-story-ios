@@ -14,6 +14,7 @@ final class TennisTournamentUITests: XCTestCase {
         XCTAssertTrue(row.waitForExistence(timeout: 5))
         XCTAssertEqual(rows.count, 1)
         let rowIdentifier = row.identifier
+        assertOnlyStatusHeading(completed: true, in: app)
         XCTAssertEqual(row.label, "Meadow Cup")
         expectValue("Status: Completed", on: row)
         reveal(row, in: app).tap()
@@ -54,12 +55,14 @@ final class TennisTournamentUITests: XCTestCase {
         assertOutcome(summary)
         app.navigationBars.buttons.firstMatch.tap()
         XCTAssertEqual(rows.count, 1)
+        assertOnlyStatusHeading(completed: false, in: app)
         XCTAssertEqual(row.identifier, rowIdentifier)
         expectValue("Status: Entered", on: row)
         XCTAssertTrue(app.buttons["Mark Tournament Complete"].exists)
         XCTAssertFalse(app.buttons["Mark Tournament Entered"].exists)
         reveal(app.buttons["Mark Tournament Complete"], in: app).tap()
         expectValue("Status: Completed", on: row)
+        assertOnlyStatusHeading(completed: true, in: app)
         let reopen = reveal(app.buttons["Mark Tournament Entered"], in: app)
         assertOutcome(row)
         reveal(row, in: app)
@@ -69,6 +72,7 @@ final class TennisTournamentUITests: XCTestCase {
         add(screenshot)
         reveal(reopen, in: app).tap()
         expectValue("Status: Entered", on: row)
+        assertOnlyStatusHeading(completed: false, in: app)
         XCTAssertTrue(app.buttons["Mark Tournament Complete"].exists)
         XCTAssertFalse(app.buttons["Mark Tournament Entered"].exists)
         assertOutcome(row)
@@ -78,6 +82,15 @@ final class TennisTournamentUITests: XCTestCase {
         XCTAssertTrue(summary.waitForExistence(timeout: 5))
         expectValue("Status: Entered", on: summary)
         assertOutcome(summary)
+    }
+
+    private func assertOnlyStatusHeading(completed: Bool, in app: XCUIApplication) {
+        let visible = completed ? "Completed tournaments" : "Upcoming tournaments"
+        let absent = completed ? "Upcoming tournaments" : "Completed tournaments"
+        XCTAssertTrue(app.staticTexts[visible].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts[absent].exists)
+        XCTAssertFalse(app.staticTexts["No upcoming tournaments."].exists)
+        XCTAssertFalse(app.staticTexts["No completed tournaments."].exists)
     }
 
     private func assertOutcome(_ summary: XCUIElement) {

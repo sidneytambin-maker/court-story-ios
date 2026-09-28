@@ -8,6 +8,7 @@
 - Advanced metrics and an optional preview-before-sharing coach summary restricted to Power mode.
 - Separate tournament stage reached and optional finishing position 1st to 16th. Additional round-robin, group and placement play-off stages.
 - State-dependent tournament completion actions, spoken confirmation and matching visible status on iPhone and Watch.
+- Tournament lists hide empty status sections; match and tournament status text keeps strong contrast on the bright tennis background.
 - Tournament summaries count linked scheduled, in-progress and completed matches separately; results describe completed matches only.
 - Watch all-time match results use the full compact result history rather than the limited editable cache, preserving achievement rules and linked-practice deduplication.
 - Watch recent focus summaries retain all recorded sessions in the displayed 30-day window, including sessions whose actual start differs from their scheduled date.

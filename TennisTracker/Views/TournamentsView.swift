@@ -86,13 +86,15 @@ struct TournamentsView: View {
                     EmptyStateView(title: "No tournaments added yet", message: "Track an upcoming tournament, then link matches to it later.")
                 }
             } else {
-                TennisSection("Upcoming tournaments") {
-                    if upcoming.isEmpty { Text("No upcoming tournaments.") }
-                    else { ForEach(upcoming) { tournamentRow($0) } }
+                if !upcoming.isEmpty {
+                    TennisSection("Upcoming tournaments") {
+                        ForEach(upcoming) { tournamentRow($0) }
+                    }
                 }
-                TennisSection("Completed tournaments") {
-                    if completed.isEmpty { Text("No completed tournaments.") }
-                    else { ForEach(completed) { tournamentRow($0) } }
+                if !completed.isEmpty {
+                    TennisSection("Completed tournaments") {
+                        ForEach(completed) { tournamentRow($0) }
+                    }
                 }
             }
         }
@@ -107,10 +109,10 @@ struct TournamentsView: View {
                     Text(tournament.name.fallback("Unnamed tournament"))
                     Label(tournament.statusText, systemImage: tournament.statusSymbol)
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.primary)
                     Text(TennisSummaryFormatter.tournament(tournament, matches: store.linkedMatches(for: tournament), includeName: false))
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.primary)
                 }
             }
             .accessibilityLabel(tournament.name.fallback("Unnamed tournament"))
