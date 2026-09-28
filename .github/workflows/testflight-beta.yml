@@ -1,0 +1,145 @@
+name: TestFlight beta validation
+on:
+  workflow_dispatch:
+    inputs:
+      upload_to_testflight:
+        description: Sign and upload to Apple after all validation jobs pass
+        required: true
+        default: false
+        type: boolean
+  push:
+    branches: [codex/testflight-beta]
+permissions:
+  contents: read
+jobs:
+  iphone-tests:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install packaging test dependency
+        run: python3 -m pip install pymobiledevice3==11.3.1
+      - name: Packaging regression tests
+        run: python3 -m unittest discover -s Scripts -p 'test_*.py' -v
+      - run: xcodegen generate --spec project-tests.yml
+      - name: Native iPhone unit and accessibility tests
+        run: |
+          set -euo pipefail
+          ID=$(xcrun simctl list devices available --json | jq -r '[.devices | to_entries[] | select(.key | contains("iOS")) | .value[] | select(.isAvailable and (.name | startswith("iPhone")))][0].udid')
+          xcrun simctl bootstatus "$ID" -b
+          xcodebuild test -project TennisTrackeriOS.xcodeproj -scheme TennisTracker -destination "id=$ID" -parallel-testing-enabled NO -configuration Debug -resultBundlePath iPhoneBetaTests.xcresult CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+      - name: Export iPhone test summary and screenshots
+        if: always()
+        run: |
+          if [ -d iPhoneBetaTests.xcresult ]; then
+            mkdir -p iPhoneReview
+            xcrun xcresulttool get test-results summary --path iPhoneBetaTests.xcresult > iPhoneReview/summary.json
+            xcrun xcresulttool export attachments --path iPhoneBetaTests.xcresult --output-path iPhoneReview/screenshots
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: testflight-iphone-tests
+          path: |
+            iPhoneBetaTests.xcresult
+            iPhoneReview
+          retention-days: 7
+  watch-tests:
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - run: xcodegen generate --spec project-watch-tests.yml
+      - name: Native Watch accessibility tests
+        run: |
+          set -euo pipefail
+          ID=$(xcrun simctl list devices available --json | jq -r '[.devices | to_entries[] | select(.key | contains("watchOS")) | .value[] | select(.isAvailable and (.name | contains("Ultra")))][0].udid')
+          xcrun simctl bootstatus "$ID" -b
+          xcodebuild test -project TennisTrackeriOS.xcodeproj -scheme TennisTrackerWatchTests -destination "id=$ID" -parallel-testing-enabled NO -configuration Debug -resultBundlePath WatchBetaTests.xcresult CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+      - name: Export Watch test summary and screenshots
+        if: always()
+        run: |
+          if [ -d WatchBetaTests.xcresult ]; then
+            mkdir -p WatchReview
+            xcrun xcresulttool get test-results summary --path WatchBetaTests.xcresult > WatchReview/summary.json
+            xcrun xcresulttool export attachments --path WatchBetaTests.xcresult --output-path WatchReview/screenshots
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: testflight-watch-tests
+          path: |
+            WatchBetaTests.xcresult
+            WatchReview
+          retention-days: 7
+  release-privacy:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - run: xcodegen generate --spec project-testflight.yml
+      - name: Reject copied build configuration resources
+        run: python3 Scripts/verify_project_resources.py
+      - name: Archive all three permanent-identity components
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          xcodebuild archive -project TennisTrackeriOS.xcodeproj -scheme TennisTrackerTestFlight -destination 'generic/platform=iOS' -configuration Release -archivePath Beta.xcarchive CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+          python3 Scripts/verify_testflight_release.py --app Beta.xcarchive/Products/Applications/TennisTracker.app | tee evidence/release-privacy.json
+      - name: Build release simulator applications
+        run: xcodebuild build -project TennisTrackeriOS.xcodeproj -scheme TennisTrackerTestFlight -destination 'generic/platform=iOS Simulator' -configuration Release -derivedDataPath ReleaseSim CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+      - name: Verify two fresh iPhone and Watch containers
+        run: |
+          set -euo pipefail
+          python3 Scripts/check_fresh_release.py --platform iOS --app ReleaseSim/Build/Products/Release-iphonesimulator/TennisTracker.app | tee evidence/fresh-iphone.json
+          python3 Scripts/check_fresh_release.py --platform watchOS --app ReleaseSim/Build/Products/Release-watchsimulator/TennisTrackerWatchApp.app | tee evidence/fresh-watch.json
+      - name: Preserve archive file permissions
+        run: tar -czf testflight-unsigned-archive.tar.gz Beta.xcarchive
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: testflight-release-evidence
+          path: evidence
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        with:
+          name: testflight-unsigned-archive
+          path: testflight-unsigned-archive.tar.gz
+          retention-days: 7
+  upload:
+    if: github.event_name == 'workflow_dispatch' && inputs.upload_to_testflight && github.ref == 'refs/heads/codex/testflight-beta'
+    needs: [iphone-tests, watch-tests, release-privacy]
+    runs-on: macos-latest
+    timeout-minutes: 45
+    environment: testflight
+    concurrency:
+      group: tennis-testflight-upload
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - name: Build, sign, inspect and upload without publishing signing material
+        env:
+          TENNIS_DISTRIBUTION_P12: ${{ secrets.TENNIS_DISTRIBUTION_P12 }}
+          TENNIS_DISTRIBUTION_PASSWORD: ${{ secrets.TENNIS_DISTRIBUTION_PASSWORD }}
+          TENNIS_PHONE_PROFILE: ${{ secrets.TENNIS_PHONE_PROFILE }}
+          TENNIS_WATCH_PROFILE: ${{ secrets.TENNIS_WATCH_PROFILE }}
+          TENNIS_WIDGET_PROFILE: ${{ secrets.TENNIS_WIDGET_PROFILE }}
+          TENNIS_ASC_PRIVATE_KEY: ${{ secrets.TENNIS_ASC_PRIVATE_KEY }}
+          TENNIS_ASC_KEY_ID: ${{ secrets.TENNIS_ASC_KEY_ID }}
+          TENNIS_ASC_ISSUER_ID: ${{ secrets.TENNIS_ASC_ISSUER_ID }}
+          TENNIS_DIAGNOSTIC_RECIPIENT: ${{ secrets.TENNIS_DIAGNOSTIC_RECIPIENT }}
+        run: python3 Scripts/upload_testflight.py
+      - name: Preserve encrypted failure diagnostics only
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: encrypted-signing-diagnostic
+          path: ${{ runner.temp }}/tennis-private-diagnostics/*.cms
+          retention-days: 1

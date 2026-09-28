@@ -1,0 +1,48 @@
+name: Native app icon validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/polish-health]
+    paths:
+      - .github/workflows/app-icon-validation.yml
+      - TennisTracker/Assets.xcassets/**
+      - TennisTrackerWatchApp/Assets.xcassets/**
+
+jobs:
+  icons:
+    runs-on: macos-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and inspect the platform icon catalogues
+        shell: bash
+        run: |
+          set -euo pipefail
+          for platform in iphoneos watchos; do
+            if [ "$platform" = iphoneos ]; then
+              target=TennisTracker
+              device=iphone
+              minimum=17.0
+            else
+              target=TennisTrackerWatchApp
+              device=watch
+              minimum=10.0
+            fi
+            output="IconDiagnostics/$platform"
+            mkdir -p "$output"
+            xcrun actool "$target/Assets.xcassets" --compile "$output" \
+              --output-format human-readable-text --notices --warnings \
+              --output-partial-info-plist "$output/icon-info.plist" --app-icon AppIcon \
+              --compress-pngs --standalone-icon-behavior all --platform "$platform" \
+              --target-device "$device" --minimum-deployment-target "$minimum"
+            xcrun assetutil --info "$output/Assets.car" > "$output/catalogue.json"
+            plutil -convert json -o "$output/icon-info.json" "$output/icon-info.plist"
+            cat "$output/icon-info.json"
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tennis-tracker-native-icon-catalogues
+          path: IconDiagnostics
+          retention-days: 7

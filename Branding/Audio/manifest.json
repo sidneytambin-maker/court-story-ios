@@ -1,0 +1,77 @@
+{
+  "license": "CC0-1.0",
+  "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+  "verified_on": "2026-09-10",
+  "sounds": [
+    {
+      "id": "bounce",
+      "title": "Tennis bounce",
+      "filename": "tennis-bounce.wav",
+      "seconds": 0.28,
+      "sha256": "828d8d1a9660ccdb6398ab8bc204cddbc6de982a399ec045fdace0a9280ea551",
+      "original": "tennis-bounces-original.wav",
+      "source_sha256": "bfde3eecc528d0773e2ca6b171aa234e7c64104c05eb783126e46a7c376f32e0",
+      "author": "Joseph SARDIN",
+      "source_page": "https://lasonotheque.org/balle-de-tennis-rebonds-s0584.html",
+      "download_url": "https://lasonotheque.org/UPLOAD/bwf-fr/0584.wav",
+      "start_seconds": 0.045,
+      "edits": "One excerpt, mono PCM conversion, reduced peak and edge fades. No repeated, pitch-shifted or reused bounce variants."
+    },
+    {
+      "id": "racketStrike",
+      "title": "Racket strike",
+      "filename": "tennis-racket-strike.wav",
+      "seconds": 0.36,
+      "sha256": "d2d1fa767b36a715104bb2f9670d7eea0b462d189fbf910d753c6e5fe5a1c76d",
+      "original": "racket-strike-original.mp3",
+      "source_sha256": "d191b611e27905a8ed4dc80a6170422ae1535f8bacf8ca008b0608e1abe82076",
+      "author": "jacklilley",
+      "source_page": "https://freesound.org/people/jacklilley/sounds/338122/",
+      "download_url": "https://cdn.freesound.org/previews/338/338122_2527347-hq.mp3",
+      "start_seconds": 4.015,
+      "edits": "One excerpt, mono PCM conversion, reduced peak and edge fades. No repeated, pitch-shifted or reused bounce variants."
+    },
+    {
+      "id": "racketSwing",
+      "title": "Racket swoosh",
+      "filename": "tennis-racket-swoosh.wav",
+      "seconds": 0.55,
+      "sha256": "3305d6dae76608760062554434f6ce75e0bd08283b39418f8df4e23b42cb7146",
+      "original": "racket-swing-original.mp3",
+      "source_sha256": "bbef3e2c392a13f00066bffd2580762499d53d02d312f8be3a0a9a19ce388697",
+      "author": "MIKEJONESBONES",
+      "source_page": "https://freesound.org/people/MIKEJONESBONES/sounds/511825/",
+      "download_url": "https://cdn.freesound.org/previews/511/511825_2686281-hq.mp3",
+      "start_seconds": 19.78,
+      "edits": "One excerpt, mono PCM conversion, reduced peak and edge fades. No repeated, pitch-shifted or reused bounce variants."
+    },
+    {
+      "id": "ballCan",
+      "title": "New ball can",
+      "filename": "tennis-ball-can.wav",
+      "seconds": 0.72,
+      "sha256": "9b3fb012ad4be8970c0ce5ce1f6cc5d162d96cd39e25ef1af983ce74167bb398",
+      "original": "ball-can-original.mp3",
+      "source_sha256": "94af7bc96e6e265322f60ec0fe1964722279a9efa5b1aef680c83511104a8c6a",
+      "author": "tomschuetz",
+      "source_page": "https://freesound.org/people/tomschuetz/sounds/649763/",
+      "download_url": "https://cdn.freesound.org/previews/649/649763_5828489-hq.mp3",
+      "start_seconds": 0,
+      "edits": "One excerpt, mono PCM conversion, reduced peak and edge fades. No repeated, pitch-shifted or reused bounce variants."
+    },
+    {
+      "id": "applause",
+      "title": "Court applause",
+      "filename": "tennis-applause.wav",
+      "seconds": 1.2,
+      "sha256": "f80a868c6502d83776dded6c4dbcb58e342b36192252bfb52725741ac23d5fc8",
+      "original": "tennis-applause-original.mp3",
+      "source_sha256": "9e0c9dce0da9d616eb109a1048d4e93f71628fe021bc6d950b941e805e865b85",
+      "author": "muse88",
+      "source_page": "https://freesound.org/people/muse88/sounds/490341/",
+      "download_url": "https://cdn.freesound.org/previews/490/490341_371140-hq.mp3",
+      "start_seconds": 21.55,
+      "edits": "One excerpt, mono PCM conversion, reduced peak and edge fades. No repeated, pitch-shifted or reused bounce variants."
+    }
+  ]
+}

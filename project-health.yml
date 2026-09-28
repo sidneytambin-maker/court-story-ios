@@ -1,0 +1,26 @@
+include:
+  - project.yml
+targets:
+  TennisTracker:
+    info:
+      properties:
+        CFBundleVersion: "22"
+    settings:
+      base:
+        CURRENT_PROJECT_VERSION: "22"
+  TennisTrackerWatchApp:
+    info:
+      properties:
+        CFBundleVersion: "22"
+        TennisHealthEnabled: true
+        NSHealthShareUsageDescription: Court Story reads workout duration, heart rate, active energy, steps and distance to summarise your tennis training when you allow it.
+        NSHealthUpdateUsageDescription: Court Story saves tennis training workouts to Apple Health when you allow it.
+        WKBackgroundModes:
+          - workout-processing
+    settings:
+      base:
+        CURRENT_PROJECT_VERSION: "22"
+    entitlements:
+      path: TennisTrackerWatchApp/Health.entitlements
+      properties:
+        com.apple.developer.healthkit: true

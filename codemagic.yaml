@@ -1,0 +1,37 @@
+workflows:
+  ios-free-proof-of-concept:
+    name: iOS free proof of concept
+    max_build_duration: 30
+    instance_type: mac_mini_m2
+    environment:
+      xcode: latest
+      vars:
+        XCODE_PROJECT: TennisTrackeriOS.xcodeproj
+        XCODE_SCHEME: TennisTracker
+    scripts:
+      - name: Install XcodeGen
+        script: |
+          brew install xcodegen
+      - name: Generate Xcode project
+        script: |
+          xcodegen generate --spec project-tests.yml
+      - name: Run accessibility-focused unit tests
+        script: |
+          xcodebuild test \
+            -project "$XCODE_PROJECT" \
+            -scheme "$XCODE_SCHEME" \
+            -sdk iphonesimulator \
+            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
+      - name: Build unsigned device IPA for Windows signing
+        script: |
+          xcodegen generate --spec project.yml
+          chmod +x Scripts/build_unsigned_ipa.sh
+          Scripts/build_unsigned_ipa.sh
+    artifacts:
+      - artifacts/*.ipa
+      - artifacts/*.zip
+      - artifacts/build-summary.txt

@@ -1,0 +1,60 @@
+name: TestFlight signing recovery
+on:
+  push:
+    branches: [codex/testflight-beta]
+    paths: [.github/workflows/testflight-signing-recovery.yml]
+  workflow_dispatch:
+    inputs:
+      validated_run:
+        description: Full beta validation run with all three native gates passed
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+jobs:
+  verify-identical-product:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/codex/testflight-beta'
+    runs-on: macos-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify all native gates passed for identical app and build inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VALIDATED_RUN: ${{ inputs.validated_run }}
+        run: python3 Scripts/verify_testflight_recovery.py --validated-run "$VALIDATED_RUN"
+      - name: Verify signing and recovery regression tests
+        run: python3 -m unittest discover -s Scripts -p 'test_testflight_*.py' -v
+  upload:
+    needs: verify-identical-product
+    runs-on: macos-latest
+    timeout-minutes: 45
+    environment: testflight
+    concurrency:
+      group: tennis-testflight-upload
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - name: Build, sign, inspect and upload the validated product
+        env:
+          TENNIS_DISTRIBUTION_P12: ${{ secrets.TENNIS_DISTRIBUTION_P12 }}
+          TENNIS_DISTRIBUTION_PASSWORD: ${{ secrets.TENNIS_DISTRIBUTION_PASSWORD }}
+          TENNIS_PHONE_PROFILE: ${{ secrets.TENNIS_PHONE_PROFILE }}
+          TENNIS_WATCH_PROFILE: ${{ secrets.TENNIS_WATCH_PROFILE }}
+          TENNIS_WIDGET_PROFILE: ${{ secrets.TENNIS_WIDGET_PROFILE }}
+          TENNIS_ASC_PRIVATE_KEY: ${{ secrets.TENNIS_ASC_PRIVATE_KEY }}
+          TENNIS_ASC_KEY_ID: ${{ secrets.TENNIS_ASC_KEY_ID }}
+          TENNIS_ASC_ISSUER_ID: ${{ secrets.TENNIS_ASC_ISSUER_ID }}
+          TENNIS_DIAGNOSTIC_RECIPIENT: ${{ secrets.TENNIS_DIAGNOSTIC_RECIPIENT }}
+        run: python3 Scripts/upload_testflight.py
+      - name: Preserve encrypted failure diagnostics only
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: encrypted-signing-diagnostic
+          path: ${{ runner.temp }}/tennis-private-diagnostics/*.cms
+          retention-days: 1

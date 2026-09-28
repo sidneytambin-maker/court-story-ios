@@ -1,0 +1,24 @@
+include:
+  - project-health.yml
+targets:
+  TennisTrackerWatchUITests:
+    type: bundle.ui-testing
+    platform: watchOS
+    sources:
+      - TennisTrackerWatchUITests
+    dependencies:
+      - target: TennisTrackerWatchApp
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.inclusophy.tennistracker.dev.watchuitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: TennisTrackerWatchApp
+schemes:
+  TennisTrackerWatchTests:
+    build:
+      targets:
+        TennisTrackerWatchApp: all
+        TennisTrackerWatchUITests: [test]
+    test:
+      targets:
+        - TennisTrackerWatchUITests

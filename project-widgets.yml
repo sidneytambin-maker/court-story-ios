@@ -1,0 +1,68 @@
+include:
+  - project-health.yml
+settings:
+  base:
+    # Compile-only placeholder. Signing must use an independently authorized App Group.
+    TENNIS_APP_GROUP: group.com.inclusophy.tennistracker.preview
+targets:
+  TennisTracker:
+    info:
+      properties:
+        CFBundleVersion: "29"
+    settings:
+      base:
+        CURRENT_PROJECT_VERSION: "29"
+  TennisTrackerWatchApp:
+    dependencies:
+      - target: TennisTrackerWatchWidgets
+        embed: true
+    info:
+      properties:
+        CFBundleVersion: "29"
+        TennisSharedAppGroup: $(TENNIS_APP_GROUP)
+        CFBundleURLTypes:
+          - CFBundleURLName: TennisTrackerWatch
+            CFBundleURLSchemes:
+              - tennistracker
+    settings:
+      base:
+        CURRENT_PROJECT_VERSION: "29"
+    entitlements:
+      path: TennisTrackerWatchApp/HealthAndWidgets.entitlements
+      properties:
+        com.apple.developer.healthkit: true
+        com.apple.security.application-groups:
+          - $(TENNIS_APP_GROUP)
+  TennisTrackerWatchWidgets:
+    type: app-extension
+    platform: watchOS
+    sources:
+      - path: TennisTrackerWatchWidgets
+        excludes: [Info.plist, '*.entitlements']
+      - TennisTrackerShared
+      - TennisTracker/Models/TennisModels.swift
+      - TennisTracker/Scoring/TennisScoring.swift
+    info:
+      path: TennisTrackerWatchWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: Court Story
+        CFBundleName: Court Story
+        CFBundleShortVersionString: "0.9.0"
+        CFBundleVersion: "29"
+        TennisSharedAppGroup: $(TENNIS_APP_GROUP)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: TennisTrackerWatchWidgets/Widgets.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - $(TENNIS_APP_GROUP)
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.inclusophy.tennistracker.dev.watchkitapp.widgets
+        PRODUCT_NAME: TennisTrackerWatchWidgets
+        CURRENT_PROJECT_VERSION: "29"
+        MARKETING_VERSION: "0.9.0"
+        SKIP_INSTALL: "YES"
+        CODE_SIGNING_ALLOWED: "NO"
+        CODE_SIGNING_REQUIRED: "NO"

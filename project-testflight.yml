@@ -1,0 +1,74 @@
+include:
+  - project-widgets.yml
+settings:
+  base:
+    DEVELOPMENT_TEAM: HT5X86Q4DD
+    TENNIS_APP_GROUP: group.com.inclusophy.tennistracker
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_USER_SCRIPT_SANDBOXING: "YES"
+targets:
+  TennisTracker:
+    dependencies:
+      - target: TennisTrackerWatchApp
+        embed: true
+        link: false
+        copy:
+          destination: productsDirectory
+          subpath: $(CONTENTS_FOLDER_PATH)/Watch
+    info:
+      path: Distribution/Generated/iPhone-Info.plist
+      properties:
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "33"
+        TennisDistribution: TestFlight
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
+        ITSAppUsesNonExemptEncryption: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.inclusophy.tennistracker
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "33"
+        CODE_SIGNING_ALLOWED: "YES"
+        CODE_SIGNING_REQUIRED: "YES"
+        SKIP_INSTALL: "NO"
+  TennisTrackerWatchApp:
+    info:
+      path: Distribution/Generated/Watch-Info.plist
+      properties:
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "33"
+        WKCompanionAppBundleIdentifier: com.inclusophy.tennistracker
+        ITSAppUsesNonExemptEncryption: false
+    entitlements:
+      path: Distribution/Generated/Watch.entitlements
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.inclusophy.tennistracker.watchkitapp
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "33"
+        CODE_SIGNING_ALLOWED: "YES"
+        CODE_SIGNING_REQUIRED: "YES"
+  TennisTrackerWatchWidgets:
+    info:
+      path: Distribution/Generated/Widgets-Info.plist
+      properties:
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "33"
+        ITSAppUsesNonExemptEncryption: false
+    entitlements:
+      path: Distribution/Generated/Widgets.entitlements
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.inclusophy.tennistracker.watchkitapp.widgets
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "33"
+        CODE_SIGNING_ALLOWED: "YES"
+        CODE_SIGNING_REQUIRED: "YES"
+schemes:
+  TennisTrackerTestFlight:
+    build:
+      targets:
+        TennisTracker: all
+    archive:
+      config: Release

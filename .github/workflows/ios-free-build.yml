@@ -1,0 +1,267 @@
+name: iOS free development build
+
+on:
+  workflow_dispatch:
+    inputs:
+      verified_test_run:
+        description: Optional completed native test run; accepted only for unchanged app and test sources
+        type: string
+        default: ""
+      stage:
+        description: Capability stage to compile; never installs a physical device
+        required: true
+        default: core
+        type: choice
+        options:
+          - core
+          - health
+          - widgets
+  push:
+    branches:
+      - codex/ios-poc
+      - codex/product-integration
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build:
+    name: Build unsigned iOS IPA
+    runs-on: macos-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate reusable native test evidence
+        id: test_evidence
+        if: inputs.verified_test_run != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TEST_RUN: ${{ inputs.verified_test_run }}
+          BUILD_STAGE: ${{ inputs.stage || 'core' }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          python3 Scripts/verify_native_test_evidence.py --run "$TEST_RUN" --repo "$GITHUB_REPOSITORY" --stage "$BUILD_STAGE" | tee artifacts/native-test-evidence.json
+          echo 'reuse=true' >> "$GITHUB_OUTPUT"
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Validate iPhone and Watch app icon artwork
+        run: python3 -m unittest discover -s Scripts -p test_app_icons.py -v
+
+      - name: Validate native test evidence guard
+        run: python3 -m unittest discover -s Scripts -p test_native_test_evidence.py -v
+
+      - name: Validate five independent tennis sound resources
+        run: python3 -m unittest discover -s Scripts -p test_tennis_sounds.py -v
+
+      - name: Compile Watch complication
+        if: inputs.stage == 'widgets' && steps.test_evidence.outputs.reuse != 'true'
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          xcodegen generate --spec project-widgets.yml
+          xcodebuild build \
+            -project TennisTrackeriOS.xcodeproj \
+            -target TennisTrackerWatchWidgets \
+            -sdk watchsimulator \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+
+      - name: Prepare Watch simulator
+        if: steps.test_evidence.outputs.reuse != 'true'
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          xcodegen generate --spec project-watch-tests.yml
+          xcrun simctl shutdown all
+          WATCH_ID="$(xcrun simctl list devices available --json | jq -r '[.devices | to_entries[] | select(.key | contains("watchOS")) | .value[] | select(.isAvailable)] | (map(select(.name | contains("Ultra"))) + .) | .[0].udid // empty')"
+          test -n "$WATCH_ID"
+          xcrun simctl bootstatus "$WATCH_ID" -b
+          printf 'WATCH_ID=%s\n' "$WATCH_ID" >> "$GITHUB_ENV"
+
+      - name: Run native Watch accessibility UI tests
+        if: steps.test_evidence.outputs.reuse != 'true'
+        timeout-minutes: 25
+        run: |
+          set -euo pipefail
+          mkdir -p WatchDiagnostics
+          (
+            for attempt in $(seq 1 420); do
+              if grep -q 'App event loop idle notification not received' WatchDiagnostics/test.log 2>/dev/null; then
+                xcrun simctl io "$WATCH_ID" screenshot WatchDiagnostics/watch-timeout.png || true
+                ps -axo pid,comm | awk '$2 ~ /TennisTrackerWatchApp$/ { print $1 }' | while read -r pid; do
+                  sample "$pid" 5 -file "WatchDiagnostics/watch-hang-$pid.txt" || true
+                done
+                break
+              fi
+              sleep 2
+            done
+          ) &
+          WATCH_DIAGNOSTIC_PID=$!
+          trap 'kill "$WATCH_DIAGNOSTIC_PID" 2>/dev/null || true' EXIT
+          xcodebuild test \
+            -project TennisTrackeriOS.xcodeproj \
+            -scheme TennisTrackerWatchTests \
+            -sdk watchsimulator \
+            -destination "id=$WATCH_ID" \
+            -parallel-testing-enabled NO \
+            -resultBundlePath WatchTests.xcresult \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" 2>&1 | tee WatchDiagnostics/test.log
+
+      - name: Export Watch interaction diagnostics
+        if: always()
+        run: |
+          if [ -d WatchTests.xcresult ]; then
+            xcrun xcresulttool export attachments --path WatchTests.xcresult --output-path WatchDiagnostics/VisualReview || true
+          fi
+
+      - name: Preserve Watch test log before iPhone tests
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tennis-tracker-watch-test-log
+          path: WatchDiagnostics
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Generate iOS test project
+        id: iphone_project
+        if: ${{ !cancelled() && steps.test_evidence.outputs.reuse != 'true' && steps.test_evidence.outcome != 'failure' }}
+        run: xcodegen generate --spec project-tests.yml
+
+      - name: Prepare iPhone simulator
+        id: iphone_simulator
+        if: ${{ !cancelled() && steps.iphone_project.outcome == 'success' }}
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          xcrun simctl shutdown all
+          SIMULATOR_ID="$(xcrun simctl list devices available --json | jq -r '[.devices | to_entries[] | select(.key | contains("iOS")) | .value[] | select(.isAvailable and (.name | startswith("iPhone")))][0].udid // empty')"
+          if [ -z "$SIMULATOR_ID" ]; then
+            echo "No available iPhone simulator was found on the hosted macOS runner." >&2
+            exit 1
+          fi
+          xcrun simctl bootstatus "$SIMULATOR_ID" -b
+          printf 'SIMULATOR_ID=%s\n' "$SIMULATOR_ID" >> "$GITHUB_ENV"
+
+      - name: Run unit tests
+        if: ${{ !cancelled() && steps.iphone_simulator.outcome == 'success' }}
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          mkdir -p UnitDiagnostics
+          xcodebuild test \
+            -project "TennisTrackeriOS.xcodeproj" \
+            -scheme "TennisTracker" \
+            -sdk iphonesimulator \
+            -destination "id=$SIMULATOR_ID" \
+            -only-testing:TennisTrackerTests \
+            -parallel-testing-enabled NO \
+            -resultBundlePath UnitTests.xcresult \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" 2>&1 | tee UnitDiagnostics/test.log
+
+      - name: Preserve unit test log before iPhone UI tests
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tennis-tracker-unit-test-log
+          path: UnitDiagnostics
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Run iPhone accessibility UI tests
+        if: ${{ !cancelled() && steps.iphone_simulator.outcome == 'success' }}
+        timeout-minutes: 25
+        run: |
+          set -euo pipefail
+          xcodebuild test \
+            -project "TennisTrackeriOS.xcodeproj" \
+            -scheme "TennisTracker" \
+            -sdk iphonesimulator \
+            -destination "id=$SIMULATOR_ID" \
+            -only-testing:TennisTrackerUITests \
+            -parallel-testing-enabled NO \
+            -resultBundlePath iPhoneTests.xcresult \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
+
+      - name: Build unsigned device IPA
+        env:
+          BUILD_STAGE: ${{ inputs.stage || 'core' }}
+        run: |
+          set -euo pipefail
+          case "$BUILD_STAGE" in
+            core) SPEC=project.yml ;;
+            health) SPEC=project-health.yml ;;
+            widgets) SPEC=project-widgets.yml ;;
+            *) echo "Unsupported capability stage" >&2; exit 1 ;;
+          esac
+          xcodegen generate --spec "$SPEC"
+          chmod +x Scripts/build_unsigned_ipa.sh
+          Scripts/build_unsigned_ipa.sh
+          python3 Scripts/verify_app_icons.py --ipa artifacts/TennisTracker-unsigned.ipa --native | tee artifacts/app-icon-verification.json
+          python3 Scripts/verify_tennis_sounds.py --ipa artifacts/TennisTracker-unsigned.ipa | tee artifacts/tennis-sound-verification.json
+          printf '\nCapability stage: %s\nPhysical acceptance: not tested by this workflow\n' "$BUILD_STAGE" >> artifacts/build-summary.txt
+
+      - name: Report iPhone and Watch signing status
+        shell: pwsh
+        run: |
+          ./Scripts/inspect_ipa_signing.ps1 `
+            -IpaPath "artifacts/TennisTracker-unsigned.ipa" `
+            -ExpectedIphoneBundleId "com.inclusophy.tennistracker.dev" `
+            -ExpectedWatchBundleId "com.inclusophy.tennistracker.dev.watchkitapp" `
+            -ExpectedWatchCompanionBundleId "com.inclusophy.tennistracker.dev" `
+            -ReportOnly
+          Write-Host "Watch bundle compiled - physical signing not yet verified."
+
+      - name: Upload unsigned IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tennis-tracker-ios-development-unsigned
+          path: |
+            artifacts/TennisTracker-unsigned.ipa
+            artifacts/build-summary.txt
+            artifacts/app-icon-verification.json
+            artifacts/tennis-sound-verification.json
+            artifacts/native-test-evidence.json
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Export visual review screenshots
+        if: always()
+        run: |
+          mkdir -p VisualReview
+          for suite in WatchTests UnitTests iPhoneTests; do
+            if [ -d "$suite.xcresult" ]; then
+              xcrun xcresulttool export attachments --path "$suite.xcresult" --output-path "VisualReview/$suite" || true
+            fi
+          done
+
+      - name: Preserve simulator test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tennis-tracker-simulator-test-results
+          path: |
+            WatchTests.xcresult
+            UnitTests.xcresult
+            iPhoneTests.xcresult
+            WatchDiagnostics
+            UnitDiagnostics
+            VisualReview
+          if-no-files-found: warn
+          retention-days: 7
