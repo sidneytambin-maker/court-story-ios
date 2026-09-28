@@ -118,11 +118,17 @@ final class TennisTrackerWatchUITests: XCTestCase {
         reveal(app.buttons["Edit Training and Focus"], in: app)
         app.buttons["Edit Training and Focus"].tap()
         let hours = app.buttons["durationHours"]
-        reveal(hours, in: app); hours.tap()
+        reveal(hours, in: app)
+        XCTAssertEqual(hours.label, "Duration hours")
+        XCTAssertEqual(hours.value as? String, "0 hours")
+        hours.tap()
         let twoHours = app.buttons["2 hours"]
         reveal(twoHours, in: app); twoHours.tap()
         let minutes = app.buttons["durationMinutes"]
-        reveal(minutes, in: app); minutes.tap()
+        reveal(minutes, in: app)
+        XCTAssertEqual(minutes.label, "Duration minutes")
+        XCTAssertEqual(minutes.value as? String, "3 minutes")
+        minutes.tap()
         let zeroMinutes = app.buttons["0 minutes"]
         reveal(zeroMinutes, in: app); zeroMinutes.tap()
         app.buttons["Save"].tap()
@@ -133,6 +139,16 @@ final class TennisTrackerWatchUITests: XCTestCase {
         XCTAssertTrue(summary.label.contains("72 beats per minute"))
         XCTAssertTrue(summary.label.contains("201 steps"))
         capture(app, name: "Watch edited duration with original Health measurements")
+        reveal(app.buttons["Edit Training and Focus"], in: app)
+        app.buttons["Edit Training and Focus"].tap()
+        reveal(hours, in: app)
+        XCTAssertEqual(hours.label, "Duration hours")
+        XCTAssertEqual(hours.value as? String, "2 hours")
+        reveal(minutes, in: app)
+        XCTAssertEqual(minutes.label, "Duration minutes")
+        XCTAssertEqual(minutes.value as? String, "0 minutes")
+        app.buttons["Cancel"].tap()
+        XCTAssertTrue(summary.waitForExistence(timeout: 5))
     }
 
     func testActiveWatchEditorDoesNotOfferDurationOverride() {
@@ -143,6 +159,7 @@ final class TennisTrackerWatchUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Active training summary"].waitForExistence(timeout: 10))
         reveal(app.buttons["Edit Training and Focus"], in: app)
         app.buttons["Edit Training and Focus"].tap()
+        XCTAssertTrue(app.navigationBars["Edit Training"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["Save"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["durationHours"].exists)
         XCTAssertFalse(app.buttons["durationMinutes"].exists)

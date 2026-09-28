@@ -3,6 +3,8 @@ import Foundation
 enum TennisSummaryStyle { case short, long, accessibility, detailed }
 
 struct TennisMatchSummary: Equatable {
+    var headline: String
+    var scheduleText: String
     var shortText: String
     var longText: String
     var accessibilityText: String
@@ -14,13 +16,20 @@ enum TennisSummaryFormatter {
         let summary = matchSummary(match, tournaments: tournaments)
         switch style {
         case .short: return summary.shortText
-        case .long, .accessibility: return summary.longText
+        case .long: return summary.longText
+        case .accessibility: return summary.accessibilityText
         case .detailed:
-            return "\(summary.longText) \(match.matchType.rawValue). \(match.matchFormat.label), \(match.suddenDeathDeuce ? "sudden-death deuce" : "advantage deuce"). Player classification: \(match.sightLevel.label). \(match.allowedBounces) bounces allowed." + (match.conditionsSummary.isBlank ? "" : " " + match.conditionsSummary)
+            return "\(summary.longText) \(match.matchFormat.label), \(match.suddenDeathDeuce ? "sudden-death deuce" : "advantage deuce"). Player classification: \(match.sightLevel.label). \(match.allowedBounces) bounces allowed." + (match.conditionsSummary.isBlank ? "" : " " + match.conditionsSummary)
         }
     }
 
     static func matchSummary(_ match: MatchRecord, tournaments: [TournamentRecord] = []) -> TennisMatchSummary {
+        let round = match.matchPosition == .notSpecified ? "match" : match.matchPosition.label.lowercased()
+        let headline = "\(match.status.rawValue) \(match.matchType.rawValue.lowercased()) \(round)"
+        var schedule = match.date.tennisSummaryDate
+        if match.hasStartTime { schedule += " at \(match.date.shortTennisTime)" }
+        let place = unique([match.venue, match.location]).joined(separator: ", ")
+        if !place.isBlank { schedule += " at \(place)" }
         let team = match.playerTeam
         let opponents = match.opponentSummary.fallback("opponent not recorded")
         let score = scoreText(for: match)
@@ -37,14 +46,11 @@ enum TennisSummaryFormatter {
             case .retired: verb = "retired against"
             }
         }
-        var standard = "\(team) \(verb) \(opponents)"
+        var standard = "\(headline). \(team) \(verb) \(opponents)"
         if !score.isBlank { standard += ", \(score)" }
         else if match.status == .completed { standard += ". Score not recorded" }
         if !tournament.isBlank { standard += ", \(tournament)" }
-        standard += ", \(match.date.tennisSummaryDate)"
-        if match.hasStartTime { standard += " at \(match.date.shortTennisTime)" }
-        let place = unique([match.venue, match.location]).joined(separator: ", ")
-        if !place.isBlank { standard += " at \(place)" }
+        standard += ", \(schedule)"
         let duration = match.actualStart.flatMap { start in match.actualFinish.map { TennisDurationFormatter.text(seconds: $0.timeIntervalSince(start)) } }
         if let duration { standard += ", duration \(duration)" }
         standard += "."
@@ -55,7 +61,8 @@ enum TennisSummaryFormatter {
         else if match.status == .completed { compact += ". Score not recorded" }
         if !tournament.isBlank { compact += ", \(tournament)" }
         if let duration { compact += ", \(duration)" }
-        return TennisMatchSummary(shortText: compact + ".", longText: standard, accessibilityText: standard, scoreText: score.fallback("Score not recorded"))
+        return TennisMatchSummary(headline: headline, scheduleText: schedule, shortText: headline + ". " + compact + ".",
+            longText: standard, accessibilityText: standard, scoreText: score.fallback("Score not recorded"))
     }
 
     static func training(_ session: TrainingSession, style: TennisSummaryStyle = .long, now: Date = Date(), coaches: [TennisCoach] = [], players: [PlayerProfile] = []) -> String {
@@ -96,7 +103,7 @@ enum TennisSummaryFormatter {
         return parts.joined(separator: ", ") + "."
     }
 
-    static func tournament(_ tournament: TournamentRecord, linkedMatchCount: Int = 0, style: TennisSummaryStyle = .long, matches: [MatchRecord] = [], includeName: Bool = true) -> String {
+    static func tournament(_ tournament: TournamentRecord, linkedMatchCount: Int = 0, style: TennisSummaryStyle = .long, matches: [MatchRecord]? = nil, includeName: Bool = true) -> String {
         var parts = includeName ? [tournament.name.fallback("Tournament")] : []
         parts.append(dateRange(from: tournament.date, through: tournament.endDate))
         parts += unique([tournament.venue, tournament.location])
@@ -111,17 +118,27 @@ enum TennisSummaryFormatter {
         if let start = tournament.actualStart, let finish = tournament.actualFinish {
             parts.append("Tracked duration " + TennisDurationFormatter.text(seconds: finish.timeIntervalSince(start)))
         }
-        if style != .short {
-            let linked = matches.filter { $0.tournamentID == tournament.id && $0.status == .completed }
+        if style != .short || matches != nil || linkedMatchCount > 0 {
+            let linked = (matches ?? []).filter { $0.tournamentID == tournament.id && $0.playerID == tournament.playerID }
             if !linked.isEmpty {
-                let wins = linked.filter { $0.result == .win }.count
-                let losses = linked.filter { $0.result == .loss }.count
-                let draws = linked.filter { $0.result == .draw }.count
-                var results = ["\(wins) \(wins == 1 ? "win" : "wins")", "\(losses) \(losses == 1 ? "loss" : "losses")"]
-                if draws > 0 { results.append("\(draws) \(draws == 1 ? "draw" : "draws")") }
-                parts.append("\(linked.count) \(linked.count == 1 ? "match" : "matches"): " + results.joined(separator: " and "))
+                let scheduled = linked.filter { $0.status == .scheduled }.count
+                let inProgress = linked.filter { $0.status == .inProgress }.count
+                let completed = linked.filter { $0.status == .completed }
+                if scheduled > 0 { parts.append("\(scheduled) scheduled \(scheduled == 1 ? "match" : "matches")") }
+                if inProgress > 0 { parts.append("\(inProgress) \(inProgress == 1 ? "match" : "matches") in progress") }
+                if !completed.isEmpty {
+                    let outcomes: [(MatchResult, String, String)] = [(.win, "win", "wins"), (.loss, "loss", "losses"),
+                        (.draw, "draw", "draws"), (.retired, "retirement", "retirements")]
+                    let results = outcomes.compactMap { outcome, singular, plural -> String? in
+                        let count = completed.filter { $0.result == outcome }.count
+                        return count > 0 ? "\(count) \(count == 1 ? singular : plural)" : nil
+                    }
+                    parts.append("\(completed.count) completed \(completed.count == 1 ? "match" : "matches"): " + results.joined(separator: " and "))
+                }
             } else {
-                parts.append(linkedMatchCount == 0 ? "No matches recorded yet" : "\(linkedMatchCount) matches recorded")
+                // An explicit record list is authoritative; a count alone cannot imply played matches.
+                let count = matches == nil ? max(0, linkedMatchCount) : 0
+                parts.append(count == 0 ? "No matches linked yet" : "\(count) linked \(count == 1 ? "match" : "matches")")
             }
         }
         return parts.joined(separator: ", ") + "."

@@ -234,7 +234,7 @@ final class TennisTrackerAccessibilityUITests: XCTestCase {
         }
         openDestination("Training")
         app.buttons["addTrainingButton"].tap()
-        tapPossiblyScrolledButton("trainingEntryDetails")
+        expandPhoneSection("trainingEntryDetails", in: app)
         tapPossiblyScrolledButton("Coaches")
         XCTAssertFalse(app.textFields["New coach name"].exists)
         XCTAssertFalse(app.textFields["otherCoachName"].exists)
@@ -263,7 +263,7 @@ final class TennisTrackerAccessibilityUITests: XCTestCase {
         XCTAssertTrue(app.buttons["saveTrainingButton"].exists)
         app.buttons["Cancel"].tap()
         app.buttons["addTrainingButton"].tap()
-        tapPossiblyScrolledButton("trainingEntryDetails")
+        expandPhoneSection("trainingEntryDetails", in: app)
         tapPossiblyScrolledButton("Coaches")
         XCTAssertTrue(app.buttons["Chris"].exists)
         XCTAssertTrue(app.buttons["Sarah"].exists)
@@ -279,7 +279,7 @@ final class TennisTrackerAccessibilityUITests: XCTestCase {
         launchRegressionData()
         openDestination("Matches")
         app.buttons["addMatchButton"].tap()
-        tapPossiblyScrolledButton("matchEntryDetails")
+        expandPhoneSection("matchEntryDetails", in: app)
         tapPossiblyScrolledButton("activityVenuePicker")
         XCTAssertTrue(app.buttons["Training Court, Town"].exists)
         XCTAssertTrue(app.buttons["History Court, City"].exists)
@@ -310,7 +310,7 @@ final class TennisTrackerAccessibilityUITests: XCTestCase {
         XCTAssertTrue((doubles.value as? String)?.contains("Includes 3 matches played during training") == true)
         XCTAssertFalse(app.staticTexts["Current activity"].exists)
         XCTAssertFalse(app.staticTexts["Training practice results, all time"].exists)
-        tapPossiblyScrolledButton("dashboardInsights")
+        expandPhoneSection("dashboardInsights", in: app)
         let coaching = app.descendants(matching: .any)
             .matching(NSPredicate(format: "label == %@ AND value != nil", "One-to-one coaching, coaches: Chris")).firstMatch
         for _ in 0..<6 {
@@ -349,7 +349,7 @@ final class TennisTrackerAccessibilityUITests: XCTestCase {
         launchRegressionData()
         for (tab, add) in [("Training", "addTrainingButton"), ("Tournaments", "addTournamentButton")] {
             openDestination(tab); app.buttons[add].tap()
-            if tab == "Training" { tapPossiblyScrolledButton("trainingEntryDetails") }
+            if tab == "Training" { expandPhoneSection("trainingEntryDetails", in: app) }
             tapPossiblyScrolledButton("activityVenuePicker")
             app.buttons["Training Court, Town"].tap()
             XCTAssertEqual(app.buttons["activityVenuePicker"].value as? String, "Training Court, Town")
@@ -363,7 +363,7 @@ final class TennisTrackerAccessibilityUITests: XCTestCase {
     func testWeatherKeepsMultipleSelectedConditions() {
         launchRegressionData(); openDestination("Matches")
         app.buttons["addMatchButton"].tap()
-        tapPossiblyScrolledButton("matchEntryDetails")
+        expandPhoneSection("matchEntryDetails", in: app)
         tapPossiblyScrolledButton("matchCourtSetting"); app.buttons["Outdoors"].tap()
         tapPossiblyScrolledButton("matchWeather")
         for condition in ["Sunny", "Light showers", "Windy"] {
@@ -404,7 +404,7 @@ final class TennisTrackerAccessibilityUITests: XCTestCase {
         app.buttons["activityPersonPicker.Opponent name"].tap()
         app.buttons["Sam"].tap()
         tapPossiblyScrolledButton("matchFormatPicker"); app.buttons["One set"].tap()
-        tapPossiblyScrolledButton("matchEntryDetails")
+        expandPhoneSection("matchEntryDetails", in: app)
         tapPossiblyScrolledButton("matchTrainingPicker")
         let session = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Coaches: Chris")).firstMatch
         XCTAssertTrue(session.waitForExistence(timeout: 5)); session.tap()
@@ -421,7 +421,7 @@ final class TennisTrackerAccessibilityUITests: XCTestCase {
 
     func testDashboardFocusRepairOpensChoicesAndGoalsCanBeSaved() {
         launchMatchUpdateData()
-        tapPossiblyScrolledButton("dashboardInsights")
+        expandPhoneSection("dashboardInsights", in: app)
         tapPossiblyScrolledButton("dashboardChooseFocus")
         XCTAssertTrue(app.buttons["trainingFocusOption.Serves"].waitForExistence(timeout: 5))
         app.buttons["trainingFocusOption.Serves"].tap()
@@ -497,10 +497,7 @@ final class TennisTrackerAccessibilityUITests: XCTestCase {
 
     private func revealButton(_ identifier: String) -> XCUIElement {
         let button = app.buttons[identifier]
-        for _ in 0..<8 { if button.isHittable { break }; app.swipeUp() }
-        if !button.isHittable {
-            for _ in 0..<16 { if button.isHittable { break }; app.swipeDown() }
-        }
+        revealPhoneElement(button, in: app)
         XCTAssertTrue(button.waitForExistence(timeout: 5), "Missing button \(identifier)")
         XCTAssertTrue(button.isHittable, "Button \(identifier) is not available for interaction")
         return button

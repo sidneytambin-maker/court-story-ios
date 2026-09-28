@@ -17,7 +17,6 @@ struct OrderedChoicePicker<Value: Hashable>: View {
         Picker(title, selection: $selection) {
             ForEach(values, id: \.self) { value in Text(label(value)).tag(value) }
         }
-        .accessibilityLabel(title)
         .accessibilityValue(label(selection))
         .accessibilityAdjustableAction { direction in
             switch direction {

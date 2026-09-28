@@ -143,7 +143,7 @@ struct DashboardView: View {
 
                 if store.data.settings.showRecentActivity && store.selectedMatches.contains(where: { $0.status == .completed }) {
                     TennisSection("Recent matches") {
-                        ForEach(store.selectedMatches.filter { $0.status == .completed }.sorted { $0.date > $1.date }.prefix(3)) { match in
+                        ForEach(store.selectedMatches.filter { $0.status == .completed }.suffix(3)) { match in
                             NavigationLink(TennisSummaryFormatter.match(match, tournaments: store.selectedTournaments, style: .short)) {
                                 MatchDetailView(match: match)
                             }
@@ -237,7 +237,7 @@ struct DashboardView: View {
     }
 
     private var nextMatch: MatchRecord? {
-        store.selectedMatches.filter { $0.status == .scheduled && $0.date >= Date() }.min { $0.date < $1.date }
+        TennisMatchListGroups(matches: store.selectedMatches).nextUpcomingMatch()
     }
 
     private func addMatchToCalendar(_ match: MatchRecord) {

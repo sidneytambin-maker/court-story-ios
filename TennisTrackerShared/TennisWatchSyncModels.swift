@@ -34,13 +34,13 @@ struct TennisWatchSnapshot: Codable, Equatable {
         let recentLimit = Calendar.current.date(byAdding: .day, value: -60, to: now) ?? now
         let weekStart = TennisReportingWeek.interval(containing: now).start
         matches = data.matches
-            .filter { $0.status == .inProgress || $0.needsDetails || $0.date >= recentLimit || $0.date >= now }
+            .filter { $0.status != .completed || $0.needsDetails || $0.date >= recentLimit || $0.date >= now }
             .sorted { $0.date > $1.date }
             .prefix(30)
             .map { $0 }
-        // History limits must never drop an active record or an offline edit awaiting details.
+        // History limits must never drop a scheduled/active match or an offline edit awaiting details.
         matches += data.matches.filter { record in
-            (record.status == .inProgress || record.needsDetails || (record.date >= weekStart && record.date <= now)) && !matches.contains { $0.id == record.id }
+            (record.status != .completed || record.needsDetails || (record.date >= weekStart && record.date <= now)) && !matches.contains { $0.id == record.id }
         }
         trainingSessions = data.trainingSessions
             .filter { $0.isActive || $0.needsDetails || $0.date >= recentLimit || $0.expectedEndDate >= now }
@@ -66,6 +66,13 @@ struct TennisWatchSnapshot: Codable, Equatable {
             trainingSessions += data.trainingSessions.filter { $0.id == recordID && !trainingSessions.contains { $0.id == recordID } }
             tournaments += data.tournaments.filter { $0.id == recordID && !tournaments.contains { $0.id == recordID } }
         }
+        // Retained and explicitly requested tournaments need their full linked results for honest summaries.
+        let retainedTournamentIDs = Set(tournaments.map(\.id))
+        let retainedMatchIDs = Set(matches.map(\.id))
+        matches += data.matches.filter { record in
+            guard let tournamentID = record.tournamentID else { return false }
+            return retainedTournamentIDs.contains(tournamentID) && !retainedMatchIDs.contains(record.id)
+        }
     }
 
     init(from decoder: Decoder) throws {
@@ -88,10 +95,21 @@ struct TennisWatchSnapshot: Codable, Equatable {
 
     mutating func retainOpenActivities(_ ids: Set<UUID>, from local: Self) {
         guard libraryID == local.libraryID else { return }
-        let retained = ids.subtracting(deletedRecordIDs).subtracting(local.deletedRecordIDs)
+        let deleted = deletedRecordIDs.union(local.deletedRecordIDs)
+        let retained = ids.subtracting(deleted)
         matches += local.matches.filter { record in retained.contains(record.id) && !matches.contains { $0.id == record.id } }
         trainingSessions += local.trainingSessions.filter { record in retained.contains(record.id) && !trainingSessions.contains { $0.id == record.id } }
-        tournaments += local.tournaments.filter { record in retained.contains(record.id) && !tournaments.contains { $0.id == record.id } }
+        let playerIDs = Set(players.map(\.id)).subtracting(deleted)
+        let retainedTournaments = local.tournaments.filter { record in
+            retained.contains(record.id) && playerIDs.contains(record.playerID) && !tournaments.contains { $0.id == record.id }
+        }
+        tournaments += retainedTournaments
+        // Only a locally retained tournament needs cached links; a current incoming tournament is authoritative.
+        let incomingMatchIDs = Set(matches.map(\.id))
+        matches += local.matches.filter { record in
+            !deleted.contains(record.id) && playerIDs.contains(record.playerID) && !incomingMatchIDs.contains(record.id)
+                && retainedTournaments.contains { $0.id == record.tournamentID && $0.playerID == record.playerID }
+        }
     }
 }
 

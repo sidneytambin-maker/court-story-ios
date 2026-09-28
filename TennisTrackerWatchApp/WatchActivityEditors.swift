@@ -68,13 +68,18 @@ struct WatchMatchEditor: View {
     @EnvironmentObject private var store: WatchTennisStore
     @Environment(\.dismiss) private var dismiss
     @State var draft: MatchRecord
+    @State private var original: MatchRecord?
     @State private var validationMessage = ""
 
     var body: some View {
         Form {
             if !validationMessage.isBlank { Text(validationMessage) }
             TennisMatchPeopleFields(players: store.snapshot.players, match: $draft, showsKind: draft.status == .completed)
-            if draft.status == .completed { WatchDateField(title: "Match date", date: $draft.date) }
+            if draft.status != .inProgress, store.snapshot.matches.first(where: { $0.id == draft.id })?.status != .inProgress {
+                WatchMatchScheduleFields(match: $draft)
+            }
+            OrderedChoicePicker(title: "Match round", selection: $draft.matchPosition, values: MatchPosition.allCases) { $0.label }
+                .accessibilityIdentifier("matchRoundPicker")
             WatchVenueFields(venueID: $draft.venueID, venue: $draft.venue, location: $draft.location)
             TennisTournamentPicker(tournaments: store.snapshot.tournaments, tournamentID: $draft.tournamentID, customName: $draft.customTournamentName)
             TennisTrainingSessionPicker(sessions: store.snapshot.trainingSessions.filter { $0.playerID == draft.playerID }, coaches: store.snapshot.setup.coaches, selection: $draft.trainingSessionID)
@@ -90,13 +95,14 @@ struct WatchMatchEditor: View {
         }
         .navigationTitle("Edit Match")
         .pickerStyle(.navigationLink)
+        .onAppear { if original == nil { original = draft } }
         .toolbar {
             ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
             ToolbarItem(placement: .confirmationAction) {
                 Button("Save") {
                     if draft.status == .completed, let error = TennisManualMatchEntry.validationMessage(for: draft) {
                         validationMessage = error; store.announce(error)
-                    } else { store.updateMatchDetails(draft); dismiss() }
+                    } else { store.updateMatchDetails(draft, original: original); dismiss() }
                 }
             }
         }
@@ -120,6 +126,7 @@ struct WatchTournamentEditor: View {
             Picker("Stage reached", selection: $draft.stageReached) {
                 ForEach(TournamentStage.allCases) { Text($0.rawValue).tag($0) }
             }
+            .accessibilityValue(draft.stageReached.rawValue)
             .accessibilityIdentifier("watchTournamentStagePicker")
             Picker("Finishing position", selection: $draft.finishingPosition) {
                 Text("Not recorded").tag(Optional<Int>.none)
@@ -127,6 +134,7 @@ struct WatchTournamentEditor: View {
                     Text(TournamentFinishingPosition.label(position)).tag(Optional(position))
                 }
             }
+            .accessibilityValue(TournamentFinishingPosition.label(draft.finishingPosition))
             .accessibilityHint("Optional final finishing position, independent of stage reached.")
             .accessibilityIdentifier("watchTournamentFinishingPositionPicker")
             TextField("Notes", text: $draft.notes)

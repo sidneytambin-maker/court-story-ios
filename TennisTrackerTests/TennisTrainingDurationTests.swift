@@ -165,21 +165,25 @@ final class TennisTrainingDurationTests: XCTestCase {
     func testPhoneSaveReloadBackupAndWatchSnapshotKeepCorrection() throws {
         let url = temporaryURL()
         defer { try? FileManager.default.removeItem(at: url) }
-        let player = PlayerProfile()
+        var player = PlayerProfile(); player.name = "Example player"
         let store = TennisStore(storeURL: url)
-        store.completeOnboarding(player: player, settings: AppSettings())
+        XCTAssertTrue(store.completeOnboarding(player: player, settings: AppSettings()))
         let original = recordedSession(playerID: player.id)
         store.applyWatchCommand(.upsertTraining(original))
         var edited = try XCTUnwrap(store.data.trainingSessions.first)
         edited.setManualDuration(minutes: 120, at: now)
         store.upsertTraining(edited)
         let reloaded = TennisStore(storeURL: url)
+        XCTAssertEqual(reloaded.data.players, [player])
+        XCTAssertEqual(reloaded.data.selectedPlayerID, player.id)
+        XCTAssertTrue(reloaded.data.onboardingCompleted)
         let saved = try XCTUnwrap(reloaded.data.trainingSessions.first)
         XCTAssertEqual(saved.effectiveDurationSeconds, 7200)
         XCTAssertEqual(saved.durationSource, .manual)
         XCTAssertGreaterThan(saved.revision, original.revision)
         assertOriginalRecording(saved, equals: original)
-        let restoredBackup = try TennisBackup.decode(JSONEncoder.tennisTracker.encode(reloaded.data))
+        let restoredBackup = try TennisBackup.decode(reloaded.backupData())
+        XCTAssertEqual(restoredBackup, reloaded.data)
         XCTAssertEqual(restoredBackup.libraryID, reloaded.data.libraryID)
         XCTAssertEqual(restoredBackup.trainingSessions, [saved])
         let snapshot = TennisWatchSnapshot(data: restoredBackup, now: now)
@@ -277,9 +281,28 @@ final class TennisTrainingDurationTests: XCTestCase {
         let incoming = try roundTrip(TennisWatchSnapshot(data: store.data, now: now))
         let reconciled = TennisWatchReconciliation.reconcile(incoming: incoming, pending: [.upsertTraining(original)])
         XCTAssertTrue(reconciled.pending.isEmpty)
-        XCTAssertEqual(reconciled.snapshot.trainingSessions, [saved])
+        // Compare complete records at the same wire precision; the in-memory modifiedAt has fractions.
+        XCTAssertEqual(reconciled.snapshot.trainingSessions, [try roundTrip(saved)])
         store.applyWatchCommand(.upsertTraining(original))
         XCTAssertEqual(store.data.trainingSessions, [saved])
+    }
+
+    func testFractionalModifiedTimeAcknowledgesAtWirePrecisionWithoutLosingState() throws {
+        let original = recordedSession()
+        var corrected = original
+        corrected.setManualDuration(minutes: 120, at: now)
+        corrected = TennisRecordConflictResolver.prepareLocalTraining(corrected, now: now.addingTimeInterval(0.875))
+        let wireRecord = try roundTrip(corrected)
+        XCTAssertNotEqual(wireRecord.modifiedAt, corrected.modifiedAt)
+        XCTAssertEqual(corrected.modifiedAt.timeIntervalSince(wireRecord.modifiedAt), 0.875, accuracy: 0.000001)
+        var snapshot = TennisWatchSnapshot(); snapshot.trainingSessions = [corrected]
+        let reconciled = TennisWatchReconciliation.reconcile(incoming: try roundTrip(snapshot), pending: [.upsertTraining(corrected)])
+        XCTAssertTrue(reconciled.pending.isEmpty)
+        XCTAssertEqual(reconciled.snapshot.trainingSessions, [wireRecord])
+        let acknowledged = try XCTUnwrap(reconciled.snapshot.trainingSessions.first)
+        XCTAssertEqual(acknowledged.durationEditedAt, corrected.durationEditedAt)
+        XCTAssertEqual(acknowledged.effectiveDurationSeconds, 7200)
+        assertOriginalRecording(acknowledged, equals: original)
     }
 
     func testNewerWatchMetadataCannotRevertManualDuration() {

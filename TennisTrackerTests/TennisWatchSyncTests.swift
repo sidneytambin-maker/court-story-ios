@@ -119,11 +119,11 @@ final class TennisWatchSyncTests: XCTestCase {
 
         XCTAssertEqual(
             TennisSummaryFormatter.match(match, tournaments: [tournament], style: .long),
-            "Example Player beat Fictional Opponent, 6-4, Fictional Test Open, 21 August 2026."
+            "Completed singles match. Example Player beat Fictional Opponent, 6-4, Fictional Test Open, 21 August 2026."
         )
         XCTAssertEqual(
             TennisSummaryFormatter.match(match, tournaments: [tournament], style: .short),
-            "Win against Fictional Opponent, 6-4, Fictional Test Open."
+            "Completed singles match. Win against Fictional Opponent, 6-4, Fictional Test Open."
         )
     }
 

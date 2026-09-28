@@ -8,6 +8,8 @@
 - Advanced metrics and an optional preview-before-sharing coach summary restricted to Power mode.
 - Separate tournament stage reached and optional finishing position 1st to 16th. Additional round-robin, group and placement play-off stages.
 - State-dependent tournament completion actions, spoken confirmation and matching visible status on iPhone and Watch.
+- Tournament summaries count linked scheduled, in-progress and completed matches separately; results describe completed matches only.
+- Status-based match lists with no empty headings, chronological date/time ordering independent of entry order, accessible match-round choices in every mode, and date/time/place in match summaries.
 
 ## Acceptance
 

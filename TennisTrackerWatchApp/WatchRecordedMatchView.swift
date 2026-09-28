@@ -11,7 +11,9 @@ struct WatchRecordedMatchView: View {
         Form {
             if !validationMessage.isBlank { Text(validationMessage).accessibilityIdentifier("recordMatchValidation") }
             TennisMatchPeopleFields(players: store.snapshot.players, match: $match)
-            WatchDateField(title: "Match date", date: $match.date)
+            WatchMatchScheduleFields(match: $match)
+            OrderedChoicePicker(title: "Match round", selection: $match.matchPosition, values: MatchPosition.allCases) { $0.label }
+                .accessibilityIdentifier("matchRoundPicker")
             WatchVenueFields(venueID: $match.venueID, venue: $match.venue, location: $match.location)
             TennisTournamentPicker(tournaments: store.snapshot.tournaments, tournamentID: $match.tournamentID, customName: $match.customTournamentName)
             TennisTrainingSessionPicker(sessions: store.snapshot.trainingSessions.filter { $0.playerID == match.playerID }, coaches: store.snapshot.setup.coaches, selection: $match.trainingSessionID)

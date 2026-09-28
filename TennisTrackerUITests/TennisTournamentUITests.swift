@@ -9,7 +9,10 @@ final class TennisTournamentUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.tabBars.buttons["Tournaments"].waitForExistence(timeout: 8))
         app.tabBars.buttons["Tournaments"].tap()
-        let row = app.buttons.matching(NSPredicate(format: "label == %@ AND value CONTAINS %@", "Meadow Cup", "Status:")).firstMatch
+        let row = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "tournamentList.")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        XCTAssertEqual(row.label, "Meadow Cup")
+        expectValue("Status: Completed", on: row)
         reveal(row, in: app).tap()
         let summary = app.descendants(matching: .any).matching(identifier: "tournamentDetailsSummary")
             .matching(NSPredicate(format: "value != nil")).firstMatch
@@ -77,6 +80,7 @@ final class TennisTournamentUITests: XCTestCase {
         picker.tap()
         reveal(app.buttons[value], in: app).tap()
         expectValue(value, on: picker)
+        XCTAssertEqual(picker.value as? String, value)
     }
 
     private func expectValue(_ value: String, on element: XCUIElement) {
@@ -91,15 +95,6 @@ final class TennisTournamentUITests: XCTestCase {
 
     @discardableResult
     private func reveal(_ element: XCUIElement, in app: XCUIApplication) -> XCUIElement {
-        for _ in 0..<8 {
-            if element.exists && element.isHittable { return element }
-            app.swipeUp()
-        }
-        for _ in 0..<8 {
-            if element.exists && element.isHittable { return element }
-            app.swipeDown()
-        }
-        XCTFail("Could not reach tournament control \(element)")
-        return element
+        revealPhoneElement(element, in: app)
     }
 }

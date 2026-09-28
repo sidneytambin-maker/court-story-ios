@@ -161,6 +161,26 @@ final class TennisTournamentOutcomeTests: XCTestCase {
         XCTAssertTrue(result.pending.isEmpty)
     }
 
+    func testSnapshotUsesWholeSecondModifiedAtWithoutChangingTournamentFields() throws {
+        var original = fixture()
+        original.stageReached = .seventhEighthPlayOff
+        original.finishingPosition = 8
+        let fractionalDate = original.modifiedAt.addingTimeInterval(0.375)
+        let saved = TennisRecordConflictResolver.prepareLocalTournament(original, now: fractionalDate)
+        var snapshot = TennisWatchSnapshot()
+        snapshot.generatedAt = original.date
+        snapshot.tournaments = [saved]
+
+        let restored: TennisWatchSnapshot = try roundTrip(snapshot)
+        var expected = original
+        expected.revision += 1
+        XCTAssertEqual(saved.modifiedAt, fractionalDate)
+        XCTAssertNotEqual(saved.modifiedAt, expected.modifiedAt)
+        XCTAssertEqual(restored.tournaments, [expected])
+        XCTAssertEqual(try XCTUnwrap(restored.tournaments.first).modifiedAt, original.modifiedAt)
+        XCTAssertEqual(snapshot.tournaments, [saved])
+    }
+
     @MainActor func testStoreWatchSyncAndReloadPreserveBothMetricsAndLinkedData() throws {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathExtension("json")
         defer { try? FileManager.default.removeItem(at: url) }
@@ -187,7 +207,14 @@ final class TennisTournamentOutcomeTests: XCTestCase {
         phone.upsertTournament(edited)
         let phoneSaved = try XCTUnwrap(phone.data.tournaments.first)
         let snapshot: TennisWatchSnapshot = try roundTrip(TennisWatchSnapshot(data: phone.data, now: original.date))
-        XCTAssertEqual(snapshot.tournaments, [phoneSaved])
+        var expectedSnapshotTournament = edited
+        expectedSnapshotTournament.revision += 1
+        // The store keeps subsecond Date() values; the existing ISO-8601 wire format carries whole seconds.
+        expectedSnapshotTournament.modifiedAt = Date(timeIntervalSince1970: phoneSaved.modifiedAt.timeIntervalSince1970.rounded(.down))
+        XCTAssertNil(phone.storageError)
+        XCTAssertEqual(snapshot.tournaments, [expectedSnapshotTournament])
+        XCTAssertEqual(snapshot.tournaments.first?.stageReached, .seventhEighthPlayOff)
+        XCTAssertEqual(snapshot.tournaments.first?.finishingPosition, 8)
 
         var watchDraft = phoneSaved
         watchDraft.finishingPosition = 7

@@ -18,10 +18,23 @@ struct TennisOptionalSection<Content: View>: View {
 
     var body: some View {
         Section {
-            DisclosureGroup(isExpanded: $expanded) { content } label: {
-                Text(title).font(.body.weight(.medium))
+            Button { expanded.toggle() } label: {
+                HStack {
+                    Text(title).font(.body.weight(.medium))
+                    Spacer()
+                    Image(systemName: expanded ? "chevron.down" : "chevron.right")
+                        .font(.footnote.weight(.semibold))
+                        .accessibilityHidden(true)
+                }
+                .contentShape(Rectangle())
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(title)
+            .accessibilityValue(expanded ? "Expanded" : "Collapsed")
+            .accessibilityHint(expanded ? "Hides optional details without clearing them." : "Shows optional details.")
             .accessibilityIdentifier(identifier)
+            // Keep the header identifier off the container so children retain their own identities.
+            if expanded { content }
         }
         .onChange(of: mode) { _, value in expanded = value != .basic }
     }

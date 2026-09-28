@@ -103,6 +103,12 @@ final class WatchTennisStore: NSObject, ObservableObject, WCSessionDelegate {
             if ProcessInfo.processInfo.arguments.contains("-ui-testing-tournament-outcome") {
                 data = TennisTournamentUITestFixture.make()
             }
+            if ProcessInfo.processInfo.arguments.contains("-ui-testing-tournament-summary") {
+                data = TennisTournamentSummaryUITestFixture.make()
+            }
+            if ProcessInfo.processInfo.arguments.contains("-ui-testing-match-list") {
+                data = TennisMatchListUITestFixture.make()
+            }
             if let argument = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-watch-mode=") }),
                let mode = TrackingMode(rawValue: String(argument.dropFirst("-watch-mode=".count))) {
                 data.settings.trackingMode = mode
@@ -534,9 +540,9 @@ final class WatchTennisStore: NSObject, ObservableObject, WCSessionDelegate {
             settings: snapshot.settings.sounds, otherwise: .save))
     }
 
-    func updateMatchDetails(_ draft: MatchRecord) {
+    func updateMatchDetails(_ draft: MatchRecord, original: MatchRecord? = nil) {
         guard let current = snapshot.matches.first(where: { $0.id == draft.id }) else { return }
-        let updated = TennisWatchRecordEdits.match(draft, current: current)
+        let updated = TennisWatchRecordEdits.match(draft, current: current, original: original)
         if activeMatch?.id == updated.id { activeMatch = updated }
         mergeMatch(updated); send(.upsertMatch(updated))
         announce("Match details saved on Watch.")
@@ -881,8 +887,11 @@ final class WatchTennisStore: NSObject, ObservableObject, WCSessionDelegate {
 
     private func mergeTournament(_ tournament: TournamentRecord) {
         guard !snapshot.deletedRecordIDs.contains(tournament.id) else { return }
-        snapshot.tournaments.removeAll { $0.id == tournament.id }
-        snapshot.tournaments.insert(tournament, at: 0)
+        var updated = snapshot
+        updated.tournaments.removeAll { $0.id == tournament.id }
+        updated.tournaments.insert(tournament, at: 0)
+        // Notification destinations must never observe the record temporarily missing.
+        snapshot = updated
         persistSnapshot()
     }
 

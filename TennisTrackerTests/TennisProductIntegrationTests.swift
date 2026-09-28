@@ -19,7 +19,7 @@ final class TennisProductIntegrationTests: XCTestCase {
         for (result, verb) in [(MatchResult.win, "beat"), (.loss, "lost to"), (.draw, "drew with")] {
             let record = match(result)
             let text = TennisSummaryFormatter.match(record)
-            XCTAssertTrue(text.hasPrefix("Alex \(verb) Sam"))
+            XCTAssertTrue(text.hasPrefix("Completed singles match. Alex \(verb) Sam"))
             XCTAssertTrue(text.contains(record.setScores))
             XCTAssertFalse(text.contains("not recorded"))
         }
@@ -67,10 +67,10 @@ final class TennisProductIntegrationTests: XCTestCase {
     func testTournamentCountsOnlyItsCompletedMatches() {
         var tournament = TournamentRecord(playerID: UUID())
         tournament.name = "Regional Open"
-        var win = match(.win); win.tournamentID = tournament.id
-        var loss = match(.loss); loss.tournamentID = tournament.id
+        var win = match(.win); win.playerID = tournament.playerID; win.tournamentID = tournament.id
+        var loss = match(.loss); loss.playerID = tournament.playerID; loss.tournamentID = tournament.id
         let text = TennisSummaryFormatter.tournament(tournament, matches: [win, loss, match(.win)])
-        XCTAssertTrue(text.contains("2 matches: 1 win and 1 loss"))
+        XCTAssertTrue(text.contains("2 completed matches: 1 win and 1 loss"))
     }
 
     func testTrainingContextAndMetricsAreNotInvented() {

@@ -35,8 +35,8 @@ enum TennisWatchRecordEdits {
         return TennisRecordConflictResolver.prepareLocalTraining(updated, now: now)
     }
 
-    static func match(_ draft: MatchRecord, current: MatchRecord, now: Date = Date()) -> MatchRecord {
-        var updated = current
+    static func match(_ draft: MatchRecord, current: MatchRecord, original: MatchRecord? = nil, now: Date = Date()) -> MatchRecord {
+        var updated = TennisMatchDetailEdits.roundAndSchedule(draft, current: current, original: original)
         updated.opponentID = draft.opponentID; updated.opponentName = draft.opponentName
         updated.partnerID = draft.partnerID; updated.partnerName = draft.partnerName
         updated.opponent2ID = draft.opponent2ID; updated.opponent2Name = draft.opponent2Name
@@ -50,7 +50,6 @@ enum TennisWatchRecordEdits {
         updated.nextPracticeFocus = draft.nextPracticeFocus
         updated.matchNeedsWork = draft.matchNeedsWork
         if current.status == .completed && draft.status == .completed {
-            updated.date = draft.date
             updated.matchType = draft.matchType
             updated.matchFormat = draft.matchFormat
             updated.result = draft.result

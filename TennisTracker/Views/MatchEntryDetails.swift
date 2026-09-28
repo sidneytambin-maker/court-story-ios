@@ -7,8 +7,6 @@ struct MatchEntryDetails: View {
     var body: some View {
         TennisOptionalSection("Match details", mode: store.data.settings.trackingMode, identifier: "matchEntryDetails") {
             StoredVenuePicker(id: $match.venueID, venue: $match.venue, location: $match.location)
-            Toggle("Start time specified", isOn: $match.hasStartTime)
-            if match.hasStartTime { FiveMinuteTimePicker(title: "Start time", date: $match.date) }
             TennisTrainingSessionPicker(sessions: store.selectedTraining, coaches: store.data.setup.coaches, selection: $match.trainingSessionID)
             TennisTournamentPicker(tournaments: store.selectedTournaments, tournamentID: $match.tournamentID, customName: $match.customTournamentName)
             if let tournament = store.selectedTournaments.first(where: { $0.id == match.tournamentID }) {

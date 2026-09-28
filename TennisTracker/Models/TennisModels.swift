@@ -95,13 +95,24 @@ enum MatchResult: String, Codable, CaseIterable, Identifiable {
 
 enum MatchPosition: String, Codable, CaseIterable, Identifiable {
     case notSpecified = "Not specified"
+    case qualifying = "Qualifying"
+    case groupStage = "Group stage"
     case roundRobin = "Round robin"
+    case roundOf128 = "Round of 128"
+    case roundOf64 = "Round of 64"
+    case roundOf32 = "Round of 32"
     case last16 = "Last 16"
     case quarterFinal = "Quarter-final"
     case semiFinal = "Semi-final"
     case final = "Final"
+    case thirdPlacePlayOff = "Third-place play-off"
+    case fifthPlacePlayOff = "Fifth-place play-off"
+    case seventhPlacePlayOff = "Seventh-place play-off"
+    case placementPlayOff = "Placement play-off"
+    case consolation = "Consolation"
 
     var id: String { rawValue }
+    var label: String { self == .last16 ? "Round of 16" : rawValue }
 }
 
 enum MatchKind: String, Codable, CaseIterable, Identifiable {

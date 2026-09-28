@@ -116,6 +116,7 @@ struct TournamentsView: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(tournament.name.fallback("Unnamed tournament"))
             .accessibilityValue(TennisSummaryFormatter.tournament(tournament, style: .accessibility, matches: store.linkedMatches(for: tournament), includeName: false))
+            .accessibilityIdentifier("tournamentList." + tournament.id.uuidString)
             .accessibilityFocused($focusedTournamentID, equals: tournament.id)
             .onAppear {
                 guard voiceOver, pendingTournamentFocus == tournament.id else { return }
@@ -360,10 +361,12 @@ struct TournamentEditorView: View {
                     Picker("Status", selection: $tournament.effectiveStatus) {
                         ForEach(TournamentResult.allCases) { Text($0.rawValue).tag($0) }
                     }
+                    .accessibilityValue(tournament.effectiveStatus.rawValue)
                     .accessibilityIdentifier("tournamentStatusPicker")
                     Picker("Stage reached", selection: $tournament.stageReached) {
                         ForEach(TournamentStage.allCases) { Text($0.rawValue).tag($0) }
                     }
+                    .accessibilityValue(tournament.stageReached.rawValue)
                     .accessibilityIdentifier("tournamentStagePicker")
                     Picker("Finishing position", selection: $tournament.finishingPosition) {
                         Text("Not recorded").tag(Optional<Int>.none)
@@ -371,6 +374,7 @@ struct TournamentEditorView: View {
                             Text(TournamentFinishingPosition.label(position)).tag(Optional(position))
                         }
                     }
+                    .accessibilityValue(TournamentFinishingPosition.label(tournament.finishingPosition))
                     .accessibilityHint("Optional final finishing position, independent of stage reached.")
                     .accessibilityIdentifier("tournamentFinishingPositionPicker")
                 }

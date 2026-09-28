@@ -117,7 +117,7 @@ struct WatchTrainingRow: View {
     @State private var finishing = false
 
     var body: some View {
-        Group {
+        VStack(alignment: .leading, spacing: 8) {
             if training.isActive {
                 if !store.workoutMessage.isEmpty {
                     Text(store.workoutMessage).font(.footnote).accessibilityIdentifier("activeHealthStatus")
@@ -188,13 +188,26 @@ struct WatchMatchRow: View {
     @State private var deleting = false
 
     var body: some View {
-        WatchActivityCard(title: match.matchType.rawValue, detail: TennisSummaryFormatter.match(match, style: .short),
+        let summary = TennisSummaryFormatter.matchSummary(match, tournaments: store.snapshot.tournaments)
+        WatchActivityCard(title: summary.headline, detail: listDetail(summary),
             summary: TennisSummaryFormatter.match(match, tournaments: store.snapshot.tournaments, style: .detailed),
-            symbol: "tennisball.fill", identifier: "Match summary", edit: { editing = true },
+            symbol: "tennisball.fill",
+            identifier: "Match summary", edit: { editing = true },
             completeTitle: match.needsDetails && match.status == .completed ? "Mark Complete" : nil,
             complete: { store.markMatchComplete(match.id) }, delete: { deleting = true })
             .sheet(isPresented: $editing) { NavigationStack { WatchMatchEditor(draft: match) } }
             .modifier(WatchDeleteConfirmation(isPresented: $deleting, deletion: TennisRecordDeletion(id: match.id, kind: .match)))
+    }
+
+    private func listDetail(_ summary: TennisMatchSummary) -> String {
+        let tournament = match.tournamentID.flatMap { id in store.snapshot.tournaments.first { $0.id == id }?.name } ?? match.customTournamentName ?? ""
+        var lines = [match.playerTeam + " vs " + match.opponentSummary.fallback("Opponent not recorded")]
+        if !tournament.isBlank { lines.append(tournament) }
+        lines.append(summary.scheduleText)
+        if match.status != .scheduled {
+            lines.append((match.status == .completed ? match.result.rawValue + ". " : "") + summary.scoreText)
+        }
+        return lines.joined(separator: "\n")
     }
 }
 

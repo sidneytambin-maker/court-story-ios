@@ -31,8 +31,14 @@ final class TennisStore: ObservableObject {
         load()
         if storageError == nil { migrateIfNeeded() }
         #if DEBUG && targetEnvironment(simulator)
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-match-list") {
+            data = TennisMatchListUITestFixture.make()
+        }
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-tournament-outcome") {
             data = TennisTournamentUITestFixture.make()
+        }
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-tournament-summary") {
+            data = TennisTournamentSummaryUITestFixture.make()
         }
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-manual-duration") ||
            ProcessInfo.processInfo.arguments.contains("-ui-testing-legacy-duration") {
@@ -77,7 +83,7 @@ final class TennisStore: ObservableObject {
 
     var selectedMatches: [MatchRecord] {
         guard let id = selectedPlayerID else { return [] }
-        return data.matches.filter { $0.playerID == id }.sorted { $0.date > $1.date }
+        return TennisMatchChronology.ordered(data.matches.filter { $0.playerID == id })
     }
 
     var selectedTraining: [TrainingSession] {
@@ -119,11 +125,17 @@ final class TennisStore: ObservableObject {
         TennisSummaryFormatter.training(session, style: style, now: now, coaches: data.setup.coaches, players: data.players)
     }
 
-    func upsertMatch(_ match: MatchRecord, audibleFeedback: Bool = true) {
+    func upsertMatch(_ match: MatchRecord, original: MatchRecord? = nil, audibleFeedback: Bool = true) {
         guard !data.deletedRecordIDs.contains(match.id) else { return }
         let wasCompleted = data.matches.first { $0.id == match.id }?.status == .completed
         let beforeAchievements = TennisAchievement.earnedIDs(records: data.achievementRecords, playerID: match.playerID)
         var latest = match
+        if let original, let current = data.matches.first(where: { $0.id == match.id }) {
+            let metadata = TennisMatchDetailEdits.roundAndSchedule(match, current: current, original: original)
+            latest.matchPosition = metadata.matchPosition
+            latest.date = metadata.date
+            latest.hasStartTime = metadata.hasStartTime
+        }
         latest.revision = max(latest.revision, data.matches.first(where: { $0.id == match.id })?.revision ?? 0)
         var saved = TennisRecordConflictResolver.prepareLocalMatch(latest)
         if saved.playerName.isBlank {
@@ -221,9 +233,7 @@ final class TennisStore: ObservableObject {
     }
 
     func linkedMatches(for tournament: TournamentRecord) -> [MatchRecord] {
-        data.matches
-            .filter { $0.playerID == tournament.playerID && $0.tournamentID == tournament.id }
-            .sorted { $0.date > $1.date }
+        TennisMatchChronology.ordered(data.matches.filter { $0.playerID == tournament.playerID && $0.tournamentID == tournament.id })
     }
 
     func deleteTournamentKeepingMatches(_ tournament: TournamentRecord) {

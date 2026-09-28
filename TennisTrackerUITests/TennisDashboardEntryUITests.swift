@@ -15,7 +15,15 @@ final class TennisDashboardEntryUITests: XCTestCase {
         XCTAssertTrue(app.buttons["saveTrainingButton"].isEnabled)
         XCTAssertFalse(app.buttons["Coaches"].exists)
         XCTAssertFalse(app.switches["trainingIncludeRatings"].exists)
+        expandPhoneSection("trainingEntryDetails", in: app)
+        reveal(app.buttons["activityVenuePicker"]).tap()
+        app.buttons["Training Court, Town"].tap()
         reveal(app.buttons["trainingEntryDetails"]).tap()
+        XCTAssertEqual(app.buttons["trainingEntryDetails"].value as? String, "Collapsed")
+        XCTAssertFalse(app.buttons["activityVenuePicker"].exists)
+        expandPhoneSection("trainingEntryDetails", in: app)
+        XCTAssertEqual(reveal(app.buttons["activityVenuePicker"]).value as? String, "Training Court, Town")
+        capture("iPhone Basic optional details retain venue and child identifiers")
         reveal(app.buttons["Coaches"]).tap()
         XCTAssertTrue(app.navigationBars["Coaches"].waitForExistence(timeout: 5))
         app.navigationBars["Coaches"].buttons.firstMatch.tap()
@@ -56,13 +64,13 @@ final class TennisDashboardEntryUITests: XCTestCase {
 
     func testDashboardGroupedResultsAndBasicDisclosure() {
         launch()
-        let results = reveal(element("resultSummary.Doubles matches"))
+        let results = revealPhoneElement(element("resultSummary.Doubles matches"), in: app, showing: .top)
         XCTAssertTrue((results.value as? String)?.contains("3 matches. 1 win, 2 losses, 0 draws") == true)
         XCTAssertTrue((results.value as? String)?.contains("Includes 3 matches played during training") == true)
         XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "resultSummary.Doubles matches")
             .matching(NSPredicate(format: "value != nil")).count, 1)
         XCTAssertFalse(app.buttons["dashboardEditGoals"].exists)
-        reveal(app.buttons["dashboardInsights"]).tap()
+        expandPhoneSection("dashboardInsights", in: app)
         XCTAssertTrue(reveal(app.buttons["dashboardEditGoals"]).exists)
         XCTAssertFalse(app.buttons["dashboardCoachPreview"].exists)
     }
@@ -79,7 +87,7 @@ final class TennisDashboardEntryUITests: XCTestCase {
         reveal(app.buttons["dashboardCoachPreview"]).tap()
         XCTAssertTrue(app.navigationBars["Coach Summary"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.switches["coachIncludeGoals"].value as? String, "0")
-        let preview = reveal(app.staticTexts["coachSummaryText"])
+        let preview = revealPhoneElement(app.staticTexts["coachSummaryText"], in: app, showing: .top)
         XCTAssertTrue(preview.label.contains("Training, last 30 days"))
         XCTAssertFalse(preview.label.contains("Goals & match review"))
         XCTAssertFalse(preview.label.contains("Chris"))
@@ -88,7 +96,7 @@ final class TennisDashboardEntryUITests: XCTestCase {
         XCTAssertTrue(reveal(app.buttons["coachShareSummary"]).exists)
         XCTAssertFalse(app.otherElements["ActivityListView"].exists)
         reveal(app.switches["coachIncludeGoals"]).tap()
-        XCTAssertTrue(reveal(app.staticTexts["coachSummaryText"]).label.contains("Goals & match review"))
+        XCTAssertTrue(revealPhoneElement(app.staticTexts["coachSummaryText"], in: app, showing: .top).label.contains("Goals & match review"))
         app.buttons["Done"].tap()
     }
 
@@ -99,15 +107,27 @@ final class TennisDashboardEntryUITests: XCTestCase {
         XCTAssertTrue(session.waitForExistence(timeout: 5))
         session.tap()
         app.navigationBars.buttons["Edit"].tap()
-        reveal(app.buttons["Duration hours"]).tap()
+        let hours = reveal(app.buttons["durationHours"])
+        XCTAssertEqual(hours.label, "Duration hours")
+        XCTAssertEqual(hours.value as? String, "5 hours")
+        hours.tap()
         app.buttons["2 hours"].tap()
-        reveal(app.buttons["Duration minutes"]).tap()
+        XCTAssertEqual(app.buttons["durationHours"].value as? String, "2 hours")
+        let minutes = reveal(app.buttons["durationMinutes"])
+        XCTAssertEqual(minutes.label, "Duration minutes")
+        XCTAssertEqual(minutes.value as? String, "52 minutes")
+        minutes.tap()
         app.buttons["0 minutes"].tap()
+        XCTAssertEqual(app.buttons["durationMinutes"].value as? String, "0 minutes")
         app.buttons["saveTrainingButton"].tap()
         let detail = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Fitness measurements cover the original 5 hours 52 minutes recording")).firstMatch
         XCTAssertTrue(detail.waitForExistence(timeout: 5))
         XCTAssertTrue(detail.label.contains("2 hours"))
         capture("iPhone corrected duration and original Health window")
+        app.navigationBars.buttons["Edit"].tap()
+        XCTAssertEqual(reveal(app.buttons["durationHours"]).value as? String, "2 hours")
+        XCTAssertEqual(reveal(app.buttons["durationMinutes"]).value as? String, "0 minutes")
+        app.buttons["Cancel"].tap()
         app.tabBars.buttons["Dashboard"].tap()
         let summary = reveal(element("dashboardTrainingSummary"))
         XCTAssertTrue((summary.value as? String)?.contains("2 hours") == true)
@@ -122,15 +142,22 @@ final class TennisDashboardEntryUITests: XCTestCase {
                 app.tabBars.buttons["Dashboard"].tap()
                 scrollToTop()
                 capture("iPhone \(mode) dashboard \(large ? "accessibility XXXL" : "normal")")
-                let result = reveal(element("resultSummary.Doubles matches"))
+                let result = revealPhoneElement(element("resultSummary.Doubles matches"), in: app, showing: .top)
                 assertFitsHorizontally(result)
-                capture("iPhone \(mode) results \(large ? "accessibility XXXL" : "normal")")
+                capturePhoneSummary(result, in: app, name: "iPhone \(mode) results \(large ? "accessibility XXXL" : "normal")")
+                let insights = reveal(app.buttons["dashboardInsights"])
+                XCTAssertEqual(insights.value as? String, mode == "Basic" ? "Collapsed" : "Expanded")
+                if mode == "Basic" { expandPhoneSection("dashboardInsights", in: app) }
+                XCTAssertEqual(app.buttons.matching(identifier: "dashboardInsights").count, 1)
+                reveal(app.buttons["dashboardEditGoals"])
+                capture("iPhone \(mode) goals controls \(large ? "accessibility XXXL" : "normal")")
                 app.buttons["dashboardAddActivity"].tap()
                 app.buttons["Track Training Session"].tap()
                 XCTAssertTrue(app.buttons["saveTrainingButton"].waitForExistence(timeout: 5))
                 capture("iPhone \(mode) training entry \(large ? "accessibility XXXL" : "normal")")
                 assertFitsHorizontally(app.buttons["saveTrainingButton"])
-                reveal(app.buttons["Duration minutes"])
+                let minutes = reveal(app.buttons["durationMinutes"])
+                XCTAssertEqual(minutes.label, "Duration minutes")
                 capture("iPhone \(mode) duration controls \(large ? "accessibility XXXL" : "normal")")
                 app.buttons["Cancel"].tap()
                 app.buttons["dashboardAddActivity"].tap()
@@ -159,6 +186,9 @@ final class TennisDashboardEntryUITests: XCTestCase {
         app.tabBars.buttons["Settings"].tap()
         reveal(app.buttons["settingsTrackingModePicker"]).tap()
         app.buttons[mode].tap()
+        if app.buttons["settingsTrackingModePicker"].value as? String != mode {
+            capture("Unexpected spoken tracking mode " + mode)
+        }
         XCTAssertEqual(app.buttons["settingsTrackingModePicker"].value as? String, mode)
     }
 
@@ -180,23 +210,11 @@ final class TennisDashboardEntryUITests: XCTestCase {
 
     @discardableResult
     private func reveal(_ element: XCUIElement) -> XCUIElement {
-        for _ in 0..<16 {
-            if element.exists && element.isHittable { return element }
-            app.swipeUp()
-        }
-        for _ in 0..<20 {
-            if element.exists && element.isHittable { return element }
-            app.swipeDown()
-        }
-        XCTFail("Could not reach \(element)")
-        return element
+        revealPhoneElement(element, in: app)
     }
 
     private func scrollToTop() {
-        for _ in 0..<12 {
-            if app.staticTexts["Welcome, Alex"].isHittable { break }
-            app.swipeDown()
-        }
+        reveal(app.staticTexts["Welcome, Alex"])
     }
 
     private func assertFitsHorizontally(_ element: XCUIElement) {
@@ -206,9 +224,6 @@ final class TennisDashboardEntryUITests: XCTestCase {
     }
 
     private func capture(_ name: String) {
-        let attachment = XCTAttachment(screenshot: app.screenshot())
-        attachment.name = name
-        attachment.lifetime = .keepAlways
-        add(attachment)
+        capturePhoneEvidence(app, name: name)
     }
 }

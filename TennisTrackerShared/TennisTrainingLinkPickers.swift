@@ -65,8 +65,8 @@ struct TennisLinkedMatchesPicker: View {
     private var choices: some View {
         TennisChoiceList {
             Button("No matches") { selected = [] }.accessibilityAddTraits(selected.isEmpty ? .isSelected : [])
-            ForEach(matches.sorted { $0.date > $1.date }) { match in
-                TennisSelectionRow(name: "\(match.matchType.rawValue), \(match.opponentSummary.fallback("Opponent not recorded")), \(match.date.shortTennisDate)", id: match.id, selectedIDs: $selected)
+            ForEach(TennisMatchChronology.ordered(matches)) { match in
+                TennisSelectionRow(name: TennisSummaryFormatter.match(match, style: .accessibility), id: match.id, selectedIDs: $selected)
                     .accessibilityHint(match.trainingSessionID != nil && match.trainingSessionID != sessionID ? "Selecting moves this match from its other training session when saved." : "")
             }
             if matches.isEmpty { Text("No recorded or scheduled matches") }

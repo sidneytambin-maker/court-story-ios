@@ -80,7 +80,19 @@ final class WatchTournamentUITests: XCTestCase {
 
     private func expectSummary(_ value: String, on summary: XCUIElement) {
         let changed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS %@", value), object: summary)
-        XCTAssertEqual(XCTWaiter.wait(for: [changed], timeout: 5), .completed)
+        let result = XCTWaiter.wait(for: [changed], timeout: 5)
+        if result != .completed {
+            let app = XCUIApplication()
+            let tree = XCTAttachment(string: "Application state: \(app.state.rawValue)\n" + app.debugDescription)
+            tree.name = "Tournament status timeout full accessibility tree"
+            tree.lifetime = .keepAlways
+            add(tree)
+            let screenshot = XCTAttachment(screenshot: app.screenshot())
+            screenshot.name = "Tournament status timeout " + value
+            screenshot.lifetime = .keepAlways
+            add(screenshot)
+        }
+        XCTAssertEqual(result, .completed)
     }
 
     @discardableResult

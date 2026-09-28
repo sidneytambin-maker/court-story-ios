@@ -276,29 +276,27 @@ private struct WatchPracticeResultView: View {
 
 private struct WatchRecentView: View {
     @EnvironmentObject private var store: WatchTennisStore
-    private var matches: [MatchRecord] { Array(store.snapshot.matches.filter { $0.status == .completed && !$0.needsDetails }.sorted { $0.date > $1.date }.prefix(5)) }
+    private var matches: [MatchRecord] { store.snapshot.matches }
     private var training: [TrainingSession] { Array(store.snapshot.trainingSessions.filter { !$0.needsDetails && !$0.isActive && ($0.actualFinish != nil || $0.expectedEndDate < Date()) }.sorted { $0.date > $1.date }.prefix(5)) }
     private var tournaments: [TournamentRecord] { Array(store.snapshot.tournaments.filter { $0.isCompleted && !$0.needsDetails }.sorted { $0.date > $1.date }.prefix(3)) }
+    private var trainingNeedingDetails: [TrainingSession] { store.snapshot.trainingSessions.filter { $0.needsDetails && !$0.isActive } }
+    private var tournamentsNeedingDetails: [TournamentRecord] { store.snapshot.tournaments.filter { $0.needsDetails && $0.id != store.activeTournamentID } }
     var body: some View {
         List {
-            if !matches.isEmpty {
-                Section { ForEach(matches) { WatchMatchRow(match: $0) } }
-                    header: { Text("Matches").accessibilityHidden(true) }
-            }
+            WatchRecentMatchSections(matches: matches)
             if !training.isEmpty {
                 Section { ForEach(training) { WatchTrainingRow(training: $0) } }
-                    header: { Text("Training").accessibilityHidden(matches.isEmpty) }
+                    header: { Text("Training").accessibilityAddTraits(.isHeader) }
             }
             if !tournaments.isEmpty {
                 Section { ForEach(tournaments) { WatchTournamentRow(tournament: $0) } }
-                    header: { Text("Tournaments").accessibilityHidden(matches.isEmpty && training.isEmpty) }
+                    header: { Text("Tournaments").accessibilityAddTraits(.isHeader) }
             }
-            if store.needsDetailsCount > 0 {
+            if !trainingNeedingDetails.isEmpty || !tournamentsNeedingDetails.isEmpty {
                 Section {
-                    ForEach(store.snapshot.trainingSessions.filter { $0.needsDetails && !$0.isActive }) { WatchTrainingRow(training: $0) }
-                    ForEach(store.snapshot.matches.filter { $0.needsDetails && $0.status != .inProgress }) { WatchMatchRow(match: $0) }
-                    ForEach(store.snapshot.tournaments.filter { $0.needsDetails && $0.id != store.activeTournamentID }) { WatchTournamentRow(tournament: $0) }
-                } header: { Text("Needs Details").accessibilityHidden(matches.isEmpty && training.isEmpty && tournaments.isEmpty) }
+                    ForEach(trainingNeedingDetails) { WatchTrainingRow(training: $0) }
+                    ForEach(tournamentsNeedingDetails) { WatchTournamentRow(tournament: $0) }
+                } header: { Text("Needs Details").accessibilityAddTraits(.isHeader) }
             } else if matches.isEmpty && training.isEmpty && tournaments.isEmpty {
                 Text("No recent activity")
             }
@@ -341,10 +339,7 @@ private struct WatchScoreView: View {
                     scoreActions(for: match)
                 }
             } else {
-                Text("No match in progress.")
-                ForEach(store.snapshot.matches.filter { $0.status == .scheduled || $0.status == .inProgress }) { match in
-                    Button("Score \(match.playerTeam) against \(match.opponentSummary)") { store.beginMatch(match) }
-                }
+                WatchMatchScoringChoices()
                 NavigationLink("Live Score a Match") { WatchMatchSetupView() }
             }
         }

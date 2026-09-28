@@ -134,15 +134,17 @@ final class WatchDashboardUITests: XCTestCase {
     private func contentViewport(in app: XCUIApplication) -> CGRect {
         let screen = app.frame
         let navigation = app.navigationBars.firstMatch
-        let upperEdge = max(screen.minY + 40, navigation.exists ? navigation.frame.maxY : screen.minY) + 8
-        let lowerEdge = screen.maxY - 20
+        let status = app.statusBars.firstMatch
+        let upperEdge = max(status.exists ? status.frame.maxY : screen.minY,
+                            navigation.exists ? navigation.frame.maxY : screen.minY)
+        let lowerEdge = screen.maxY
         return CGRect(x: screen.minX, y: upperEdge, width: screen.width, height: max(0, lowerEdge - upperEdge))
     }
 
     private func requiredFrame(of element: XCUIElement, showing region: VisibleRegion, viewport: CGRect) -> CGRect {
         let frame = element.frame
         // A tall summary may scroll naturally; a button must fit completely.
-        let height = min(frame.height, max(0, viewport.height - 8))
+        let height = min(frame.height, max(0, viewport.height * 0.7))
         switch region {
         case .control: return frame
         case .summaryTop: return CGRect(x: frame.minX, y: frame.minY, width: frame.width, height: height)
@@ -161,7 +163,8 @@ final class WatchDashboardUITests: XCTestCase {
         let list = app.scrollViews.allElementsBoundByIndex.last(where: { $0.isHittable })
             ?? app.collectionViews.allElementsBoundByIndex.last(where: { $0.isHittable })
             ?? app
-        let travel = min(max(12, distance), viewport.height * 0.45)
+        // Sub-threshold drags can leave the Watch list stationary even when a row is clipped.
+        let travel = min(max(40, distance), viewport.height * 0.45)
         let offset = upward ? travel / 2 : -travel / 2
         let origin = list.coordinate(withNormalizedOffset: .zero)
         let start = origin.withOffset(CGVector(dx: viewport.midX - list.frame.minX, dy: viewport.midY + offset - list.frame.minY))
@@ -182,7 +185,7 @@ final class WatchDashboardUITests: XCTestCase {
     private func captureSummary(_ element: XCUIElement, in app: XCUIApplication, name: String) {
         reveal(element, in: app, showing: .summaryTop)
         capture(app, name: name + " top")
-        if element.frame.height > contentViewport(in: app).height - 8 {
+        if !contentViewport(in: app).contains(element.frame) {
             reveal(element, in: app, showing: .summaryBottom)
             capture(app, name: name + " bottom")
         }

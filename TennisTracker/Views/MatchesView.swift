@@ -32,37 +32,19 @@ struct MatchesView: View {
                         .accessibilityIdentifier("addMatchButton")
                 }
 
-                TennisSection("Match history") {
-                    if store.selectedMatches.isEmpty {
+                if store.selectedMatches.isEmpty {
+                    Section {
                         EmptyStateView(title: "No matches recorded yet", message: "Use Record Match or Track Match Scoring.")
-                    } else {
-                        ForEach(store.selectedMatches) { match in
-                            NavigationLink {
-                                MatchDetailView(match: match)
-                            } label: {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(TennisSummaryFormatter.match(match, tournaments: store.selectedTournaments, style: .long))
-                                    Text(match.matchType.rawValue)
-                                        .font(.subheadline)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                            .accessibilityLabel("Match")
-                            .accessibilityValue(TennisSummaryFormatter.match(match, tournaments: store.selectedTournaments, style: .accessibility))
-                            .accessibilityAction(named: "Edit match") {
-                                matchToEdit = match
-                            }
-                            .accessibilityAction(named: "Add to Calendar") {
-                                addToCalendar(match)
-                            }
-                            .accessibilityAction(named: "Delete match") {
-                                matchToDelete = match
-                                confirmDelete = true
-                            }
-                            .modifier(MatchResumeAction(match: match, resume: {
-                                liveMatchToResume = match
-                                showingLiveScorer = true
-                            }))
+                    }
+                } else {
+                    let groups = TennisMatchListGroups(matches: store.selectedMatches)
+                    ForEach(TennisMatchListGroup.allCases) { group in
+                        let matches = groups[group]
+                        if !matches.isEmpty {
+                            MatchListSection(group: group, matches: matches, tournaments: store.selectedTournaments,
+                                edit: { matchToEdit = $0 }, calendar: addToCalendar,
+                                delete: { matchToDelete = $0; confirmDelete = true },
+                                resume: { liveMatchToResume = $0; showingLiveScorer = true })
                         }
                     }
                 }
@@ -101,20 +83,6 @@ struct MatchesView: View {
 
     private func scoreSummary(_ match: MatchRecord) -> String {
         TennisSummaryFormatter.matchSummary(match, tournaments: store.selectedTournaments).scoreText
-    }
-}
-
-private struct MatchResumeAction: ViewModifier {
-    let match: MatchRecord
-    let resume: () -> Void
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if match.status == .inProgress && match.liveScore != nil {
-            content.accessibilityAction(named: "Resume Match Scoring") { resume() }
-        } else {
-            content
-        }
     }
 }
 
@@ -194,6 +162,7 @@ struct MatchEditorView: View {
     @EnvironmentObject private var store: TennisStore
     @Environment(\.dismiss) private var dismiss
     @State var match: MatchRecord
+    @State private var original: MatchRecord?
     @State private var validationMessage = ""
 
     var body: some View {
@@ -205,8 +174,20 @@ struct MatchEditorView: View {
                 }
 
                 TennisSection("Match") {
-                    DatePicker("Date", selection: $match.date, displayedComponents: .date)
-                        .accessibilityIdentifier("matchDatePicker")
+                    if match.status != .inProgress, storedMatch?.status != .inProgress {
+                        DatePicker("Date", selection: $match.date, displayedComponents: .date)
+                            .accessibilityLabel("Match date")
+                            .accessibilityValue(match.date.fullTennisDate)
+                            .accessibilityIdentifier("matchDatePicker")
+                        Toggle("Start time specified", isOn: $match.hasStartTime)
+                            .accessibilityIdentifier("matchStartTimeSpecified")
+                        if match.hasStartTime { FiveMinuteTimePicker(title: "Start time", date: $match.date) }
+                    } else {
+                        SummaryRow(title: "Match date and time", value: readOnlySchedule)
+                            .accessibilityIdentifier("matchReadOnlySchedule")
+                    }
+                    OrderedChoicePicker(title: "Match round", selection: $match.matchPosition, values: MatchPosition.allCases) { $0.label }
+                        .accessibilityIdentifier("matchRoundPicker")
                     OrderedChoicePicker(title: "Match format", selection: $match.matchFormat, values: MatchFormat.allCases) { $0.label }
                         .accessibilityIdentifier("matchFormatPicker")
                 }
@@ -228,9 +209,6 @@ struct MatchEditorView: View {
                 MatchEntryDetails(match: $match)
                 if store.data.settings.trackingMode == .power {
                     TennisSection("Performance") {
-                        Picker("Round or position", selection: $match.matchPosition) {
-                            ForEach(MatchPosition.allCases) { Text($0.rawValue).tag($0) }
-                        }
                         NumberChoicePicker(title: "Aces", value: $match.aces, range: 0...99)
                             .accessibilityIdentifier("matchAces")
                         NumberChoicePicker(title: "Double faults", value: $match.doubleFaults, range: 0...99)
@@ -241,6 +219,7 @@ struct MatchEditorView: View {
             }
             .tennisThemedList()
             .navigationTitle("Match")
+            .onAppear { if original == nil { original = match } }
             .onChange(of: match.tournamentID) { _, _ in applyTournamentDefaults() }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
@@ -253,13 +232,22 @@ struct MatchEditorView: View {
                         match.needsDetails = match.opponentName.isBlank || match.opponentName == "Opponent"
                             || (match.matchType == .doubles && (match.partnerName.isBlank || match.opponent2Name.isBlank))
                             || (match.status == .completed && match.setScores.isBlank)
-                        store.upsertMatch(match)
+                        store.upsertMatch(match, original: original)
                         dismiss()
                     }
                     .accessibilityIdentifier("saveMatchButton")
                 }
             }
         }
+    }
+
+    private var storedMatch: MatchRecord? {
+        store.data.matches.first { $0.id == match.id }
+    }
+
+    private var readOnlySchedule: String {
+        let current = storedMatch ?? match
+        return current.date.fullTennisDate + (current.hasStartTime ? " at \(current.date.shortTennisTime)" : "")
     }
 
     private var liveScoreSummary: String {
@@ -283,7 +271,7 @@ struct MatchEditorView: View {
         match.location = tournament.location
         match.sightLevel = sightLevel(from: tournament.category) ?? match.sightLevel
         match.allowedBounces = match.sightLevel.allowedBounces
-        if tournament.format == .roundRobin {
+        if tournament.format == .roundRobin, match.matchPosition == .notSpecified {
             match.matchPosition = .roundRobin
         }
     }
@@ -378,6 +366,8 @@ struct LiveMatchView: View {
                 ForEach(MatchKind.allCases) { kind in Text(kind.rawValue).tag(kind) }
             }
             AccessibleDateTimeEditor(dateTitle: "Date", timeTitle: "Start time", date: binding(\.date), hasStartTime: binding(\.hasStartTime))
+            OrderedChoicePicker(title: "Match round", selection: binding(\.matchPosition), values: MatchPosition.allCases) { $0.label }
+                .accessibilityIdentifier("matchRoundPicker")
             Toggle("Expected duration known", isOn: binding(\.hasExpectedDuration))
             if match.hasExpectedDuration {
                 DurationFields(minutes: binding(\.expectedDurationMinutes), minimumMinutes: 15)

@@ -33,7 +33,7 @@ struct WatchTodayView: View {
                 }
                 .accessibilityIdentifier("overviewTrackActivity")
             }
-            if let match = store.snapshot.matches.filter({ $0.status == .scheduled }).min(by: { $0.date < $1.date }) {
+            if let match = TennisMatchListGroups(matches: store.snapshot.matches).nextUpcomingMatch() {
                 Section("Next match") { WatchMatchRow(match: match) }
             }
             if store.snapshot.settings.showUpcomingTournaments, let tournament = store.upcomingTournament {

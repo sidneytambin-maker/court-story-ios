@@ -60,7 +60,7 @@ struct TennisGlance: Equatable {
             && tournament.endDate >= today && tournament.finalResult != .completed && tournament.finalResult != .withdrawn {
             events.append((tournament.date, tournament.id.uuidString, Self(title: tournament.name.fallback("Tournament"),
                 detail: TennisSummaryFormatter.dateRange(from: tournament.date, through: tournament.endDate),
-                accessibilitySummary: TennisSummaryFormatter.tournament(tournament, style: .short), destination: .today, isStale: false,
+                accessibilitySummary: TennisSummaryFormatter.tournament(tournament, style: .short, matches: snapshot.matches), destination: .today, isStale: false,
                 compactDetail: compactRange(tournament.date, tournament.endDate))))
         }
         if let event = events.sorted(by: { $0.date == $1.date ? $0.id < $1.id : $0.date < $1.date }).first { return event.glance }

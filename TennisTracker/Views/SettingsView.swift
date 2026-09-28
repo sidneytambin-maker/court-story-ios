@@ -37,6 +37,7 @@ struct SettingsView: View {
                         }
                     }
                     .accessibilityIdentifier("settingsTrackingModePicker")
+                    .accessibilityValue(settings.trackingMode.rawValue)
                     Text(settings.trackingMode.description)
                     if let health = watchSync.healthStatus {
                         SummaryRow(title: "Watch Health access", value: health.access)
