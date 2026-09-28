@@ -19,14 +19,23 @@ struct TennisAchievementRecord: Codable, Equatable, Identifiable {
                 if !session.specificFocusSelections.isEmpty { metrics.append("focus") }
                 if !session.notes.isBlank || !session.sessionOutcome.isBlank { metrics.append("reflection") }
                 if session.trackedOnWatch == true || session.workout != nil { metrics.append("watchTraining") }
-                if let practice = session.practiceResult { metrics += matchMetrics(kind: practice.kind, result: practice.result) }
+                if let practice = session.practiceResult {
+                    metrics += matchMetrics(kind: practice.kind, result: practice.result)
+                    metrics.append(TennisMatchResultTotals.metric(kind: practice.kind, result: practice.result))
+                }
             }
             records.append(Self(id: session.id, playerID: session.playerID, date: session.actualStart ?? session.date,
                 metrics: metrics, seconds: TennisDurationFormatter.trainingSeconds(session), legacyPractice: session.practiceResult != nil))
         }
         for match in matches {
+            var metrics = [String]()
+            if match.status == .completed {
+                // Dashboard results follow completion status; achievement eligibility remains date-gated.
+                metrics.append(TennisMatchResultTotals.metric(kind: match.matchType, result: match.result))
+                if match.date <= now { metrics += matchMetrics(kind: match.matchType, result: match.result) }
+            }
             records.append(Self(id: match.id, playerID: match.playerID, date: match.date,
-                metrics: match.status == .completed && match.date <= now ? matchMetrics(kind: match.matchType, result: match.result) : [],
+                metrics: metrics,
                 linkedTrainingID: match.trainingSessionID))
         }
         for tournament in tournaments {
@@ -121,8 +130,11 @@ struct TennisAchievement: Identifiable, Equatable {
 
 extension TennisWatchSnapshot {
     var achievementRecords: [TennisAchievementRecord] {
+        achievementRecords(at: Date())
+    }
+    func achievementRecords(at now: Date) -> [TennisAchievementRecord] {
         TennisAchievementRecord.merge(history: achievementHistory,
-            current: TennisAchievementRecord.collect(matches: matches, training: trainingSessions, tournaments: tournaments), deleted: deletedRecordIDs)
+            current: TennisAchievementRecord.collect(matches: matches, training: trainingSessions, tournaments: tournaments, now: now), deleted: deletedRecordIDs)
     }
     var achievements: [TennisAchievement] { TennisAchievement.build(records: achievementRecords, playerID: selectedPlayerID) }
 }

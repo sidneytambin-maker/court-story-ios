@@ -40,7 +40,6 @@ struct WatchMatchScoringChoices: View {
                                 Text(summary.scheduleText).font(.footnote)
                             }.fixedSize(horizontal: false, vertical: true)
                         }
-                        .accessibilityElement(children: .ignore)
                         .accessibilityLabel("Score \(match.playerTeam) against \(match.opponentSummary)")
                         .accessibilityValue(summary.headline + ". " + summary.scheduleText)
                     }

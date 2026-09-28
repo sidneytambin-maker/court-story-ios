@@ -9,6 +9,9 @@
 - Separate tournament stage reached and optional finishing position 1st to 16th. Additional round-robin, group and placement play-off stages.
 - State-dependent tournament completion actions, spoken confirmation and matching visible status on iPhone and Watch.
 - Tournament summaries count linked scheduled, in-progress and completed matches separately; results describe completed matches only.
+- Watch all-time match results use the full compact result history rather than the limited editable cache, preserving achievement rules and linked-practice deduplication.
+- Watch recent focus summaries retain all recorded sessions in the displayed 30-day window, including sessions whose actual start differs from their scheduled date.
+- Preserve native button and navigation behaviour on expandable details, match lists, tournament lists and Watch scoring choices while retaining concise summaries and custom actions.
 - Status-based match lists with no empty headings, chronological date/time ordering independent of entry order, accessible match-round choices in every mode, and date/time/place in match summaries.
 
 ## Acceptance
@@ -28,4 +31,5 @@ The public build source is a clean, privacy-reviewed snapshot in `sidneytambin-m
 - [Apple: Authorizing access to Health data](https://developer.apple.com/documentation/healthkit/authorizing-access-to-health-data)
 - [Apple: Building a workout app for Apple Watch](https://developer.apple.com/documentation/healthkit/building-a-workout-app-for-apple-watch)
 - [Apple: Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility)
+- [Apple: Accessibility child behaviour](https://developer.apple.com/documentation/swiftui/accessibilitychildbehavior/ignore)
 - [GitHub: Standard hosted runners](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)

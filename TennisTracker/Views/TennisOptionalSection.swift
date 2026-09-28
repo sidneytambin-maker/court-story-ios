@@ -28,7 +28,6 @@ struct TennisOptionalSection<Content: View>: View {
                 }
                 .contentShape(Rectangle())
             }
-            .accessibilityElement(children: .ignore)
             .accessibilityLabel(title)
             .accessibilityValue(expanded ? "Expanded" : "Collapsed")
             .accessibilityHint(expanded ? "Hides optional details without clearing them." : "Shows optional details.")

@@ -119,14 +119,14 @@ final class TennisTrackerWatchUITests: XCTestCase {
         app.buttons["Edit Training and Focus"].tap()
         let hours = app.buttons["durationHours"]
         reveal(hours, in: app)
-        XCTAssertEqual(hours.label, "Duration hours")
+        XCTAssertEqual(hours.label, "Duration hours, 0 hours")
         XCTAssertEqual(hours.value as? String, "0 hours")
         hours.tap()
         let twoHours = app.buttons["2 hours"]
         reveal(twoHours, in: app); twoHours.tap()
         let minutes = app.buttons["durationMinutes"]
         reveal(minutes, in: app)
-        XCTAssertEqual(minutes.label, "Duration minutes")
+        XCTAssertEqual(minutes.label, "Duration minutes, 3 minutes")
         XCTAssertEqual(minutes.value as? String, "3 minutes")
         minutes.tap()
         let zeroMinutes = app.buttons["0 minutes"]
@@ -142,10 +142,10 @@ final class TennisTrackerWatchUITests: XCTestCase {
         reveal(app.buttons["Edit Training and Focus"], in: app)
         app.buttons["Edit Training and Focus"].tap()
         reveal(hours, in: app)
-        XCTAssertEqual(hours.label, "Duration hours")
+        XCTAssertEqual(hours.label, "Duration hours, 2 hours")
         XCTAssertEqual(hours.value as? String, "2 hours")
         reveal(minutes, in: app)
-        XCTAssertEqual(minutes.label, "Duration minutes")
+        XCTAssertEqual(minutes.label, "Duration minutes, 0 minutes")
         XCTAssertEqual(minutes.value as? String, "0 minutes")
         app.buttons["Cancel"].tap()
         XCTAssertTrue(summary.waitForExistence(timeout: 5))

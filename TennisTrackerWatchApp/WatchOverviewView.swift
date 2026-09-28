@@ -79,6 +79,7 @@ private struct WatchDashboardProgress: View {
 
     var body: some View {
         let progress = self.progress
+        let totals = TennisMatchResultTotals.build(records: store.snapshot.achievementRecords, playerID: player.id)
         Section {
             Button { expanded.toggle() } label: {
                 Label("Results & focus", systemImage: expanded ? "chevron.down" : "chevron.right")
@@ -87,8 +88,8 @@ private struct WatchDashboardProgress: View {
             .accessibilityHint("Shows or hides match results and recent training focus.")
             .accessibilityIdentifier("overviewProgress")
             if expanded {
-                result("Singles", totals: progress.singles)
-                result("Doubles", totals: progress.doubles)
+                result("Singles", totals: totals.singles)
+                result("Doubles", totals: totals.doubles)
                 ForEach(progress.focus.prefix(3)) { item in
                     VStack(alignment: .leading, spacing: 4) {
                         Text(item.focus).font(.headline)

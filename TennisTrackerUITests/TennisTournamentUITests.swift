@@ -9,8 +9,11 @@ final class TennisTournamentUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.tabBars.buttons["Tournaments"].waitForExistence(timeout: 8))
         app.tabBars.buttons["Tournaments"].tap()
-        let row = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "tournamentList.")).firstMatch
+        let rows = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "tournamentList."))
+        let row = rows.firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 5))
+        XCTAssertEqual(rows.count, 1)
+        let rowIdentifier = row.identifier
         XCTAssertEqual(row.label, "Meadow Cup")
         expectValue("Status: Completed", on: row)
         reveal(row, in: app).tap()
@@ -50,6 +53,8 @@ final class TennisTournamentUITests: XCTestCase {
         expectLabel("Mark Tournament Complete", on: action)
         assertOutcome(summary)
         app.navigationBars.buttons.firstMatch.tap()
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(row.identifier, rowIdentifier)
         expectValue("Status: Entered", on: row)
         XCTAssertTrue(app.buttons["Mark Tournament Complete"].exists)
         XCTAssertFalse(app.buttons["Mark Tournament Entered"].exists)
@@ -67,6 +72,12 @@ final class TennisTournamentUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Mark Tournament Complete"].exists)
         XCTAssertFalse(app.buttons["Mark Tournament Entered"].exists)
         assertOutcome(row)
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(row.identifier, rowIdentifier)
+        reveal(row, in: app).tap()
+        XCTAssertTrue(summary.waitForExistence(timeout: 5))
+        expectValue("Status: Entered", on: summary)
+        assertOutcome(summary)
     }
 
     private func assertOutcome(_ summary: XCUIElement) {

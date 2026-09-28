@@ -15,6 +15,8 @@ final class TennisMatchOrderUITests: XCTestCase {
         XCTAssertTrue(later.waitForExistence(timeout: 5))
         XCTAssertLessThan(earlier.frame.minY, later.frame.minY)
         let identifier = earlier.identifier
+        XCTAssertTrue(identifier.hasPrefix("matchList."))
+        XCTAssertEqual(app.buttons.matching(identifier: identifier).count, 1)
         capturePhoneEvidence(app, name: "Scheduled 1205 before 1400 despite reverse insertion")
         earlier.tap()
         app.navigationBars.buttons["Edit"].tap()
@@ -29,6 +31,7 @@ final class TennisMatchOrderUITests: XCTestCase {
         let restored = row("Earlier 1205", in: app)
         XCTAssertTrue(restored.waitForExistence(timeout: 5))
         XCTAssertEqual(restored.identifier, identifier)
+        XCTAssertEqual(app.buttons.matching(identifier: identifier).count, 1)
         XCTAssertLessThan(restored.frame.minY, row("Later 1400", in: app).frame.minY)
         XCTAssertFalse(app.staticTexts["Match history"].exists)
     }

@@ -10,7 +10,7 @@ final class WatchMatchEditorUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Recent"].waitForExistence(timeout: 8))
         openEditor(app)
         let round = app.buttons["matchRoundPicker"]
-        XCTAssertEqual(reveal(round, in: app).label, "Match round")
+        XCTAssertEqual(reveal(round, in: app).label, "Match round, Not specified")
         XCTAssertEqual(round.value as? String, "Not specified")
         let date = app.buttons["watchMatchDatePicker"]
         let originalDate = reveal(date, in: app).value as? String

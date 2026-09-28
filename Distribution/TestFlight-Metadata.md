@@ -38,7 +38,7 @@ Please use Court Story naturally on iPhone and Apple Watch. Test with VoiceOver,
 - Match lists: populated status headings only, earliest date/time first regardless of entry order. Choose a match round in any mode; check spoken time and venue.
 - Live scoring, undo, saving progress, resuming, and clearly ending an activity on Watch.
 - Tournament dates, linked scheduled/completed match counts, and optional links to matches and training.
-- Dashboard result categories, Monday-to-Sunday summaries, training focus, goals, achievements and direct links to relevant editors.
+- Dashboard and Watch all-time results, weekly summaries, training focus, goals, achievements and direct links to relevant editors.
 - Notifications that open the exact activity or reflection, and the five selectable tennis sounds without excessive playback or interference with speech.
 - Watch Overview, Track, Live, Recent and Score, including the Menu button, VoiceOver actions, empty states and complications.
 - Two-way sync, including edits made while the other device is temporarily unreachable. Reopen both apps to confirm the final result.

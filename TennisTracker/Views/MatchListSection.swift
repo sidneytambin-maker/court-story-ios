@@ -15,7 +15,6 @@ struct MatchListSection: View {
                 NavigationLink { MatchDetailView(match: match) } label: {
                     MatchListRow(match: match, group: group, tournaments: tournaments)
                 }
-                .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Match")
                 .accessibilityValue(TennisSummaryFormatter.match(match, tournaments: tournaments, style: .accessibility))
                 .accessibilityIdentifier("matchList." + match.id.uuidString)

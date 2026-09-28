@@ -46,14 +46,15 @@ final class WatchMatchListUITests: XCTestCase {
     func testSavedInProgressAndScheduledScoringChoicesAreSeparated() {
         let app = launch(page: "Score")
         reveal(app.staticTexts["In progress"], in: app)
-        let active = app.buttons["Score Morgan Example against Live Opponent"]
+        let active = scoringButton("Live Opponent", in: app)
         reveal(active, in: app)
-        XCTAssertTrue((active.value as? String)?.contains("In progress") == true)
+        assertScoringSummary(active, status: "In progress", opponent: "Live Opponent")
         reveal(app.staticTexts["Scheduled matches"], in: app)
-        let scheduled = app.buttons["Score Morgan Example against Past Scheduled"]
+        let scheduled = scoringButton("Past Scheduled", in: app)
         reveal(scheduled, in: app)
-        XCTAssertTrue((scheduled.value as? String)?.contains("Scheduled") == true)
-        XCTAssertFalse(app.buttons["Score Morgan Example against Future Result"].exists)
+        assertScoringSummary(scheduled, status: "Scheduled", opponent: "Past Scheduled")
+        XCTAssertFalse(scoringButton("Future Result", in: app).exists)
+        capture(app, name: "Watch distinct active and scheduled scoring choices")
     }
 
     func testEmptyRecentHasOneEmptyStateAndNoMatchHeadings() {
@@ -71,10 +72,18 @@ final class WatchMatchListUITests: XCTestCase {
     func testReverseInsertionPlaces1205FirstInRecentScoreAndOverview() {
         for page in ["Recent", "Score", "Overview"] {
             let app = launch(page: page, filter: "-match-list-time-order")
-            let first = page == "Score"
-                ? app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Score Morgan Example against")).firstMatch
-                : app.buttons.matching(identifier: "Match summary").firstMatch
+            let first: XCUIElement
+            if page == "Score" {
+                first = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Score Morgan Example against")).firstMatch
+                XCTAssertTrue(first.waitForExistence(timeout: 5))
+                XCTAssertEqual(first.label, "Score Morgan Example against Earlier 1205")
+            } else {
+                first = app.buttons.matching(identifier: "Match summary").firstMatch
+            }
             reveal(first, in: app)
+            if page == "Score" {
+                assertScoringSummary(first, status: "Scheduled", opponent: "Earlier 1205")
+            }
             XCTAssertTrue(first.label.contains("Earlier 1205"))
             XCTAssertFalse(first.label.contains("Later 1400"))
             capture(app, name: "Watch \(page) selects 1205 before 1400")
@@ -94,6 +103,16 @@ final class WatchMatchListUITests: XCTestCase {
 
     private func match(_ name: String, in app: XCUIApplication) -> XCUIElement {
         app.buttons.matching(identifier: "Match summary").matching(NSPredicate(format: "label CONTAINS %@", name)).firstMatch
+    }
+
+    private func scoringButton(_ opponent: String, in app: XCUIApplication) -> XCUIElement {
+        app.buttons["Score Morgan Example against " + opponent]
+    }
+
+    private func assertScoringSummary(_ button: XCUIElement, status: String, opponent: String) {
+        XCTAssertEqual(button.label, "Score Morgan Example against " + opponent)
+        XCTAssertTrue((button.value as? String)?.contains(status + " singles match") == true)
+        XCTAssertTrue((button.value as? String)?.contains("Example Centre Court") == true)
     }
 
     private func reveal(_ element: XCUIElement, in app: XCUIApplication, showingBottom: Bool = false) {

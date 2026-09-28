@@ -47,8 +47,13 @@ struct TennisWatchSnapshot: Codable, Equatable {
             .sorted { $0.date > $1.date }
             .prefix(30)
             .map { $0 }
+        let focusStart = Calendar.current.date(byAdding: .day, value: -30, to: Calendar.current.startOfDay(for: now)) ?? now
         trainingSessions += data.trainingSessions.filter { record in
-            (record.isActive || record.needsDetails || (record.date >= weekStart && record.date <= now)) && !trainingSessions.contains { $0.id == record.id }
+            // Match TennisPlayerProgress's recorded focus window even when the editable cache is full.
+            let start = record.actualStart ?? record.date
+            let inFocusWindow = record.isRecordedTraining(at: now) && start >= focusStart && start <= now
+            return (record.isActive || record.needsDetails || inFocusWindow || (record.date >= weekStart && record.date <= now))
+                && !trainingSessions.contains { $0.id == record.id }
         }
         tournaments = data.tournaments
             .filter { !$0.isCompleted || $0.needsDetails || $0.endDate >= recentLimit }

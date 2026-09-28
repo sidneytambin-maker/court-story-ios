@@ -13,7 +13,7 @@ final class TennisMatchEditorUITests: XCTestCase {
         revealPhoneElement(row, in: app).tap()
         app.navigationBars.buttons["Edit"].tap()
         let round = revealPhoneElement(app.buttons["matchRoundPicker"], in: app)
-        XCTAssertEqual(round.label, "Match round")
+        XCTAssertEqual(round.label, "Match round, Not specified")
         XCTAssertEqual(round.value as? String, "Not specified")
         XCTAssertFalse(app.buttons["matchAces"].exists)
         let date = app.descendants(matching: .any).matching(identifier: "matchDatePicker")

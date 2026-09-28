@@ -7,13 +7,15 @@ final class WatchTournamentUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-ui-testing-watch", "-ui-testing-tournament-outcome", "-test-notification=tournament"]
         app.launch()
-        let summary = app.buttons["Tournament summary"]
+        XCTAssertTrue(app.navigationBars["Tournament"].waitForExistence(timeout: 8))
+        let destination = tournamentDestination(in: app)
+        let summary = destination.buttons["Tournament summary"]
         XCTAssertTrue(summary.waitForExistence(timeout: 8))
         expectSummary("Status: Completed", on: summary)
-        reveal(app.buttons["Mark Tournament Entered"], in: app).tap()
+        reveal(destination.buttons["Mark Tournament Entered"], in: app).tap()
         expectSummary("Status: Entered", on: summary)
 
-        reveal(app.buttons["Edit"], in: app).tap()
+        reveal(destination.buttons["Edit"], in: app).tap()
         XCTAssertTrue(app.navigationBars["Edit Tournament"].waitForExistence(timeout: 5))
         let stage = reveal(control("watchTournamentStagePicker", in: app), in: app)
         XCTAssertTrue(stage.label.contains("Stage reached"))
@@ -30,12 +32,12 @@ final class WatchTournamentUITests: XCTestCase {
         assertOutcome(summary.label)
 
         // These are the visible counterparts, not XCTest emulation of VoiceOver rotor gestures.
-        let complete = reveal(app.buttons["Mark Tournament Complete"], in: app)
-        XCTAssertEqual(app.buttons.matching(identifier: "Mark Tournament Complete").count, 1)
+        let complete = reveal(destination.buttons["Mark Tournament Complete"], in: app)
+        XCTAssertEqual(destination.buttons.matching(identifier: "Mark Tournament Complete").count, 1)
         complete.tap()
         expectSummary("Status: Completed", on: summary)
-        let reopen = reveal(app.buttons["Mark Tournament Entered"], in: app)
-        XCTAssertFalse(app.buttons["Mark Tournament Complete"].exists)
+        let reopen = reveal(destination.buttons["Mark Tournament Entered"], in: app)
+        XCTAssertFalse(destination.buttons["Mark Tournament Complete"].exists)
         XCTAssertEqual(app.alerts.count, 0)
         assertOutcome(summary.label)
 
@@ -52,9 +54,18 @@ final class WatchTournamentUITests: XCTestCase {
 
         reveal(reopen, in: app).tap()
         expectSummary("Status: Entered", on: summary)
-        XCTAssertTrue(reveal(app.buttons["Mark Tournament Complete"], in: app).isHittable)
-        XCTAssertFalse(app.buttons["Mark Tournament Entered"].exists)
+        XCTAssertTrue(reveal(destination.buttons["Mark Tournament Complete"], in: app).isHittable)
+        XCTAssertFalse(destination.buttons["Mark Tournament Entered"].exists)
         assertOutcome(summary.label)
+    }
+
+    private func tournamentDestination(in app: XCUIApplication) -> XCUIElement {
+        // Reopening also adds a valid tournament row to the Overview behind this sheet.
+        let destination = app.collectionViews.allElementsBoundByIndex.last {
+            $0.isHittable && $0.buttons.matching(identifier: "Tournament summary").count == 1
+        }
+        XCTAssertNotNil(destination, "Expected the foreground Tournament destination")
+        return destination ?? app.collectionViews.firstMatch
     }
 
     private func assertOutcome(_ summary: String) {

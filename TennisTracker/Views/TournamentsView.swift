@@ -113,7 +113,6 @@ struct TournamentsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            .accessibilityElement(children: .ignore)
             .accessibilityLabel(tournament.name.fallback("Unnamed tournament"))
             .accessibilityValue(TennisSummaryFormatter.tournament(tournament, style: .accessibility, matches: store.linkedMatches(for: tournament), includeName: false))
             .accessibilityIdentifier("tournamentList." + tournament.id.uuidString)
@@ -193,7 +192,7 @@ struct TournamentDetailView: View {
                     SummaryRow(title: "Format", value: tournament.format.rawValue)
                     SummaryRow(title: "Stage reached", value: tournament.stageReached.rawValue)
                     SummaryRow(title: "Finishing position", value: TournamentFinishingPosition.label(tournament.finishingPosition))
-                    SummaryRow(title: "Matches", value: linkedMatches.isEmpty ? "No matches linked yet." : "\(linkedMatches.count) matches linked.")
+                    SummaryRow(title: "Matches", value: linkedMatches.isEmpty ? "No matches linked yet." : "\(linkedMatches.count) \(linkedMatches.count == 1 ? "match" : "matches") linked.")
                     if let start = tournament.actualStart, let finish = tournament.actualFinish {
                         SummaryRow(title: "Tracked duration", value: TennisDurationFormatter.text(seconds: finish.timeIntervalSince(start)))
                     }

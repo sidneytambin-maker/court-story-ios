@@ -55,7 +55,14 @@ final class TennisMatchListUITests: XCTestCase {
             let app = launch(filter: "-match-list-empty", mode: mode)
             XCTAssertTrue(app.staticTexts["No matches recorded yet"].waitForExistence(timeout: 5))
             for title in ["Scheduled matches", "In progress", "Match history"] { XCTAssertFalse(app.staticTexts[title].exists) }
-            XCTAssertEqual(app.staticTexts.matching(identifier: "No matches recorded yet").count, 1)
+            let emptyTitle = "No matches recorded yet"
+            let emptyRows = app.cells.containing(.staticText, identifier: emptyTitle)
+            XCTAssertEqual(emptyRows.count, 1)
+            // SwiftUI exposes a StaticText wrapper and its native text child for one Label.
+            let leaves = emptyRows.firstMatch.staticTexts.matching(NSPredicate(format: "label == %@", emptyTitle))
+                .allElementsBoundByIndex.filter { !$0.staticTexts.matching(identifier: emptyTitle).firstMatch.exists }
+            XCTAssertEqual(leaves.count, 1)
+            XCTAssertEqual(leaves.first?.label, emptyTitle)
             XCTAssertTrue(app.buttons["addMatchButton"].isEnabled)
             app.terminate()
         }

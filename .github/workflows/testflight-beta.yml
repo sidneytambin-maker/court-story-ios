@@ -27,11 +27,12 @@ jobs:
         run: python3 -m unittest discover -s Scripts -p 'test_*.py' -v
       - run: xcodegen generate --spec project-tests.yml
       - name: Native iPhone unit and accessibility tests
+        timeout-minutes: 65
         run: |
           set -euo pipefail
           ID=$(xcrun simctl list devices available --json | jq -r '[.devices | to_entries[] | select(.key | contains("iOS")) | .value[] | select(.isAvailable and (.name | startswith("iPhone")))][0].udid')
           xcrun simctl bootstatus "$ID" -b
-          xcodebuild test -project TennisTrackeriOS.xcodeproj -scheme TennisTracker -destination "id=$ID" -parallel-testing-enabled NO -configuration Debug -resultBundlePath iPhoneBetaTests.xcresult CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+          xcodebuild test -project TennisTrackeriOS.xcodeproj -scheme TennisTracker -destination "id=$ID" -parallel-testing-enabled NO -configuration Debug -resultBundlePath iPhoneBetaTests.xcresult CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" 2>&1 | tee iPhoneBetaTests.log
       - name: Export iPhone test summary and screenshots
         if: always()
         run: |
@@ -47,6 +48,7 @@ jobs:
           path: |
             iPhoneBetaTests.xcresult
             iPhoneReview
+            iPhoneBetaTests.log
           retention-days: 7
   watch-tests:
     runs-on: macos-latest
@@ -56,11 +58,12 @@ jobs:
       - run: brew install xcodegen
       - run: xcodegen generate --spec project-watch-tests.yml
       - name: Native Watch accessibility tests
+        timeout-minutes: 50
         run: |
           set -euo pipefail
           ID=$(xcrun simctl list devices available --json | jq -r '[.devices | to_entries[] | select(.key | contains("watchOS")) | .value[] | select(.isAvailable and (.name | contains("Ultra")))][0].udid')
           xcrun simctl bootstatus "$ID" -b
-          xcodebuild test -project TennisTrackeriOS.xcodeproj -scheme TennisTrackerWatchTests -destination "id=$ID" -parallel-testing-enabled NO -configuration Debug -resultBundlePath WatchBetaTests.xcresult CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+          xcodebuild test -project TennisTrackeriOS.xcodeproj -scheme TennisTrackerWatchTests -destination "id=$ID" -parallel-testing-enabled NO -configuration Debug -resultBundlePath WatchBetaTests.xcresult CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" 2>&1 | tee WatchBetaTests.log
       - name: Export Watch test summary and screenshots
         if: always()
         run: |
@@ -76,6 +79,7 @@ jobs:
           path: |
             WatchBetaTests.xcresult
             WatchReview
+            WatchBetaTests.log
           retention-days: 7
   release-privacy:
     runs-on: macos-latest

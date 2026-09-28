@@ -12,7 +12,10 @@ extension XCTestCase {
         var upward = true
         var previousRows = ""
         var stationarySteps = 0
-        for _ in 0..<48 {
+        let started = Date.timeIntervalSinceReferenceDate
+        let timeout: TimeInterval = 120
+        for _ in 0..<24 {
+            if Date.timeIntervalSinceReferenceDate - started >= timeout { break }
             let viewport = phoneContentViewport(in: app)
             var distance = min(180, viewport.height * 0.3)
             if element.exists {
@@ -42,8 +45,9 @@ extension XCTestCase {
             // Hold before release: a fling can skip short rows or leave them behind the tab bar.
             start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.2)
         }
-        capturePhoneEvidence(app, name: "Failed reveal " + element.identifier)
-        XCTFail("Could not fully reveal \(element); frame \(element.exists ? element.frame.debugDescription : "missing"); viewport \(phoneContentViewport(in: app))", file: file, line: line)
+        // A missing element cannot supply an identifier or snapshot for diagnostics.
+        capturePhoneEvidence(app, name: "Failed phone reveal at line \(line)")
+        XCTFail("Could not fully reveal the requested element within \(timeout) seconds or 24 scroll attempts. See the screenshot and accessibility tree.", file: file, line: line)
         return element
     }
 
