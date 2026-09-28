@@ -31,6 +31,9 @@ final class TennisStore: ObservableObject {
         load()
         if storageError == nil { migrateIfNeeded() }
         #if DEBUG && targetEnvironment(simulator)
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-tournament-outcome") {
+            data = TennisTournamentUITestFixture.make()
+        }
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-manual-duration") ||
            ProcessInfo.processInfo.arguments.contains("-ui-testing-legacy-duration") {
             data = TennisRegressionFixtures.manualDurationCorrection(
@@ -198,9 +201,10 @@ final class TennisStore: ObservableObject {
         saveAndAnnounce("Saved tournament \(tournament.name.fallback("unnamed tournament")).", feedback: event)
     }
 
-    func toggleTournamentCompletion(_ id: UUID) {
+    @discardableResult
+    func toggleTournamentCompletion(_ id: UUID) -> Bool {
         guard storageError == nil, !data.deletedRecordIDs.contains(id),
-              let index = data.tournaments.firstIndex(where: { $0.id == id }) else { return }
+              let index = data.tournaments.firstIndex(where: { $0.id == id }) else { return false }
         let updated = data.tournaments[index].togglingCompletion()
         var savedData = data
         savedData.tournaments[index] = updated
@@ -209,8 +213,10 @@ final class TennisStore: ObservableObject {
             data = savedData
             publishSavedData()
             announce(updated.completionAnnouncement)
+            return true
         } catch {
             announce("Tournament status could not be saved. Please try again.")
+            return false
         }
     }
 

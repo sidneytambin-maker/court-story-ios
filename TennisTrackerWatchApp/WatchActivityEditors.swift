@@ -7,6 +7,9 @@ struct WatchTrainingEditor: View {
     @State private var linkedMatchIDs: [UUID] = []
     @State private var originalMatchIDs = Set<UUID>()
     @State private var loadedLinks = false
+    @State private var durationWasEdited = false
+
+    private var current: TrainingSession? { store.snapshot.trainingSessions.first { $0.id == draft.id } }
 
     var body: some View {
         Form {
@@ -14,6 +17,15 @@ struct WatchTrainingEditor: View {
                 ForEach(TrainingType.allCases) { Text($0.rawValue).tag($0) }
             }
             TennisTrainingFocusPicker(focus: $draft.focus, additionalFocus: $draft.additionalFocus)
+            if !draft.isActive && current?.isActive != true {
+                Section("Duration") {
+                    DurationFields(minutes: Binding(
+                        get: { draft.durationMinutes },
+                        set: { draft.setManualDuration(minutes: $0); durationWasEdited = true }
+                    ), minimumMinutes: 1)
+                    .pickerStyle(.navigationLink)
+                }
+            }
             TennisCoachPicker(coaches: store.snapshot.setup.coaches, context: $draft.context)
             NavigationLink("Players Present") {
                 WatchPlayerChoices(players: store.snapshot.players.filter { $0.id != draft.playerID }, selectedIDs: $draft.context.participantIDs, otherSelected: .constant(false), allowsOther: false)
@@ -43,7 +55,7 @@ struct WatchTrainingEditor: View {
                 Button("Save") {
                     draft.context.captureLegacyNames(coaches: store.snapshot.setup.coaches, players: store.snapshot.players)
                     if draft.context.needsOtherCoachName { draft.needsDetails = true }
-                    store.updateTrainingDetails(draft)
+                    store.updateTrainingDetails(draft, durationWasEdited: durationWasEdited)
                     store.updateTrainingLinks(draft, original: originalMatchIDs, selected: Set(linkedMatchIDs))
                     dismiss()
                 }

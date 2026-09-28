@@ -113,6 +113,46 @@ final class TennisTrackerWatchUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Completed training summary"].label.contains("Focus: Serves"))
     }
 
+    func testWatchDurationCorrectionKeepsOriginalHealthWindow() {
+        let app = launch(page: "Live", completedTraining: true)
+        reveal(app.buttons["Edit Training and Focus"], in: app)
+        app.buttons["Edit Training and Focus"].tap()
+        let hours = app.buttons["durationHours"]
+        reveal(hours, in: app); hours.tap()
+        let twoHours = app.buttons["2 hours"]
+        reveal(twoHours, in: app); twoHours.tap()
+        let minutes = app.buttons["durationMinutes"]
+        reveal(minutes, in: app); minutes.tap()
+        let zeroMinutes = app.buttons["0 minutes"]
+        reveal(zeroMinutes, in: app); zeroMinutes.tap()
+        app.buttons["Save"].tap()
+        let summary = app.buttons["Completed training summary"]
+        XCTAssertTrue(summary.waitForExistence(timeout: 5))
+        XCTAssertTrue(summary.label.contains("2 hours"))
+        XCTAssertTrue(summary.label.contains("original 2 minutes 39 seconds recording"))
+        XCTAssertTrue(summary.label.contains("72 beats per minute"))
+        XCTAssertTrue(summary.label.contains("201 steps"))
+        capture(app, name: "Watch edited duration with original Health measurements")
+    }
+
+    func testActiveWatchEditorDoesNotOfferDurationOverride() {
+        let app = launch(page: "Track", scheduledTraining: true)
+        app.buttons["Track Training Session"].tap()
+        reveal(app.buttons["Start Session"], in: app)
+        app.buttons["Start Session"].tap()
+        XCTAssertTrue(app.buttons["Active training summary"].waitForExistence(timeout: 10))
+        reveal(app.buttons["Edit Training and Focus"], in: app)
+        app.buttons["Edit Training and Focus"].tap()
+        XCTAssertTrue(app.buttons["Save"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["durationHours"].exists)
+        XCTAssertFalse(app.buttons["durationMinutes"].exists)
+        app.buttons["Save"].tap()
+        let summary = app.buttons["Active training summary"]
+        XCTAssertTrue(summary.waitForExistence(timeout: 5))
+        XCTAssertTrue(summary.label.contains("elapsed"))
+        XCTAssertFalse(app.buttons["Completed training summary"].exists)
+    }
+
     func testWatchDeleteCancelKeepsTrainingAndConfirmationRemovesIt() {
         let app = launch(page: "Live", completedTraining: true)
         reveal(app.buttons["Delete"], in: app)

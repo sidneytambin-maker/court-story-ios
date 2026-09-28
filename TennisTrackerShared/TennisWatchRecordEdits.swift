@@ -1,9 +1,25 @@
 import Foundation
 
 enum TennisWatchRecordEdits {
-    static func training(_ draft: TrainingSession, current: TrainingSession, now: Date = Date()) -> TrainingSession {
+    static func training(_ draft: TrainingSession, current: TrainingSession, durationWasEdited: Bool = false, now: Date = Date()) -> TrainingSession {
         var updated = current
         updated.retainManualDuration(from: draft)
+        // Wire timestamps have whole-second precision. An explicit edit of the unchanged revision
+        // can still change minutes within that second; a newer phone revision keeps precedence.
+        if durationWasEdited, draft.durationMinutes > 0,
+           draft.durationSource == .manual, current.durationSource == .manual,
+           draft.durationEditedAt != nil, draft.durationEditedAt == current.durationEditedAt,
+           draft.revision == current.revision {
+            updated.durationMinutes = draft.durationMinutes
+        }
+        // A planned duration is not a recorded-workout correction. Copy it only after an explicit edit,
+        // and only while both versions are untracked, so a stale form cannot replace live timing.
+        if durationWasEdited, draft.durationMinutes > 0,
+           draft.durationSource == .recorded, current.durationSource == .recorded,
+           draft.actualStart == nil, draft.actualFinish == nil, draft.workout == nil,
+           current.actualStart == nil, current.actualFinish == nil, current.workout == nil {
+            updated.durationMinutes = draft.durationMinutes
+        }
         updated.trainingType = draft.trainingType
         updated.focus = draft.focus
         updated.additionalFocus = draft.additionalFocus

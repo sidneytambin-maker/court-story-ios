@@ -100,6 +100,9 @@ final class WatchTennisStore: NSObject, ObservableObject, WCSessionDelegate {
                 data.matches = [match]
                 activeMatch = match
             }
+            if ProcessInfo.processInfo.arguments.contains("-ui-testing-tournament-outcome") {
+                data = TennisTournamentUITestFixture.make()
+            }
             if let argument = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-watch-mode=") }),
                let mode = TrackingMode(rawValue: String(argument.dropFirst("-watch-mode=".count))) {
                 data.settings.trackingMode = mode
@@ -519,10 +522,10 @@ final class WatchTennisStore: NSObject, ObservableObject, WCSessionDelegate {
         announce("Deleted on Watch. The deletion will sync to iPhone.")
     }
 
-    func updateTrainingDetails(_ draft: TrainingSession) {
+    func updateTrainingDetails(_ draft: TrainingSession, durationWasEdited: Bool = false) {
         guard let current = snapshot.trainingSessions.first(where: { $0.id == draft.id }) else { return }
         let beforeAchievements = TennisAchievement.earnedIDs(records: snapshot.achievementRecords, playerID: draft.playerID)
-        let updated = TennisWatchRecordEdits.training(draft, current: current)
+        let updated = TennisWatchRecordEdits.training(draft, current: current, durationWasEdited: durationWasEdited)
         if activeTraining?.id == updated.id { activeTraining = updated }
         if completedTraining?.id == updated.id { completedTraining = updated }
         mergeTraining(updated); send(.upsertTraining(updated))

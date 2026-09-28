@@ -1,8 +1,16 @@
 import Foundation
 
 extension TournamentRecord {
+    var effectiveStatus: TournamentResult {
+        get { isCompleted && finalResult == .entered ? .completed : finalResult }
+        set {
+            finalResult = newValue
+            hasExplicitStatus = true
+        }
+    }
+
     var statusText: String {
-        isCompleted && finalResult == .entered ? TournamentResult.completed.rawValue : finalResult.rawValue
+        effectiveStatus.rawValue
     }
 
     var completionActionTitle: String {

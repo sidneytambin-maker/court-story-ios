@@ -8,6 +8,8 @@ struct TournamentsView: View {
     @State private var tournamentToDelete: TournamentRecord?
     @State private var matchTournament: TournamentRecord?
     @State private var confirmDelete = false
+    @State private var pendingTournamentFocus: UUID?
+    @AccessibilityFocusState private var focusedTournamentID: UUID?
 
     private var upcoming: [TournamentRecord] {
         store.selectedTournaments.filter { !$0.isCompleted }.sorted { $0.date < $1.date }
@@ -19,36 +21,23 @@ struct TournamentsView: View {
 
     var body: some View {
         NavigationStack {
-            TennisList {
-                Section {
-                    Button("Track Tournament") { showingNewTournament = true }
-                        .accessibilityLabel("Track Tournament")
-                        .accessibilityIdentifier("addTournamentButton")
-                }
-                if store.selectedTournaments.isEmpty {
-                    Section {
-                        EmptyStateView(title: "No tournaments added yet", message: "Track an upcoming tournament, then link matches to it later.")
-                    }
-                } else {
-                    TennisSection("Upcoming tournaments") {
-                        if upcoming.isEmpty {
-                            Text("No upcoming tournaments.")
-                        } else {
-                            ForEach(upcoming) { tournamentRow($0) }
+            ScrollViewReader { scroll in
+                tournamentList
+                    .onChange(of: pendingTournamentFocus) { _, id in
+                        guard let id else { return }
+                        guard voiceOver, store.selectedTournaments.contains(where: { $0.id == id }) else {
+                            pendingTournamentFocus = nil
+                            return
                         }
+                        scroll.scrollTo(id, anchor: .center)
                     }
-
-                    TennisSection("Completed tournaments") {
-                        if completed.isEmpty {
-                            Text("No completed tournaments.")
-                        } else {
-                            ForEach(completed) { tournamentRow($0) }
-                        }
-                    }
-                }
             }
             .tennisThemedList()
             .navigationTitle("Tournaments")
+            .onDisappear { pendingTournamentFocus = nil }
+            .onChange(of: voiceOver) { _, enabled in
+                if !enabled { pendingTournamentFocus = nil }
+            }
             .sheet(isPresented: $showingNewTournament) {
                 if let tournament = store.makeDefaultTournament() {
                     TournamentEditorView(tournament: tournament)
@@ -85,6 +74,30 @@ struct TournamentsView: View {
         }
     }
 
+    private var tournamentList: some View {
+        TennisList {
+            Section {
+                Button("Track Tournament") { showingNewTournament = true }
+                    .accessibilityLabel("Track Tournament")
+                    .accessibilityIdentifier("addTournamentButton")
+            }
+            if store.selectedTournaments.isEmpty {
+                Section {
+                    EmptyStateView(title: "No tournaments added yet", message: "Track an upcoming tournament, then link matches to it later.")
+                }
+            } else {
+                TennisSection("Upcoming tournaments") {
+                    if upcoming.isEmpty { Text("No upcoming tournaments.") }
+                    else { ForEach(upcoming) { tournamentRow($0) } }
+                }
+                TennisSection("Completed tournaments") {
+                    if completed.isEmpty { Text("No completed tournaments.") }
+                    else { ForEach(completed) { tournamentRow($0) } }
+                }
+            }
+        }
+    }
+
     private func tournamentRow(_ tournament: TournamentRecord) -> some View {
         HStack(spacing: 12) {
             NavigationLink {
@@ -103,8 +116,15 @@ struct TournamentsView: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(tournament.name.fallback("Unnamed tournament"))
             .accessibilityValue(TennisSummaryFormatter.tournament(tournament, style: .accessibility, matches: store.linkedMatches(for: tournament), includeName: false))
+            .accessibilityFocused($focusedTournamentID, equals: tournament.id)
+            .onAppear {
+                guard voiceOver, pendingTournamentFocus == tournament.id else { return }
+                // Restore focus only when the replacement row has appeared in its new section.
+                focusedTournamentID = tournament.id
+                pendingTournamentFocus = nil
+            }
             .accessibilityAction(named: tournament.completionActionTitle) {
-                store.toggleTournamentCompletion(tournament.id)
+                toggleCompletion(tournament.id)
             }
             .accessibilityAction(named: "Edit tournament") {
                 tournamentToEdit = tournament
@@ -120,7 +140,7 @@ struct TournamentsView: View {
                 confirmDelete = true
             }
             Button {
-                store.toggleTournamentCompletion(tournament.id)
+                toggleCompletion(tournament.id)
             } label: {
                 Label(tournament.completionActionTitle, systemImage: tournament.completionActionSymbol)
                     .labelStyle(.iconOnly)
@@ -130,6 +150,13 @@ struct TournamentsView: View {
             .help(tournament.completionActionTitle)
             .accessibilityHidden(voiceOver)
         }
+        .id(tournament.id)
+    }
+
+    private func toggleCompletion(_ id: UUID) {
+        guard store.toggleTournamentCompletion(id), voiceOver else { return }
+        focusedTournamentID = nil
+        pendingTournamentFocus = id
     }
 
     private func addToCalendar(_ tournament: TournamentRecord) {
@@ -330,11 +357,10 @@ struct TournamentEditorView: View {
                 }
 
                 TennisSection("Progress and result") {
-                    Picker("Status", selection: $tournament.finalResult) {
+                    Picker("Status", selection: $tournament.effectiveStatus) {
                         ForEach(TournamentResult.allCases) { Text($0.rawValue).tag($0) }
                     }
                     .accessibilityIdentifier("tournamentStatusPicker")
-                    .onChange(of: tournament.finalResult) { _, _ in tournament.hasExplicitStatus = true }
                     Picker("Stage reached", selection: $tournament.stageReached) {
                         ForEach(TournamentStage.allCases) { Text($0.rawValue).tag($0) }
                     }

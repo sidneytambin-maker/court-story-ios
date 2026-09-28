@@ -1,7 +1,48 @@
 import XCTest
+import SwiftUI
 @testable import TennisTracker
 
 final class TennisTournamentStatusTests: XCTestCase {
+    @MainActor func testLegacyStatusBindingDisplaysCompletedAndOneSelectionReopens() throws {
+        var legacy = fixture()
+        legacy.date = Date(timeIntervalSince1970: 1_000)
+        legacy.endDate = Date(timeIntervalSince1970: 2_000)
+        var draft = legacy
+        let tournamentBinding = Binding<TournamentRecord>(get: { draft }, set: { draft = $0 })
+        let statusBinding = tournamentBinding.effectiveStatus
+
+        XCTAssertEqual(statusBinding.wrappedValue, .completed)
+        XCTAssertEqual(draft.statusText, "Completed")
+        XCTAssertEqual(draft, legacy, "Reading the editor must not rewrite a legacy record")
+
+        statusBinding.wrappedValue = .entered
+        XCTAssertEqual(statusBinding.wrappedValue, .entered)
+        XCTAssertEqual(draft.finalResult, .entered)
+        XCTAssertTrue(draft.hasExplicitStatus)
+        XCTAssertFalse(draft.isCompleted)
+        XCTAssertEqual(draft.statusText, "Entered")
+        var expected = legacy
+        expected.hasExplicitStatus = true
+        XCTAssertEqual(draft, expected, "Reopening must preserve dates, stage, position and other details")
+        let restored: TournamentRecord = try roundTrip(draft)
+        XCTAssertEqual(restored, expected)
+        XCTAssertEqual(restored.effectiveStatus, .entered)
+        XCTAssertFalse(restored.isCompleted)
+    }
+
+    func testEffectiveStatusPreservesEveryExplicitChoiceForPastDates() {
+        var tournament = fixture()
+        tournament.date = Date(timeIntervalSince1970: 1_000)
+        tournament.endDate = Date(timeIntervalSince1970: 2_000)
+        for status in TournamentResult.allCases {
+            tournament.effectiveStatus = status
+            XCTAssertEqual(tournament.finalResult, status)
+            XCTAssertEqual(tournament.effectiveStatus, status)
+            XCTAssertEqual(tournament.statusText, status.rawValue)
+            XCTAssertTrue(tournament.hasExplicitStatus)
+        }
+    }
+
     func testCompletionAndReopeningHaveStateSpecificActionsAndAnnouncements() {
         let entered = fixture()
         XCTAssertEqual(entered.completionActionTitle, "Mark Tournament Complete")
@@ -125,7 +166,7 @@ final class TennisTournamentStatusTests: XCTestCase {
         var announcements: [String] = []
         phone.announcementDelivery = { announcements.append($0) }
 
-        phone.toggleTournamentCompletion(original.id)
+        XCTAssertTrue(phone.toggleTournamentCompletion(original.id))
         let completed = try XCTUnwrap(TennisStore(storeURL: url).data.tournaments.first)
         XCTAssertTrue(completed.isCompleted)
         XCTAssertEqual(completed.finalResult, .completed)
@@ -142,8 +183,8 @@ final class TennisTournamentStatusTests: XCTestCase {
         XCTAssertEqual(reloaded.data.tournaments.first?.finishingPosition, original.finishingPosition)
         XCTAssertEqual(reloaded.data.matches, data.matches)
         reloaded.announcementDelivery = { announcements.append($0) }
-        reloaded.toggleTournamentCompletion(original.id)
-        reloaded.toggleTournamentCompletion(original.id)
+        XCTAssertTrue(reloaded.toggleTournamentCompletion(original.id))
+        XCTAssertTrue(reloaded.toggleTournamentCompletion(original.id))
         XCTAssertEqual(announcements.last, "Tournament Example Open marked entered.")
         let final = try XCTUnwrap(TennisStore(storeURL: url).data.tournaments.first)
         XCTAssertFalse(final.isCompleted)
@@ -161,9 +202,27 @@ final class TennisTournamentStatusTests: XCTestCase {
         let tournament = fixture()
         store.upsertTournament(tournament)
         store.deleteTournamentKeepingMatches(tournament)
-        store.toggleTournamentCompletion(tournament.id)
+        XCTAssertFalse(store.toggleTournamentCompletion(tournament.id))
         XCTAssertTrue(store.data.tournaments.isEmpty)
         XCTAssertTrue(store.data.deletedRecordIDs.contains(tournament.id))
+    }
+
+    @MainActor func testFailedStatusSaveReportsFailureWithoutChangingRecord() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("tournaments.json")
+        let store = TennisStore(storeURL: url)
+        let tournament = fixture()
+        store.upsertTournament(tournament)
+        let before = store.data
+        // A directory at the temporary store path makes the atomic file save fail.
+        try FileManager.default.removeItem(at: url)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false)
+
+        XCTAssertFalse(store.toggleTournamentCompletion(tournament.id))
+        XCTAssertEqual(store.data, before)
+        XCTAssertEqual(store.lastAnnouncement, "Tournament status could not be saved. Please try again.")
     }
 
     private func fixture() -> TournamentRecord {

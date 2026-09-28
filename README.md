@@ -95,16 +95,16 @@ claim is implemented.
 
 ## Build and verification
 
-The existing remote is a **public** GitHub repository:
-`https://github.com/sidneytambin-maker/tennis-tracker-ios`.
+The public build source is a clean, privacy-reviewed snapshot:
+`https://github.com/sidneytambin-maker/court-story-ios`.
+Earlier development history is preserved in the private original repository;
+it must not be copied into this public repository. Signing credentials and
+personal records must remain outside source, public logs and public artifacts.
 
-Public source upload was stopped pending explicit user approval. No new sprint
-build or physical installation has occurred. Do not bypass that publication
-approval using another upload mechanism.
-
-After authorized source publication, use the existing workflow. Tests are
+Use the TestFlight beta validation workflow. Tests are
 release-blocking; do not ignore failed tests or install a merely syntax-checked
-candidate.
+candidate. See [Build 33](Distribution/Build-33.md) for this sprint's release
+status and physical acceptance requirements.
 
 Local checks:
 

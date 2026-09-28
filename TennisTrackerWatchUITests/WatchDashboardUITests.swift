@@ -8,14 +8,16 @@ final class WatchDashboardUITests: XCTestCase {
     func testBasicDashboardDisclosurePreservesSpokenResults() {
         let app = launch()
         let progress = reveal(app.buttons["overviewProgress"], in: app)
+        assertFullyVisible(progress, in: app)
+        capture(app, name: "Watch Basic collapsed results control")
         XCTAssertEqual(progress.value as? String, "Collapsed")
         XCTAssertFalse(result("Doubles", in: app).exists)
         progress.tap()
         XCTAssertEqual(progress.value as? String, "Expanded")
-        let doubles = reveal(result("Doubles", in: app), in: app)
+        let doubles = reveal(result("Doubles", in: app), in: app, showing: .summaryTop)
         XCTAssertTrue((doubles.value as? String)?.contains("3 matches. 1 win, 2 losses, 0 draws") == true)
         XCTAssertFalse((doubles.value as? String)?.contains("Win rate") == true)
-        capture(app, name: "Watch Basic expanded results")
+        captureSummary(doubles, in: app, name: "Watch Basic expanded results")
         reveal(progress, in: app).tap()
         XCTAssertEqual(progress.value as? String, "Collapsed")
         XCTAssertFalse(result("Doubles", in: app).exists)
@@ -27,13 +29,15 @@ final class WatchDashboardUITests: XCTestCase {
                 let app = launch(mode: mode, large: large)
                 capture(app, name: "Watch \(mode) overview \(large ? "accessibility large" : "normal")")
                 let progress = reveal(app.buttons["overviewProgress"], in: app)
+                assertFullyVisible(progress, in: app)
+                capture(app, name: "Watch \(mode) results control \(large ? "accessibility large" : "normal")")
                 XCTAssertEqual(progress.value as? String, mode == "Basic" ? "Collapsed" : "Expanded")
                 if mode == "Basic" { progress.tap() }
-                let doubles = reveal(result("Doubles", in: app), in: app)
+                let doubles = reveal(result("Doubles", in: app), in: app, showing: .summaryTop)
                 XCTAssertTrue((doubles.value as? String)?.contains("1 win, 2 losses") == true)
                 XCTAssertEqual((doubles.value as? String)?.contains("Win rate") == true, mode == "Power")
                 assertFitsHorizontally(doubles, in: app)
-                capture(app, name: "Watch \(mode) results \(large ? "accessibility large" : "normal")")
+                captureSummary(doubles, in: app, name: "Watch \(mode) results \(large ? "accessibility large" : "normal")")
                 app.terminate()
             }
         }
@@ -48,7 +52,7 @@ final class WatchDashboardUITests: XCTestCase {
             XCTAssertFalse(app.buttons["Begin with Health Workout"].exists)
             XCTAssertFalse(app.buttons["Begin without Health"].exists)
             XCTAssertEqual(app.buttons.matching(identifier: "overviewStartSession").count, 1)
-            assertFitsHorizontally(start, in: app)
+            assertFullyVisible(start, in: app)
             capture(app, name: "Watch scheduled entry \(large ? "accessibility large" : "normal")")
             app.terminate()
         }
@@ -90,17 +94,98 @@ final class WatchDashboardUITests: XCTestCase {
     }
 
     @discardableResult
-    private func reveal(_ element: XCUIElement, in app: XCUIApplication) -> XCUIElement {
-        for _ in 0..<16 {
-            if element.exists && element.isHittable { return element }
-            app.swipeUp()
+    private func reveal(_ element: XCUIElement, in app: XCUIApplication, showing region: VisibleRegion = .control) -> XCUIElement {
+        var upward = true
+        var previousRows = ""
+        var stationarySteps = 0
+        for _ in 0..<60 {
+            let viewport = contentViewport(in: app)
+            var distance = min(60, viewport.height * 0.35)
+            if element.exists {
+                let target = requiredFrame(of: element, showing: region, viewport: viewport)
+                if element.isHittable && !target.isEmpty && viewport.contains(target) { return element }
+                if target.maxY > viewport.maxY {
+                    upward = true
+                    distance = min(distance, target.maxY - viewport.maxY + 2)
+                } else if target.minY < viewport.minY {
+                    upward = false
+                    distance = min(distance, viewport.minY - target.minY + 2)
+                }
+            } else {
+                let rows = visibleRows(in: app, viewport: viewport)
+                stationarySteps = !rows.isEmpty && rows == previousRows ? stationarySteps + 1 : 0
+                if stationarySteps == 2 {
+                    upward.toggle()
+                    stationarySteps = 0
+                }
+                previousRows = rows
+            }
+            scroll(in: app, viewport: viewport, upward: upward, distance: distance)
         }
-        for _ in 0..<20 {
-            if element.exists && element.isHittable { return element }
-            app.swipeDown()
-        }
-        XCTFail("Could not reach \(element)")
+        capture(app, name: "Failed to reveal " + element.identifier)
+        XCTFail("Could not fully reveal \(element). Element frame: \(element.exists ? element.frame.debugDescription : "missing"); content viewport: \(contentViewport(in: app))")
         return element
+    }
+
+    private enum VisibleRegion {
+        case control, summaryTop, summaryBottom
+    }
+
+    private func contentViewport(in app: XCUIApplication) -> CGRect {
+        let screen = app.frame
+        let navigation = app.navigationBars.firstMatch
+        let upperEdge = max(screen.minY + 40, navigation.exists ? navigation.frame.maxY : screen.minY) + 8
+        let lowerEdge = screen.maxY - 20
+        return CGRect(x: screen.minX, y: upperEdge, width: screen.width, height: max(0, lowerEdge - upperEdge))
+    }
+
+    private func requiredFrame(of element: XCUIElement, showing region: VisibleRegion, viewport: CGRect) -> CGRect {
+        let frame = element.frame
+        // A tall summary may scroll naturally; a button must fit completely.
+        let height = min(frame.height, max(0, viewport.height - 8))
+        switch region {
+        case .control: return frame
+        case .summaryTop: return CGRect(x: frame.minX, y: frame.minY, width: frame.width, height: height)
+        case .summaryBottom: return CGRect(x: frame.minX, y: frame.maxY - height, width: frame.width, height: height)
+        }
+    }
+
+    private func visibleRows(in app: XCUIApplication, viewport: CGRect) -> String {
+        let cells = app.cells.allElementsBoundByIndex
+        let rows = cells.isEmpty ? app.buttons.allElementsBoundByIndex : cells
+        return rows.filter { $0.frame.intersects(viewport) }
+            .map { "\($0.identifier):\($0.label):\(Int($0.frame.minY))" }.joined(separator: "|")
+    }
+
+    private func scroll(in app: XCUIApplication, viewport: CGRect, upward: Bool, distance: CGFloat) {
+        let list = app.scrollViews.allElementsBoundByIndex.last(where: { $0.isHittable })
+            ?? app.collectionViews.allElementsBoundByIndex.last(where: { $0.isHittable })
+            ?? app
+        let travel = min(max(12, distance), viewport.height * 0.45)
+        let offset = upward ? travel / 2 : -travel / 2
+        let origin = list.coordinate(withNormalizedOffset: .zero)
+        let start = origin.withOffset(CGVector(dx: viewport.midX - list.frame.minX, dy: viewport.midY + offset - list.frame.minY))
+        let end = origin.withOffset(CGVector(dx: viewport.midX - list.frame.minX, dy: viewport.midY - offset - list.frame.minY))
+        // Stop before release so inertia cannot skip a short, lazily loaded row.
+        start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.2)
+    }
+
+    private func assertFullyVisible(_ element: XCUIElement, in app: XCUIApplication) {
+        assertFitsHorizontally(element, in: app)
+        let viewport = contentViewport(in: app)
+        XCTAssertGreaterThan(element.frame.height, 0)
+        XCTAssertGreaterThanOrEqual(element.frame.minY, viewport.minY)
+        XCTAssertLessThanOrEqual(element.frame.maxY, viewport.maxY)
+        XCTAssertTrue(element.isHittable)
+    }
+
+    private func captureSummary(_ element: XCUIElement, in app: XCUIApplication, name: String) {
+        reveal(element, in: app, showing: .summaryTop)
+        capture(app, name: name + " top")
+        if element.frame.height > contentViewport(in: app).height - 8 {
+            reveal(element, in: app, showing: .summaryBottom)
+            capture(app, name: name + " bottom")
+        }
     }
 
     private func assertFitsHorizontally(_ element: XCUIElement, in app: XCUIApplication) {
@@ -114,5 +199,9 @@ final class WatchDashboardUITests: XCTestCase {
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
+        let accessibility = XCTAttachment(string: app.debugDescription)
+        accessibility.name = name + " accessibility tree"
+        accessibility.lifetime = .keepAlways
+        add(accessibility)
     }
 }
