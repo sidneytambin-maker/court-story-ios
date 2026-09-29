@@ -27,13 +27,13 @@ final class WatchMatchEditorUITests: XCTestCase {
         XCTAssertEqual(reveal(date, in: app).value as? String, originalDate)
         XCTAssertEqual(reveal(app.buttons["Start time hour"], in: app).value as? String, "13 hours")
         XCTAssertEqual(reveal(minutes, in: app).value as? String, "35 minutes")
-        reveal(app.switches["matchStartTimeSpecified"], in: app).tap()
+        setStartTimeSpecified(false, in: app)
         choose(round, value: "Final", in: app)
         saveAndReopen(app)
         XCTAssertEqual(reveal(round, in: app).value as? String, "Final")
         let specified = reveal(app.switches["matchStartTimeSpecified"], in: app)
         XCTAssertEqual(specified.value as? String, "0")
-        specified.tap()
+        setStartTimeSpecified(true, in: app)
         XCTAssertEqual(reveal(app.buttons["Start time hour"], in: app).value as? String, "13 hours")
         XCTAssertEqual(reveal(minutes, in: app).value as? String, "35 minutes")
         capture(app, name: "Watch match round and retained start time")
@@ -57,6 +57,21 @@ final class WatchMatchEditorUITests: XCTestCase {
         app.buttons["Save"].tap()
         XCTAssertTrue(app.buttons["Save"].waitForNonExistence(timeout: 5))
         openEditor(app)
+    }
+
+    private func setStartTimeSpecified(_ enabled: Bool, in app: XCUIApplication) {
+        let toggle = reveal(app.switches["matchStartTimeSpecified"], in: app)
+        let expected = enabled ? "1" : "0"
+        XCTAssertTrue(toggle.isEnabled)
+        if toggle.value as? String != expected {
+            // The Watch row includes a noninteractive label; tap its trailing native switch.
+            toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5)).tap()
+        }
+        let state = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", expected), object: toggle)
+        let result = XCTWaiter.wait(for: [state], timeout: 5)
+        if result != .completed { capture(app, name: "Watch start time switch did not change") }
+        XCTAssertEqual(result, .completed)
+        XCTAssertEqual(toggle.value as? String, expected)
     }
 
     private func choose(_ picker: XCUIElement, value: String, in app: XCUIApplication) {
