@@ -61,8 +61,12 @@ extension XCTestCase {
         XCTAssertTrue(element.isEnabled, file: file, line: line)
         let expected = enabled ? "1" : "0"
         if element.value as? String != expected {
-            // Native Switch snapshots include the label; use the trailing switch itself.
-            element.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+            // SwiftUI exposes a labelled row around the actual native switch.
+            let controls = element.descendants(matching: .switch)
+            XCTAssertLessThanOrEqual(controls.count, 1, file: file, line: line)
+            let control = controls.firstMatch.exists ? controls.firstMatch : element
+            XCTAssertTrue(control.isHittable, file: file, line: line)
+            control.tap()
         }
         let state = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", expected), object: element)
         let result = XCTWaiter.wait(for: [state], timeout: 5)

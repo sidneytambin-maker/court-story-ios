@@ -106,6 +106,10 @@ final class TennisDashboardEntryUITests: XCTestCase {
         XCTAssertEqual(previewResult, .completed)
         XCTAssertTrue(updatedPreview.label.contains("Goals & match review"))
         capture("Coach goals explicitly enabled and included in preview")
+        setPhoneSwitch(goals, enabled: false, in: app)
+        let privatePreview = revealPhoneElement(app.staticTexts["coachSummaryText"], in: app, showing: .top)
+        XCTAssertFalse(privatePreview.label.contains("Goals & match review"))
+        capture("Coach goals removed from preview after opting out")
         app.buttons["Done"].tap()
     }
 
