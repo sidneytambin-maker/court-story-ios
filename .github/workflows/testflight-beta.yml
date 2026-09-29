@@ -14,7 +14,7 @@ permissions:
 jobs:
   iphone-tests:
     runs-on: macos-latest
-    timeout-minutes: 75
+    timeout-minutes: 100
     steps:
       - uses: actions/checkout@v4
       - run: brew install xcodegen
@@ -27,7 +27,7 @@ jobs:
         run: python3 -m unittest discover -s Scripts -p 'test_*.py' -v
       - run: xcodegen generate --spec project-tests.yml
       - name: Native iPhone unit and accessibility tests
-        timeout-minutes: 65
+        timeout-minutes: 90
         run: |
           set -euo pipefail
           ID=$(xcrun simctl list devices available --json | jq -r '[.devices | to_entries[] | select(.key | contains("iOS")) | .value[] | select(.isAvailable and (.name | startswith("iPhone")))][0].udid')

@@ -11,7 +11,9 @@ struct FiveMinuteTimePicker: View {
 
     var body: some View {
         OrderedChoicePicker(title: "\(title) hour", selection: hourBinding, values: hours) { String(format: "%02d hours", $0) }
+            .accessibilityIdentifier("\(title) hour")
         OrderedChoicePicker(title: "\(title) minutes", selection: minuteBinding, values: minutes) { String(format: "%02d minutes", $0) }
+            .accessibilityIdentifier("\(title) minutes")
     }
 
     private var hourBinding: Binding<Int> {

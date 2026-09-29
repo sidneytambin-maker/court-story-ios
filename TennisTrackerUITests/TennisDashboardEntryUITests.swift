@@ -97,14 +97,7 @@ final class TennisDashboardEntryUITests: XCTestCase {
         XCTAssertFalse(app.otherElements["ActivityListView"].exists)
         let goals = reveal(app.switches["coachIncludeGoals"])
         XCTAssertEqual(goals.value as? String, "0")
-        XCTAssertTrue(goals.isEnabled)
-        // The native Switch snapshot spans the row; its center is over the label.
-        goals.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
-        let enabled = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "1"), object: goals)
-        let toggleResult = XCTWaiter.wait(for: [enabled], timeout: 5)
-        if toggleResult != .completed { capture("Coach goals switch did not turn on") }
-        XCTAssertEqual(toggleResult, .completed)
-        XCTAssertEqual(goals.value as? String, "1")
+        setPhoneSwitch(goals, enabled: true, in: app)
         let updatedPreview = revealPhoneElement(app.staticTexts["coachSummaryText"], in: app, showing: .top)
         let includesGoals = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "label CONTAINS %@", "Goals & match review"), object: updatedPreview)
@@ -133,7 +126,7 @@ final class TennisDashboardEntryUITests: XCTestCase {
         XCTAssertEqual(minutes.label, "Duration minutes, 52 minutes")
         XCTAssertEqual(minutes.value as? String, "52 minutes")
         minutes.tap()
-        app.buttons["0 minutes"].tap()
+        revealPhoneElement(app.buttons["0 minutes"], in: app, searchingUp: true).tap()
         XCTAssertEqual(app.buttons["durationMinutes"].value as? String, "0 minutes")
         app.buttons["saveTrainingButton"].tap()
         let detail = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Fitness measurements cover the original 5 hours 52 minutes recording")).firstMatch
@@ -230,7 +223,7 @@ final class TennisDashboardEntryUITests: XCTestCase {
     }
 
     private func scrollToTop() {
-        reveal(app.staticTexts["Welcome, Alex"])
+        revealPhoneElement(app.staticTexts["Welcome, Alex"], in: app, searchingUp: true)
     }
 
     private func assertFitsHorizontally(_ element: XCUIElement) {

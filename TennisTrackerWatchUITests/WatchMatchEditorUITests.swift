@@ -72,14 +72,23 @@ final class WatchMatchEditorUITests: XCTestCase {
 
     @discardableResult
     private func reveal(_ element: XCUIElement, in app: XCUIApplication) -> XCUIElement {
+        var upward = true
+        var previousFirstRow: CGRect?
+        var stationarySteps = 0
         for _ in 0..<32 {
-            let navigation = app.navigationBars.firstMatch
-            let top = navigation.exists ? navigation.frame.maxY : app.frame.minY + 28
+            let navigation = app.navigationBars.allElementsBoundByIndex.last(where: { $0.isHittable })
+            let top = navigation?.frame.maxY ?? app.frame.minY + 28
             let bottom = app.frame.maxY
-            var upward = true
             if element.exists {
                 if element.isHittable && element.frame.minY >= top && element.frame.maxY <= bottom { return element }
                 upward = element.frame.minY >= top
+            } else {
+                let list = app.collectionViews.allElementsBoundByIndex.last(where: { $0.isHittable })
+                let row = list?.cells.firstMatch
+                let frame = row?.exists == true ? row?.frame : nil
+                stationarySteps = frame != nil && frame == previousFirstRow ? stationarySteps + 1 : 0
+                if stationarySteps == 2 { upward.toggle(); stationarySteps = 0 }
+                previousFirstRow = frame
             }
             let origin = app.coordinate(withNormalizedOffset: .zero)
             let middle = (top + bottom) / 2 - app.frame.minY

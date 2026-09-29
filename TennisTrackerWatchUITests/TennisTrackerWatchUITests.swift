@@ -193,7 +193,10 @@ final class TennisTrackerWatchUITests: XCTestCase {
         XCTAssertFalse(app.buttons["Delete"].exists)
         XCTAssertFalse(app.buttons["View Details"].exists)
         XCTAssertFalse(app.buttons["Track Training Session"].exists)
-        app.buttons["Completed training summary"].tap()
+        let summary = app.buttons["Completed training summary"]
+        reveal(summary, in: app)
+        // Tap the visible title, not the gap between the two fitness columns.
+        summary.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.25)).tap()
         XCTAssertTrue(app.navigationBars["Summary"].waitForExistence(timeout: 5))
         let details = app.staticTexts["watchActivityDetailsSummary"]
         XCTAssertTrue(details.waitForExistence(timeout: 5))

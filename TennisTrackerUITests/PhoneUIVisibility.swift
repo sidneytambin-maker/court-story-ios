@@ -8,16 +8,17 @@ extension XCTestCase {
     @discardableResult
     func revealPhoneElement(_ element: XCUIElement, in app: XCUIApplication,
                             showing region: PhoneUIVisibleRegion = .full,
+                            searchingUp: Bool = false,
                             file: StaticString = #filePath, line: UInt = #line) -> XCUIElement {
-        var upward = true
-        var previousRows = ""
+        var upward = !searchingUp
+        var previousFirstRow: CGRect?
         var stationarySteps = 0
         let started = Date.timeIntervalSinceReferenceDate
         let timeout: TimeInterval = 120
         for _ in 0..<24 {
             if Date.timeIntervalSinceReferenceDate - started >= timeout { break }
             let viewport = phoneContentViewport(in: app)
-            var distance = min(180, viewport.height * 0.3)
+            var distance = min(380, viewport.height * 0.65)
             if element.exists {
                 let target = phoneVisibleFrame(element.frame, region: region, viewport: viewport)
                 if element.isHittable && !target.isEmpty && viewport.contains(target) { return element }
@@ -29,13 +30,16 @@ extension XCTestCase {
                     distance = min(distance, viewport.minY - target.minY + 4)
                 }
             } else {
-                let rows = app.cells.allElementsBoundByIndex.filter { $0.frame.intersects(viewport) }
-                    .map { "\($0.label):\(Int($0.frame.minY))" }.joined(separator: "|")
-                stationarySteps = !rows.isEmpty && rows == previousRows ? stationarySteps + 1 : 0
+                // Query one foreground row, not every offscreen cell on every drag.
+                let list = app.collectionViews.allElementsBoundByIndex.last(where: { $0.isHittable })
+                    ?? app.tables.allElementsBoundByIndex.last(where: { $0.isHittable })
+                let firstRow = list?.cells.firstMatch
+                let frame = firstRow?.exists == true ? firstRow?.frame : nil
+                stationarySteps = frame != nil && frame == previousFirstRow ? stationarySteps + 1 : 0
                 if stationarySteps == 2 { upward.toggle(); stationarySteps = 0 }
-                previousRows = rows
+                previousFirstRow = frame
             }
-            let travel = min(max(40, distance), viewport.height * 0.4)
+            let travel = min(max(40, distance), viewport.height * 0.65)
             let offset = upward ? travel / 2 : -travel / 2
             let origin = app.coordinate(withNormalizedOffset: .zero)
             let start = origin.withOffset(CGVector(dx: viewport.midX - app.frame.minX,
@@ -49,6 +53,22 @@ extension XCTestCase {
         capturePhoneEvidence(app, name: "Failed phone reveal at line \(line)")
         XCTFail("Could not fully reveal the requested element within \(timeout) seconds or 24 scroll attempts. See the screenshot and accessibility tree.", file: file, line: line)
         return element
+    }
+
+    func setPhoneSwitch(_ element: XCUIElement, enabled: Bool, in app: XCUIApplication,
+                        file: StaticString = #filePath, line: UInt = #line) {
+        revealPhoneElement(element, in: app, file: file, line: line)
+        XCTAssertTrue(element.isEnabled, file: file, line: line)
+        let expected = enabled ? "1" : "0"
+        if element.value as? String != expected {
+            // Native Switch snapshots include the label; use the trailing switch itself.
+            element.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+        }
+        let state = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", expected), object: element)
+        let result = XCTWaiter.wait(for: [state], timeout: 5)
+        if result != .completed { capturePhoneEvidence(app, name: "Switch did not reach requested state") }
+        XCTAssertEqual(result, .completed, file: file, line: line)
+        XCTAssertEqual(element.value as? String, expected, file: file, line: line)
     }
 
     func expandPhoneSection(_ identifier: String, in app: XCUIApplication,
