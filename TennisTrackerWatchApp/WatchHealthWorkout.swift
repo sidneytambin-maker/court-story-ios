@@ -1,6 +1,7 @@
 import Foundation
 import HealthKit
 import Combine
+import OSLog
 
 @MainActor
 final class WatchHealthWorkout: NSObject, ObservableObject, TennisWorkoutClient, HKWorkoutSessionDelegate, HKLiveWorkoutBuilderDelegate {
@@ -14,6 +15,9 @@ final class WatchHealthWorkout: NSObject, ObservableObject, TennisWorkoutClient,
     private var finishTimeout: Task<Void, Never>?
     private var finishing = false
     private var generation = UUID()
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "CourtStory", category: "Workout")
+    @Published private(set) var diagnosticCode = ""
+    var courtSport: CourtSport = .tennis
     var onHealthStateChange: ((TennisWorkoutState, String) -> Void)?
     var isWorkoutPaused: Bool { session?.state == .paused }
     var isWorkoutRunning: Bool {
@@ -61,6 +65,7 @@ final class WatchHealthWorkout: NSObject, ObservableObject, TennisWorkoutClient,
         distanceMeters = nil
         stepCount = nil
         statusMessage = ""
+        diagnosticCode = ""
     }
 
     func discardForLibraryChange() {
@@ -71,7 +76,6 @@ final class WatchHealthWorkout: NSObject, ObservableObject, TennisWorkoutClient,
 
     func requestPermission() async throws -> Bool {
         guard available else { return false }
-        if workoutAuthorization == .authorized { return true }
         if workoutAuthorization == .denied { return false }
         let workout = HKObjectType.workoutType()
         let heart = HKObjectType.quantityType(forIdentifier: .heartRate)!
@@ -80,8 +84,13 @@ final class WatchHealthWorkout: NSObject, ObservableObject, TennisWorkoutClient,
         let steps = HKQuantityType(.stepCount)
         let read: Set<HKObjectType> = [workout, heart, energy, distance, steps]
         do {
-            try await healthStore.requestAuthorization(toShare: [workout, heart, energy, distance, steps], read: read)
-        } catch { throw TennisWorkoutFailure.permissionRequestFailed }
+            // The Watch records sensor samples. Court Story writes the workout,
+            // not invented heart-rate, step or energy samples of its own.
+            try await healthStore.requestAuthorization(toShare: [workout], read: read)
+        } catch {
+            recordFailure(error, stage: "authorization")
+            throw TennisWorkoutFailure.permissionRequestFailed
+        }
         // Request completion is not a grant. Only workout write access gates startup.
         return healthStore.authorizationStatus(for: workout) == .sharingAuthorized
     }
@@ -94,11 +103,22 @@ final class WatchHealthWorkout: NSObject, ObservableObject, TennisWorkoutClient,
         }
         guard session == nil else { throw TennisWorkoutFailure.alreadyRunning }
         let configuration = HKWorkoutConfiguration()
-        configuration.activityType = .tennis
+        switch courtSport {
+        case .tennis: configuration.activityType = .tennis
+        case .pickleball: configuration.activityType = .pickleball
+        case .badminton: configuration.activityType = .badminton
+        case .squash: configuration.activityType = .squash
+        case .racquetball: configuration.activityType = .racquetball
+        case .tableTennis: configuration.activityType = .tableTennis
+        default: configuration.activityType = .other
+        }
         configuration.locationType = .unknown
         let session: HKWorkoutSession
         do { session = try HKWorkoutSession(healthStore: healthStore, configuration: configuration) }
-        catch { throw startFailure(for: error) }
+        catch {
+            recordFailure(error, stage: "session-create")
+            throw startFailure(for: error)
+        }
         let builder = session.associatedWorkoutBuilder()
         session.delegate = self
         builder.delegate = self
@@ -111,7 +131,7 @@ final class WatchHealthWorkout: NSObject, ObservableObject, TennisWorkoutClient,
         activeEnergy = nil
         distanceMeters = nil
         stepCount = nil
-        statusMessage = "Starting tennis workout."
+        statusMessage = "Starting \(courtSport.rawValue.lowercased()) workout."
         UserDefaults.standard.set(activityID.uuidString, forKey: "activeHealthTrainingID")
         UserDefaults.standard.set(Array(Set(pendingWorkoutIDs + [activityID])).map(\.uuidString), forKey: "pendingHealthTrainingIDs")
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
@@ -133,6 +153,7 @@ final class WatchHealthWorkout: NSObject, ObservableObject, TennisWorkoutClient,
                     self.confirmStartedWorkout()
                 } catch {
                     guard self.session === session else { return }
+                    self.recordFailure(error, stage: "collection-start")
                     self.failWorkout(self.startFailure(for: error))
                 }
             }
@@ -197,7 +218,7 @@ final class WatchHealthWorkout: NSObject, ObservableObject, TennisWorkoutClient,
         }
         return try await withCheckedThrowingContinuation { continuation in
             ending = continuation
-            statusMessage = "Saving tennis workout."
+            statusMessage = "Saving workout to Apple Health."
             if session.state == .stopped {
                 Task { await self.saveEndedWorkout(at: session.endDate ?? date) }
             } else { session.stopActivity(with: date) }
@@ -238,6 +259,7 @@ final class WatchHealthWorkout: NSObject, ObservableObject, TennisWorkoutClient,
     nonisolated func workoutSession(_ workoutSession: HKWorkoutSession, didFailWithError error: Error) {
         Task { @MainActor in
             guard self.session === workoutSession else { return }
+            self.recordFailure(error, stage: "session")
             self.failWorkout(self.starting == nil ? TennisWorkoutFailure.interrupted : self.startFailure(for: error))
         }
     }
@@ -281,6 +303,7 @@ final class WatchHealthWorkout: NSObject, ObservableObject, TennisWorkoutClient,
             statusMessage = workout == nil ? "Health finished saving. Workout link pending until available." : "Tennis workout saved."
         } catch {
             guard self.builder === builder else { return }
+            recordFailure(error, stage: "workout-save")
             failWorkout(error)
             return
         }
@@ -340,6 +363,13 @@ final class WatchHealthWorkout: NSObject, ObservableObject, TennisWorkoutClient,
         case .errorHealthDataUnavailable, .errorHealthDataRestricted: return .unavailable
         default: return .startFailed
         }
+    }
+
+    private func recordFailure(_ error: Error, stage: String) {
+        let error = error as NSError
+        // Keep diagnostics useful without names, record IDs, samples or error userInfo.
+        diagnosticCode = "\(stage): \(error.domain), code \(error.code)"
+        logger.error("Workout failure: \(self.diagnosticCode, privacy: .public)")
     }
 
     private func dataSource(configuration: HKWorkoutConfiguration) -> HKLiveWorkoutDataSource {

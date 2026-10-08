@@ -3,6 +3,7 @@ import Foundation
 extension TennisWatchSyncCommand {
     var recordID: UUID? {
         switch self {
+        case .court(let value): return value.id
         case .upsertMatch(let value): return value.id
         case .upsertTraining(let value): return value.id
         case .upsertTournament(let value): return value.id
@@ -22,6 +23,13 @@ enum TennisWatchReconciliation {
             if case .deleteRecord = command {} else if let id = command.recordID, snapshot.deletedRecordIDs.contains(id) { continue }
             let acknowledged: Bool
             switch command {
+            case .court(let mutation):
+                var library = snapshot.courtLibrary
+                acknowledged = mutation.isAcknowledged(in: library)
+                if !acknowledged {
+                    _ = mutation.apply(to: &library)
+                    snapshot.applyCourtLibrary(library)
+                }
             case .deleteRecord(let deletion):
                 acknowledged = incoming.deletedRecordIDs.contains(deletion.id)
                 snapshot.delete(deletion)

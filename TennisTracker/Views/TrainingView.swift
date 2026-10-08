@@ -233,7 +233,7 @@ struct TrainingEditorView: View {
             return
         }
         session.needsDetails = session.context.participantsNeedDetails == true || session.context.coachesNeedDetails == true || session.context.needsOtherCoachName
-        store.upsertTraining(session, newPlayers: newPlayers)
+        guard store.upsertTraining(session, newPlayers: newPlayers) else { validationMessage = store.lastAnnouncement; return }
         store.updateTrainingLinks(session, original: originalMatchIDs, selected: Set(linkedMatchIDs))
         dismiss()
     }

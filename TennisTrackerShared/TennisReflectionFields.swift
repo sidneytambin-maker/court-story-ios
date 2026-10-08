@@ -2,11 +2,13 @@ import SwiftUI
 
 struct TennisReflectionDraft: Equatable {
     let sessionID: UUID
+    let sport: CourtSport
     var focus: String
     var additionalFocus: [String]
     var outcome: String
     var notes: String
     init(session: TrainingSession) {
+        sport = session.court.sport.sport
         sessionID = session.id; focus = session.focus; additionalFocus = session.additionalFocus
         outcome = session.sessionOutcome; notes = session.notes
     }
@@ -25,7 +27,7 @@ struct TennisReflectionFields: View {
     var body: some View {
         Text(summary).font(.callout)
             .accessibilityIdentifier("reflectionSessionSummary")
-        TennisTrainingFocusPicker(focus: $draft.focus, additionalFocus: $draft.additionalFocus)
+        TennisTrainingFocusPicker(focus: $draft.focus, additionalFocus: $draft.additionalFocus, sport: draft.sport)
         TextField("Progress and next steps", text: $draft.outcome, axis: .vertical)
             .accessibilityIdentifier("reflectionProgressField")
             .accessibilityHint("What improved in this session, and what would you like to practise next? Saved progress stays with this session.")

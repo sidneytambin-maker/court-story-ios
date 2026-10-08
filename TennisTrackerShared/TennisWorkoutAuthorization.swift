@@ -14,7 +14,7 @@ enum TennisWorkoutAuthorization: String, Codable, Equatable {
     }
 
     func useHealthByDefault(preference: Bool?) -> Bool {
-        preference ?? (self == .authorized)
+        preference ?? (self != .unavailable)
     }
 }
 

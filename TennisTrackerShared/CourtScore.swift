@@ -213,11 +213,38 @@ struct CourtScoreSession: Codable, Equatable {
     @discardableResult
     mutating func correctPoints(_ points: [Int]) -> Bool {
         guard !frame.complete, points.count == sides.count, points.allSatisfy({ (0...9999).contains($0) }),
-              rules.system != .aggregate, !points.indices.contains(where: { isWinningScore(points, side: $0) }) else { return false }
+              rules.system != .aggregate else { return false }
+        if rules.system == .tennisGames {
+            let deciding = rules.decidingMatchTieBreak && frame.tennis.playerSets == rules.roundsToWin - 1 && frame.tennis.opponentSets == rules.roundsToWin - 1
+            let target = deciding ? rules.decidingTieBreakTarget : frame.tennis.isTiebreak ? rules.tieBreakTarget : 4
+            let margin = frame.tennis.isTiebreak || deciding || rules.deuce == .advantage ? 2 : 1
+            let high = points.max() ?? 0, low = points.min() ?? 0
+            if high >= target && high - low >= margin { return false }
+            if rules.deuce == .starPoint && !frame.tennis.isTiebreak && !deciding && high > 5 { return false }
+        } else if points.indices.contains(where: { isWinningScore(points, side: $0) }) || rules.cap.map({ (points.max() ?? 0) >= $0 }) == true { return false }
         checkpoint()
         frame.points = points
         if rules.system == .tennisGames { frame.tennis.playerPoints = points[0]; frame.tennis.opponentPoints = points[1] }
         return true
+    }
+
+    @discardableResult
+    mutating func recordResult(_ rounds: [CourtScoreRound], decidingWinner: Int? = nil) -> String? {
+        if let error = CourtRecordedResult.validation(rounds, sport: sport, rules: rules, sides: sides.count, decidingWinner: decidingWinner) { return error }
+        checkpoint()
+        frame = CourtScoreFrame(count: sides.count)
+        frame.rounds = rounds
+        for round in rounds {
+            for side in sides.indices { frame.aggregate[side] += round.points[side] }
+            if let winner = CourtRecordedResult.winner(round), !round.unfinished { frame.roundsWon[winner] += 1 }
+        }
+        let values = rules.system == .aggregate ? frame.aggregate : frame.roundsWon
+        let high = values.max() ?? 0
+        let leaders = values.indices.filter { values[$0] == high }
+        frame.complete = true
+        frame.winningSide = leaders.count == 1 ? leaders[0] : decidingWinner
+        frame.gummiarmPlayed = decidingWinner != nil
+        return nil
     }
 
     var summary: String {
@@ -241,7 +268,9 @@ struct CourtScoreSession: Codable, Equatable {
 
     var resultSummary: String {
         if rules.system == .aggregate { return "Aggregate \(numericSummary(frame.aggregate))" + (frame.gummiarmPlayed ? ", Gummiarm point won." : ".") }
-        return frame.rounds.map { $0.points.map(String.init).joined(separator: "-") }.joined(separator: ", ")
+        return frame.rounds.map {
+            $0.points.map(String.init).joined(separator: "-") + ($0.tieBreak.map { " (tie-break " + $0.map(String.init).joined(separator: "-") + ")" } ?? "") + ($0.unfinished ? " unfinished" : "")
+        }.joined(separator: ", ")
     }
 
     private func numericSummary(_ values: [Int]) -> String {

@@ -47,7 +47,7 @@ final class WatchDashboardUITests: XCTestCase {
         for large in [false, true] {
             let app = launch(large: large, fixture: "-watch-scheduled-training")
             let start = reveal(app.buttons["overviewStartSession"], in: app)
-            XCTAssertEqual(start.label, "Start Session")
+            XCTAssertEqual(start.label, "Start Workout")
             XCTAssertTrue(start.isEnabled)
             XCTAssertFalse(app.buttons["Begin with Health Workout"].exists)
             XCTAssertFalse(app.buttons["Begin without Health"].exists)

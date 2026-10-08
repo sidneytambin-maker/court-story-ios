@@ -14,6 +14,7 @@ private final class MockWorkoutClient: TennisWorkoutClient {
     var finishes = 0
     var permissionRequests = 0
     var discarded = 0
+    var recoveries = 0
     var permissionResponse: (@MainActor () async -> Bool)?
     var beginResponse: (@MainActor () async throws -> Void)?
     var finishResponse: (@MainActor () async -> TennisWorkoutResult)?
@@ -40,7 +41,7 @@ private final class MockWorkoutClient: TennisWorkoutClient {
         if let finishResponse { return await finishResponse() }
         return result
     }
-    func recover(activityID: UUID) async throws -> Bool { canRecover }
+    func recover(activityID: UUID) async throws -> Bool { recoveries += 1; return canRecover }
 }
 
 final class TennisWorkoutTests: XCTestCase {
@@ -199,19 +200,20 @@ final class TennisWorkoutTests: XCTestCase {
     func testAuthorizedDefaultRespectsAnExplicitOptOut() {
         XCTAssertTrue(TennisWorkoutAuthorization.authorized.useHealthByDefault(preference: nil))
         XCTAssertFalse(TennisWorkoutAuthorization.authorized.useHealthByDefault(preference: false))
-        XCTAssertFalse(TennisWorkoutAuthorization.notDetermined.useHealthByDefault(preference: nil))
+        XCTAssertTrue(TennisWorkoutAuthorization.notDetermined.useHealthByDefault(preference: nil))
+        XCTAssertFalse(TennisWorkoutAuthorization.unavailable.useHealthByDefault(preference: nil))
         XCTAssertTrue(TennisWorkoutAuthorization.denied.useHealthByDefault(preference: true))
     }
 
     @MainActor
-    func testAlreadyAuthorizedStartsWithoutPermissionRequestOrWaitingForMetrics() async {
+    func testAlreadyAuthorizedChecksCurrentTypesAndStartsWithoutWaitingForMetrics() async {
         let client = MockWorkoutClient()
         client.workoutAuthorization = .authorized
         client.result = TennisWorkoutResult(durationSeconds: 600)
         let coordinator = TennisWorkoutCoordinator(client: client)
         let started = await coordinator.start(useHealth: true)
         XCTAssertTrue(started)
-        XCTAssertEqual(client.permissionRequests, 0)
+        XCTAssertEqual(client.permissionRequests, 1)
         XCTAssertEqual(client.begins, 1)
         XCTAssertEqual(coordinator.state, .recording)
         XCTAssertFalse(coordinator.message.contains("permission"))
@@ -290,7 +292,39 @@ final class TennisWorkoutTests: XCTestCase {
         let retried = await coordinator.start(useHealth: true)
         XCTAssertTrue(retried)
         XCTAssertEqual(coordinator.state, .recording)
-        XCTAssertEqual(client.permissionRequests, 0)
+        XCTAssertEqual(client.permissionRequests, 2)
+    }
+
+    @MainActor
+    func testCancelAuthorizationIgnoresLateGrantAndAllowsAnotherStart() async {
+        let client = MockWorkoutClient()
+        let coordinator = TennisWorkoutCoordinator(client: client)
+        client.permissionResponse = {
+            coordinator.cancelStart()
+            client.workoutAuthorization = .authorized
+            return true
+        }
+        let cancelled = await coordinator.start(useHealth: true)
+        XCTAssertFalse(cancelled)
+        XCTAssertEqual(client.begins, 0)
+        XCTAssertEqual(coordinator.state, .idle)
+        client.permissionResponse = nil
+        let retried = await coordinator.start(useHealth: true)
+        XCTAssertTrue(retried)
+        XCTAssertEqual(client.begins, 1)
+    }
+
+    @MainActor
+    func testCoachedAthleteRecoveryCannotAttachWatchOwnersHealth() async {
+        let client = MockWorkoutClient()
+        client.canRecover = true
+        let coordinator = TennisWorkoutCoordinator(client: client)
+        await coordinator.restore(activityID: UUID(), startedAt: Date(), useHealth: false)
+        XCTAssertEqual(client.recoveries, 0)
+        XCTAssertEqual(coordinator.state, .recordingWithoutHealth)
+        let saved = await coordinator.finish()
+        XCTAssertNil(saved?.workoutID)
+        XCTAssertEqual(client.finishes, 0)
     }
 
     @MainActor

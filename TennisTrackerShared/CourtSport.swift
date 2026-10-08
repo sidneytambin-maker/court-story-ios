@@ -40,6 +40,7 @@ enum CourtSport: String, Codable, CaseIterable, Identifiable {
         case .tableTennis: return ["Indoor table", "Outdoor table", "Other"]
         case .badminton, .squash, .racquetball: return ["Wooden sports floor", "Synthetic sports floor", "Rubber sports floor", "Other"]
         case .padel: return ["Artificial grass", "Synthetic court", "Other"]
+        case .pickleball: return ["Hard court", "Wooden sports floor", "Synthetic sports floor", "Other"]
         case .platformTennis: return ["Platform court", "Other"]
         case .custom, .racketlon: return ["Indoor court", "Outdoor court", "Wooden sports floor", "Synthetic sports floor", "Other"]
         case .tennis: return ["Hard court", "Clay", "Grass", "Carpet", "Artificial grass", "Artificial clay", "Indoor", "Other"]

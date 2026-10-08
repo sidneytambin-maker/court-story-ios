@@ -9,12 +9,6 @@ struct WatchTrainingEntryView: View {
     @State private var configured = false
     @State private var editing = false
 
-    private var useHealth: Binding<Bool> {
-        Binding(get: { store.defaultUseHealth }, set: {
-            store.setDefaultUseHealth($0)
-        })
-    }
-
     var body: some View {
         Group {
             if store.activeTraining != nil {
@@ -26,12 +20,12 @@ struct WatchTrainingEntryView: View {
             } else if let selection, let current = store.snapshot.trainingSessions.first(where: { $0.id == selection.id }) {
                 List {
                     Text(store.trainingSummary(current)).accessibilityIdentifier("Scheduled training preview")
-                    Button("Start Session") {
-                        store.beginTraining(current)
-                        dismiss()
+                    Button("Start Workout") {
+                        if store.beginTraining(current) { dismiss() }
                     }.buttonStyle(.borderedProminent).tint(TennisSportStyle.ball).foregroundStyle(TennisSportStyle.ink)
+                        .accessibilityIdentifier("startWatchWorkout")
+                        .accessibilityHint(store.workoutStartHint)
                         .disabled(store.isPreparingWorkout || store.isFinishingWorkout)
-                    Toggle("Track Training as Workout", isOn: useHealth).disabled(!store.healthClient.available)
                     Button("Edit Details") { editing = true }
                     Button("Start a Different Session") { newSession = true }
                 }.navigationTitle("Scheduled")
@@ -47,7 +41,7 @@ struct WatchTrainingEntryView: View {
         }
         .onAppear {
             guard !configured else { return }
-            candidates = TennisScheduling.nearbyTraining(in: store.snapshot)
+            candidates = TennisScheduling.nearbyTraining(in: store.scopedSnapshot)
             if candidates.count == 1 { selection = candidates.first }
             configured = true
         }

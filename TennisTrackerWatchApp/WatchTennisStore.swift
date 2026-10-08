@@ -18,12 +18,14 @@ final class WatchTennisStore: NSObject, ObservableObject, WCSessionDelegate {
     @Published var page: TennisWatchPage = .today
     @Published var completedTraining: TrainingSession?
     @Published var activeTournamentID: UUID?
-    let healthClient = WatchHealthWorkout()
-    lazy var workoutCoordinator = TennisWorkoutCoordinator(client: healthClient)
+    let healthClient: WatchHealthWorkout
+    private let workoutClient: TennisWorkoutClient
+    lazy var workoutCoordinator = TennisWorkoutCoordinator(client: workoutClient)
     @Published var workoutMessage = ""
     @Published var isPreparingWorkout = false
     @Published var isFinishingWorkout = false
     @Published var pendingHealthStart: TrainingSession?
+    private var workoutStartID: UUID?
     private var workoutObservation: AnyCancellable?
     private let pendingHealthDraftKey = "pendingHealthTrainingDraft"
     private struct PendingHealthDraft: Codable {
@@ -32,7 +34,8 @@ final class WatchTennisStore: NSObject, ObservableObject, WCSessionDelegate {
     }
 
     var defaultUseHealth: Bool {
-        healthClient.workoutAuthorization.useHealthByDefault(
+        guard let player = selectedPlayer, mayUseHealth(for: player.id) else { return false }
+        return workoutAccess.useHealthByDefault(
             preference: UserDefaults.standard.object(forKey: "trackTrainingAsWorkout") as? Bool)
     }
 
@@ -40,6 +43,23 @@ final class WatchTennisStore: NSObject, ObservableObject, WCSessionDelegate {
         objectWillChange.send()
         UserDefaults.standard.set(enabled, forKey: "trackTrainingAsWorkout")
         sendHealthStatus()
+    }
+
+    var workoutAccess: TennisWorkoutAuthorization { workoutClient.workoutAuthorization }
+
+    var workoutStartHint: String {
+        defaultUseHealth ? "Starts timing and an Apple Health workout. Requests any Health access that has not yet been decided."
+            : "Starts session timing only. Health is off for this profile. You can review Health access from Menu."
+    }
+
+    func reviewHealthAccess() async -> String {
+        guard let player = selectedPlayer, mayUseHealth(for: player.id) else { return "Health access is only for the Watch owner's activity." }
+        do {
+            let allowed = try await workoutClient.requestPermission()
+            sendHealthStatus()
+            objectWillChange.send()
+            return allowed ? "Workout saving is allowed. Your next workout can use Apple Health." : workoutAccess.description
+        } catch { return error.localizedDescription }
     }
 
     private let snapshotKey = "snapshotData"
@@ -53,6 +73,13 @@ final class WatchTennisStore: NSObject, ObservableObject, WCSessionDelegate {
     var openNotificationRecordIDs = Set<UUID>()
 
     override init() {
+        let health = WatchHealthWorkout()
+        healthClient = health
+        #if DEBUG && targetEnvironment(simulator)
+        workoutClient = WatchWorkoutTestClient.makeIfRequested() ?? health
+        #else
+        workoutClient = health
+        #endif
         super.init()
         workoutObservation = workoutCoordinator.$message.sink { [weak self] message in
             self?.workoutMessage = message
@@ -77,7 +104,7 @@ final class WatchTennisStore: NSObject, ObservableObject, WCSessionDelegate {
                 training.hasStartTime = true
                 training.context.coachIDs = [data.setup.coaches[0].id]
                 data.trainingSessions = [training]
-                UserDefaults.standard.set(false, forKey: "trackTrainingAsWorkout")
+                UserDefaults.standard.set(ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("-watch-health=") }), forKey: "trackTrainingAsWorkout")
             }
             if ProcessInfo.processInfo.arguments.contains("-watch-completed-training") {
                 var training = TrainingSession(playerID: player.id)
@@ -127,9 +154,11 @@ final class WatchTennisStore: NSObject, ObservableObject, WCSessionDelegate {
 
     var selectedPlayer: PlayerProfile? {
         if let id = snapshot.selectedPlayerID {
-            return snapshot.players.first { $0.id == id } ?? snapshot.players.first
+            guard var player = snapshot.players.first(where: { $0.id == id && !$0.isArchived }) else { return nil }
+            if player.court.sports.contains(where: { $0.sport == courtSport }) { player.court.selectedSportID = courtSport.id }
+            return player
         }
-        return snapshot.players.first
+        return snapshot.players.first { !$0.isArchived }
     }
 
     var upcomingTournament: TournamentRecord? {
@@ -171,25 +200,26 @@ final class WatchTennisStore: NSObject, ObservableObject, WCSessionDelegate {
     func sendHealthStatus() {
         guard let libraryID = snapshot.libraryID else { return }
         guard WCSession.isSupported(), WCSession.default.activationState == .activated else { return }
-        let status = TennisWatchHealthStatus(access: healthClient.accessDescription,
-            enabledByDefault: defaultUseHealth, reportedAt: Date(), workoutAuthorization: healthClient.workoutAuthorization)
+        let status = TennisWatchHealthStatus(access: workoutAccess.description,
+            enabledByDefault: defaultUseHealth, reportedAt: Date(), workoutAuthorization: workoutAccess)
         guard let data = try? JSONEncoder.tennisTracker.encode(status) else { return }
         try? WCSession.default.updateApplicationContext(["healthStatusData": data, "libraryID": libraryID.uuidString])
     }
 
-    func trackTrainingSession(type: TrainingType = .singlesPractice, focus: String = "", additionalFocus: [String] = [], context: TennisActivityContext = TennisActivityContext(), venue: String = "", location: String = "", useHealth: Bool? = nil) {
+    @discardableResult
+    func trackTrainingSession(type: TrainingType = .singlesPractice, focus: String = "", additionalFocus: [String] = [], context: TennisActivityContext = TennisActivityContext(), venue: String = "", location: String = "", useHealth: Bool? = nil) -> Bool {
         guard let playerID = selectedPlayer?.id else {
             announce("Set up a player on iPhone first.")
-            return
+            return false
         }
-        guard activeTraining == nil && !isPreparingWorkout && !isRestoringWorkout && !isFinishingWorkout else { page = .live; return }
         var session = TennisWatchActivityFactory.trainingSession(playerID: playerID, type: type)
+        if let player = selectedPlayer { session.court = CourtActivity(player: player, coachID: capturingCoachID) }
         session.focus = focus
         session.additionalFocus = additionalFocus
         session.context = context
         session.venue = venue
         session.location = location
-        prepareTrainingStart(session, useHealth: useHealth ?? defaultUseHealth)
+        return prepareTrainingStart(session, useHealth: useHealth ?? defaultUseHealth)
     }
 
     func finishTrainingSession() {
@@ -267,12 +297,12 @@ final class WatchTennisStore: NSObject, ObservableObject, WCSessionDelegate {
         resume(match)
     }
 
-    func beginTraining(_ planned: TrainingSession, useHealth: Bool? = nil) {
+    @discardableResult
+    func beginTraining(_ planned: TrainingSession, useHealth: Bool? = nil) -> Bool {
         guard !snapshot.deletedRecordIDs.contains(planned.id), planned.actualStart == nil, planned.actualFinish == nil else {
-            announce("This session has already started or was deleted."); return
+            announce("This session has already started or was deleted."); return false
         }
-        guard activeTraining == nil && !isPreparingWorkout && !isRestoringWorkout && !isFinishingWorkout else { page = .live; return }
-        prepareTrainingStart(planned, useHealth: useHealth ?? defaultUseHealth)
+        return prepareTrainingStart(planned, useHealth: useHealth ?? defaultUseHealth)
     }
 
     func retryHealthStart() {
@@ -286,21 +316,35 @@ final class WatchTennisStore: NSObject, ObservableObject, WCSessionDelegate {
     }
 
     func cancelPendingTrainingStart() {
-        guard pendingHealthStart != nil, !isPreparingWorkout else { return }
+        guard pendingHealthStart != nil else { return }
+        workoutStartID = nil
+        workoutCoordinator.cancelStart()
+        isPreparingWorkout = false
         pendingHealthStart = nil
         UserDefaults.standard.removeObject(forKey: pendingHealthDraftKey)
         workoutCoordinator.discardForLibraryChange()
-        workoutMessage = ""
+        workoutMessage = "Workout start cancelled. No session was recorded."
+        announce(workoutMessage)
     }
 
-    private func prepareTrainingStart(_ draft: TrainingSession, useHealth: Bool) {
-        guard activeTraining == nil, !isPreparingWorkout, !isRestoringWorkout, !isFinishingWorkout else { return }
+    @discardableResult
+    private func prepareTrainingStart(_ draft: TrainingSession, useHealth: Bool) -> Bool {
+        guard activeTraining == nil, !isPreparingWorkout, !isRestoringWorkout, !isFinishingWorkout else {
+            page = .live
+            announce(activeTraining != nil ? "A workout is already in progress. End it on the Live screen before starting another."
+                : isFinishingWorkout ? "Saving your previous workout. Please wait for the save confirmation."
+                : isRestoringWorkout ? "Checking your previous workout. Please try Start Workout again when this finishes."
+                : "Workout startup is already in progress. Its status is on the Live screen.")
+            return false
+        }
         guard !snapshot.deletedRecordIDs.contains(draft.id),
               !snapshot.trainingSessions.contains(where: { $0.id == draft.id && ($0.actualStart != nil || $0.actualFinish != nil) }) else {
             pendingHealthStart = nil
             announce("This session has already started or was deleted.")
-            return
+            return false
         }
+        let useHealth = useHealth && mayUseHealth(for: draft.playerID)
+        healthClient.courtSport = draft.court.sport.sport
         healthClient.clearMetrics()
         workoutMessage = useHealth ? "Checking Health workout access." : "Starting session timing."
         var session = draft
@@ -310,21 +354,28 @@ final class WatchTennisStore: NSObject, ObservableObject, WCSessionDelegate {
         // Preserve the draft across a crash between HealthKit startup and snapshot persistence.
         var pendingDraft = draft
         pendingDraft.actualStart = nil; pendingDraft.actualFinish = nil
+        pendingHealthStart = pendingDraft
         if useHealth, let data = try? JSONEncoder.tennisTracker.encode(PendingHealthDraft(libraryID: snapshot.libraryID, training: pendingDraft)) {
             UserDefaults.standard.set(data, forKey: pendingHealthDraftKey)
         } else { UserDefaults.standard.removeObject(forKey: pendingHealthDraftKey) }
         isPreparingWorkout = true
+        let requestID = UUID()
+        workoutStartID = requestID
         let libraryID = snapshot.libraryID
+        page = .live
+        announce(workoutMessage)
         Task {
-            guard snapshot.libraryID == libraryID else { return }
+            guard snapshot.libraryID == libraryID, workoutStartID == requestID else { return }
             let started = await workoutCoordinator.start(useHealth: useHealth, activityID: session.id, at: session.actualStart ?? session.date)
-            guard snapshot.libraryID == libraryID else { return }
+            guard snapshot.libraryID == libraryID, workoutStartID == requestID else { return }
+            workoutStartID = nil
             isPreparingWorkout = false
             workoutMessage = workoutCoordinator.message
             guard !snapshot.deletedRecordIDs.contains(session.id),
                   !snapshot.trainingSessions.contains(where: { $0.id == session.id && ($0.actualStart != nil || $0.actualFinish != nil) }) else {
                 workoutCoordinator.discardForLibraryChange()
                 UserDefaults.standard.removeObject(forKey: pendingHealthDraftKey)
+                pendingHealthStart = nil
                 announce("This session changed on iPhone. Review it before starting.")
                 return
             }
@@ -351,6 +402,7 @@ final class WatchTennisStore: NSObject, ObservableObject, WCSessionDelegate {
             sendHealthStatus()
             finishRemotelyCompletedWorkoutIfNeeded()
         }
+        return true
     }
 
     func restoreWorkoutIfNeeded() {
@@ -369,7 +421,8 @@ final class WatchTennisStore: NSObject, ObservableObject, WCSessionDelegate {
             } ?? activeTraining ?? draft
             if let tracked, workoutCoordinator.state == .idle || workoutCoordinator.state == .finished {
                 isPreparingWorkout = true
-                await workoutCoordinator.restore(activityID: tracked.id, startedAt: tracked.actualStart ?? tracked.date)
+                await workoutCoordinator.restore(activityID: tracked.id, startedAt: tracked.actualStart ?? tracked.date,
+                    useHealth: mayUseHealth(for: tracked.playerID))
                 guard snapshot.libraryID == libraryID else { return }
                 isPreparingWorkout = false
                 workoutMessage = workoutCoordinator.message
@@ -444,6 +497,7 @@ final class WatchTennisStore: NSObject, ObservableObject, WCSessionDelegate {
 
     private func attachWorkout(_ result: TennisWorkoutResult, to id: UUID) {
         guard var training = snapshot.trainingSessions.first(where: { $0.id == id }) else { return }
+        guard mayUseHealth(for: training.playerID) else { return }
         // A delayed save must not replace a previously confirmed Health relationship.
         guard training.workout?.workoutID == nil else { return }
         training.workout = result
@@ -801,6 +855,7 @@ final class WatchTennisStore: NSObject, ObservableObject, WCSessionDelegate {
         queuedCommands.removeAll { $0.recordID == nil }
         persistQueue()
         for command in pending {
+            if case .court = command, snapshot.courtProtocolVersion < 2 { continue }
             let envelope = TennisWatchCommandEnvelope(libraryID: snapshot.libraryID, command: command)
             guard let data = try? JSONEncoder.tennisTracker.encode(envelope) else { continue }
             if session.isReachable {
@@ -818,6 +873,7 @@ final class WatchTennisStore: NSObject, ObservableObject, WCSessionDelegate {
         guard libraryFence.accept(incoming.libraryID, authoritative: authoritative) else { return }
         if snapshot.libraryID != incoming.libraryID {
             workoutCoordinator.discardForLibraryChange()
+            workoutStartID = nil
             isPreparingWorkout = false; isFinishingWorkout = false; isRestoringWorkout = false
             workoutMessage = ""
             pendingHealthStart = nil
@@ -835,11 +891,18 @@ final class WatchTennisStore: NSObject, ObservableObject, WCSessionDelegate {
                 for transfer in WCSession.default.outstandingUserInfoTransfers { transfer.cancel() }
             }
         } else if incoming.generatedAt < snapshot.generatedAt { return }
+        let previousAthleteID = snapshot.court.activeAthleteID
         if let encoded = try? JSONEncoder.tennisTracker.encode(libraryFence) { UserDefaults.standard.set(encoded, forKey: "watchLibraryFence") }
         incoming.retainOpenActivities(openNotificationRecordIDs, from: snapshot)
         let previousMatch = activeMatch
         let result = TennisWatchReconciliation.reconcile(incoming: incoming, pending: queuedCommands, localDeletedIDs: snapshot.deletedRecordIDs)
         snapshot = result.snapshot
+        if let previousAthleteID, let owner = snapshot.court.ownerPlayerID,
+           snapshot.court.containsAthlete(previousAthleteID, coachID: owner, players: snapshot.players),
+           snapshot.players.first(where: { $0.id == previousAthleteID })?.court.sports.contains(where: { $0.sport == courtSport }) == true {
+            snapshot.court.activeAthleteID = previousAthleteID
+            snapshot.selectedPlayerID = previousAthleteID
+        }
         queuedCommands = result.pending
         persistQueue()
         lastSyncStatus = "Updated from iPhone at \(Date().formatted(date: .omitted, time: .shortened))."
@@ -981,6 +1044,87 @@ final class WatchTennisStore: NSObject, ObservableObject, WCSessionDelegate {
 
     private func persistPointHistory() {
         if let data = try? JSONEncoder.tennisTracker.encode(pointHistory) { UserDefaults.standard.set(data, forKey: "pointHistory") }
+    }
+}
+
+extension WatchTennisStore {
+    var workspaceOwner: PlayerProfile? {
+        snapshot.players.first { $0.id == snapshot.court.ownerPlayerID && !$0.isArchived } ??
+            snapshot.players.first { $0.id == snapshot.selectedPlayerID && !$0.isArchived }
+    }
+    var courtSport: CourtSportSelection { workspaceOwner?.court.selected.sport ?? .tennis }
+    var courtRole: CourtRole { workspaceOwner?.court.selected.role ?? .player }
+    var capturingCoachID: UUID? { courtRole == .coach && snapshot.court.activeAthleteID != nil ? workspaceOwner?.id : nil }
+    var roster: [PlayerProfile] {
+        guard let owner = workspaceOwner else { return [] }
+        return snapshot.players.filter { $0.court.coachOwnerID == owner.id && !$0.isArchived && $0.court.sports.contains { $0.sport == courtSport } }
+    }
+    var scopedSnapshot: TennisWatchSnapshot {
+        var scoped = snapshot
+        let id = selectedPlayer?.id
+        scoped.matches = snapshot.matches.filter { $0.playerID == id && $0.court.sport == courtSport }
+        scoped.trainingSessions = snapshot.trainingSessions.filter { $0.playerID == id && $0.court.sport == courtSport }
+        scoped.tournaments = snapshot.tournaments.filter { $0.playerID == id && $0.court.sport == courtSport }
+        return scoped
+    }
+    func mayUseHealth(for playerID: UUID) -> Bool {
+        let owner = snapshot.court.deviceOwnerPlayerID ?? (snapshot.courtProtocolVersion < 2 ? snapshot.selectedPlayerID : nil)
+        return owner == playerID && snapshot.players.first { $0.id == playerID }?.court.coachOwnerID == nil
+    }
+    @discardableResult
+    func saveCourtMutation(_ mutation: CourtWatchMutation) -> Bool {
+        guard snapshot.libraryID != nil, snapshot.courtProtocolVersion == 2 else {
+            announce("Open the updated Court Story app on the paired iPhone to connect this workspace. Your draft is retained."); return false
+        }
+        var candidate = snapshot.courtLibrary
+        guard mutation.apply(to: &candidate) else { announce("This record changed or is not available in the selected detail level."); return false }
+        if let error = CourtLibraryValidation.message(in: candidate, validateLinks: false) { announce(error); return false }
+        snapshot.applyCourtLibrary(candidate)
+        persistSnapshot()
+        send(.court(mutation))
+        announce("Saved on Watch. Changes are queued for iPhone.")
+        return true
+    }
+    func selectCourtAthlete(_ id: UUID?) {
+        guard let owner = workspaceOwner, id == nil || roster.contains(where: { $0.id == id }) else { return }
+        snapshot.selectedPlayerID = id ?? owner.id
+        snapshot.court.activeAthleteID = id
+        persistSnapshot()
+        announce("Recording for \(selectedPlayer?.displayName ?? owner.displayName), \(courtSport.name).")
+    }
+    func selectCourtSport(_ id: String) {
+        guard var owner = workspaceOwner, owner.court.sports.contains(where: { $0.id == id }) else { return }
+        owner.court.selectedSportID = id
+        owner.court.revision += 1; owner.court.modifiedAt = Date()
+        if saveCourtMutation(.profile(owner)) { selectCourtAthlete(nil) }
+    }
+    func selectCourtRole(_ role: CourtRole) {
+        guard var owner = workspaceOwner else { return }
+        var preference = owner.court.selected; preference.role = role
+        guard owner.court.update(preference) else { return }
+        owner.court.revision += 1; owner.court.modifiedAt = Date()
+        if saveCourtMutation(.profile(owner)) { selectCourtAthlete(nil) }
+    }
+    func makeCourtMatch() -> MatchRecord? {
+        guard let player = selectedPlayer else { return nil }
+        var match = TennisWatchActivityFactory.match(player: player, kind: snapshot.settings.defaultMatchType)
+        match.court = CourtActivity(player: player, coachID: capturingCoachID)
+        match.status = .scheduled; match.liveScore = nil; match.actualStart = nil
+        return match
+    }
+    @discardableResult
+    func saveCourtMatch(_ value: MatchRecord) -> Bool {
+        guard !snapshot.deletedRecordIDs.contains(value.id), let score = value.court.score else { return false }
+        if let error = score.validationMessage { announce(error); return false }
+        var library = snapshot.courtLibrary
+        library.matches.removeAll { $0.id == value.id }; library.matches.append(value)
+        if let error = CourtLibraryValidation.message(in: library, validateLinks: false) { announce(error); return false }
+        let saved = TennisRecordConflictResolver.prepareLocalMatch(value)
+        mergeMatch(saved)
+        activeMatch = saved.status == .inProgress ? saved : nil
+        send(.upsertMatch(saved))
+        if snapshot.settings.scoreAnnouncementMode == .automatic || saved.status == .completed { announce(score.summary) }
+        return true
     }
 }
 

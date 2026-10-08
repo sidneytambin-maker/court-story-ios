@@ -154,8 +154,8 @@ final class TennisTrackerWatchUITests: XCTestCase {
     func testActiveWatchEditorDoesNotOfferDurationOverride() {
         let app = launch(page: "Track", scheduledTraining: true)
         app.buttons["Track Training Session"].tap()
-        reveal(app.buttons["Start Session"], in: app)
-        app.buttons["Start Session"].tap()
+        reveal(app.buttons["Start Workout"], in: app)
+        app.buttons["Start Workout"].tap()
         XCTAssertTrue(app.buttons["Active training summary"].waitForExistence(timeout: 10))
         reveal(app.buttons["Edit Training and Focus"], in: app)
         app.buttons["Edit Training and Focus"].tap()
@@ -242,9 +242,9 @@ final class TennisTrackerWatchUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Scheduled training preview"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["Scheduled training preview"].label.contains("Coaches: Chris"))
         XCTAssertFalse(app.buttons["Active training summary"].exists)
-        reveal(app.buttons["Start Session"], in: app)
+        reveal(app.buttons["Start Workout"], in: app)
         capture(app, name: "Watch scheduled training ready to start")
-        app.buttons["Start Session"].tap()
+        app.buttons["Start Workout"].tap()
         XCTAssertTrue(app.buttons["Active training summary"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["Active training summary"].label.contains("Coaches: Chris"))
     }
@@ -252,8 +252,8 @@ final class TennisTrackerWatchUITests: XCTestCase {
     func testEndWorkoutIsAVisibleAccessibleButtonOnLiveAndCancelKeepsItRunning() {
         let app = launch(page: "Track", accessibleNavigation: true, scheduledTraining: true)
         app.buttons["Track Training Session"].tap()
-        reveal(app.buttons["Start Session"], in: app)
-        app.buttons["Start Session"].tap()
+        reveal(app.buttons["Start Workout"], in: app)
+        app.buttons["Start Workout"].tap()
         let end = app.buttons["endTrainingWorkout"]
         XCTAssertTrue(end.waitForExistence(timeout: 10))
         reveal(end, in: app)

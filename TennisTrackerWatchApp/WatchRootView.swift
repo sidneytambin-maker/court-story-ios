@@ -17,23 +17,11 @@ struct WatchRootView: View {
         .tint(store.snapshot.settings.theme == .tennis ? TennisSportStyle.ball : .cyan)
         .sheet(isPresented: $quickTraining) { NavigationStack { WatchTrainingEntryView() }.environmentObject(store) }
         .sheet(item: $notificationRoute) { route in WatchNotificationDestination(route: route).environmentObject(store) }
-        .sheet(item: $store.pendingHealthStart) { _ in
-            NavigationStack {
-                List {
-                    Text(store.workoutMessage).accessibilityIdentifier("healthStartFailure")
-                    if store.isPreparingWorkout { ProgressView("Starting session") }
-                    Button("Retry Health Start") { store.retryHealthStart() }
-                        .disabled(store.isPreparingWorkout)
-                    Button("Start Without Health") { store.startPendingTrainingWithoutHealth() }
-                        .disabled(store.isPreparingWorkout)
-                    Button("Cancel", role: .cancel) { store.cancelPendingTrainingStart() }
-                        .disabled(store.isPreparingWorkout)
-                }.navigationTitle("Session Not Started")
-            }
-            .interactiveDismissDisabled(store.isPreparingWorkout)
-        }
         .safeAreaInset(edge: .bottom) {
-            if store.isPreparingWorkout { ProgressView("Starting session").padding(8).background(.regularMaterial) }
+            if store.isPreparingWorkout && store.page != .live {
+                Button("Workout Startup Status") { store.page = .live }
+                    .padding(8).background(.regularMaterial)
+            }
         }
         .onAppear { store.activate(); openPendingNotification() }
         .onChange(of: scenePhase) { _, phase in
@@ -107,18 +95,12 @@ struct WatchTrainingSetupView: View {
     @State private var location = ""
     @State private var otherPlayers = false
 
-    private var useHealth: Binding<Bool> {
-        Binding(get: { store.defaultUseHealth }, set: {
-            store.setDefaultUseHealth($0)
-        })
-    }
-
     var body: some View {
         Form {
             Picker("Training type", selection: $type) {
                 ForEach(TrainingType.allCases) { Text($0.rawValue).tag($0) }
             }
-            TennisTrainingFocusPicker(focus: $focus, additionalFocus: $additionalFocus)
+            TennisTrainingFocusPicker(focus: $focus, additionalFocus: $additionalFocus, sport: store.courtSport.sport)
             TennisCoachPicker(coaches: store.snapshot.setup.coaches, context: $context)
             WatchVenueFields(venueID: $context.venueID, venue: $venue, location: $location)
             NavigationLink("Players Present") {
@@ -126,20 +108,14 @@ struct WatchTrainingSetupView: View {
             }
             .accessibilityValue(context.participantSummary(in: store.snapshot.players).fallback("None"))
             TennisTournamentPicker(tournaments: store.snapshot.tournaments, tournamentID: $context.tournamentID, customName: $context.customTournamentName)
-            if store.healthClient.available {
-                Section("Apple Health") {
-                    Toggle("Track Training as Workout", isOn: useHealth)
-                    WatchHealthAccessView(client: store.healthClient)
-                    Text("Court Story can record workout duration, heart rate, active energy and available steps and distance in Apple Health. Tennis tracking still works if you decline.")
-                }
-            }
-            Button("Start Session") {
+            Button("Start Workout") {
                 context.captureLegacyNames(coaches: store.snapshot.setup.coaches, players: store.snapshot.players)
                 context.coachesNeedDetails = context.needsOtherCoachName
                 context.participantsNeedDetails = otherPlayers
-                store.trackTrainingSession(type: type, focus: focus, additionalFocus: additionalFocus, context: context, venue: venue, location: location)
-                dismiss()
+                if store.trackTrainingSession(type: type, focus: focus, additionalFocus: additionalFocus, context: context, venue: venue, location: location) { dismiss() }
             }
+            .accessibilityIdentifier("startWatchWorkout")
+            .accessibilityHint(store.workoutStartHint)
             .disabled(store.selectedPlayer == nil || store.activeTraining != nil || store.isPreparingWorkout || store.isFinishingWorkout)
         }
         .pickerStyle(.navigationLink)
@@ -224,6 +200,7 @@ private struct WatchLiveView: View {
     @EnvironmentObject private var store: WatchTennisStore
     var body: some View {
         List {
+            if store.pendingHealthStart != nil { WatchWorkoutStartupView() }
             if let training = store.activeTraining {
                 WatchTrainingRow(training: training)
             }
@@ -237,17 +214,12 @@ private struct WatchLiveView: View {
                 if training.trainingType == .matchPlay {
                     NavigationLink("Record Practice Result") { WatchPracticeResultView() }
                 }
-            } else if store.activeTraining == nil && store.activeTournamentID == nil {
+            } else if store.activeTraining == nil && store.activeTournamentID == nil && store.pendingHealthStart == nil {
                 Text("No tennis activity in progress.")
             }
         }
         .navigationTitle("Live")
     }
-}
-
-private struct WatchHealthAccessView: View {
-    @ObservedObject var client: WatchHealthWorkout
-    var body: some View { Text("Health access: \(client.accessDescription)") }
 }
 
 private struct WatchPracticeResultView: View {

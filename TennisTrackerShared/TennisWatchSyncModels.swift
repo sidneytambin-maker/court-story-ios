@@ -1,6 +1,8 @@
 import Foundation
 
 struct TennisWatchSnapshot: Codable, Equatable {
+    var courtProtocolVersion = 2
+    var court = CourtWorkspace()
     var libraryID: UUID?
     var generatedAt = Date()
     var deletedRecordIDs: Set<UUID> = []
@@ -21,6 +23,9 @@ struct TennisWatchSnapshot: Codable, Equatable {
     init() {}
 
     init(data: AppData, now: Date = Date(), including recordID: UUID? = nil) {
+        court = data.court
+        if court.deviceOwnerPlayerID == nil { court.deviceOwnerPlayerID = data.selectedPlayerID ?? data.players.first?.id }
+        if court.ownerPlayerID == nil { court.ownerPlayerID = data.selectedPlayerID ?? data.players.first?.id }
         libraryID = data.libraryID
         generatedAt = now
         deletedRecordIDs = data.deletedRecordIDs
@@ -82,6 +87,8 @@ struct TennisWatchSnapshot: Codable, Equatable {
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        courtProtocolVersion = try c.decodeIfPresent(Int.self, forKey: .courtProtocolVersion) ?? 1
+        court = try c.decodeIfPresent(CourtWorkspace.self, forKey: .court) ?? CourtWorkspace()
         libraryID = try c.decodeIfPresent(UUID.self, forKey: .libraryID)
         generatedAt = try c.decodeIfPresent(Date.self, forKey: .generatedAt) ?? .distantPast
         deletedRecordIDs = try c.decodeIfPresent(Set<UUID>.self, forKey: .deletedRecordIDs) ?? []
@@ -121,6 +128,18 @@ struct TennisWatchSnapshot: Codable, Equatable {
 struct TennisWatchCommandEnvelope: Codable, Equatable {
     var libraryID: UUID?
     var command: TennisWatchSyncCommand
+    var courtProtocolVersion = 2
+
+    init(libraryID: UUID?, command: TennisWatchSyncCommand, courtProtocolVersion: Int = 2) {
+        self.libraryID = libraryID; self.command = command; self.courtProtocolVersion = courtProtocolVersion
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        libraryID = try c.decodeIfPresent(UUID.self, forKey: .libraryID)
+        command = try c.decode(TennisWatchSyncCommand.self, forKey: .command)
+        courtProtocolVersion = try c.decodeIfPresent(Int.self, forKey: .courtProtocolVersion) ?? 1
+    }
 
     func isAllowed(in libraryID: UUID) -> Bool {
         if case .requestSnapshot = command { return true }
@@ -154,6 +173,7 @@ struct TennisWatchLibraryFence: Codable, Equatable {
 }
 
 enum TennisWatchSyncCommand: Codable, Equatable {
+    case court(CourtWatchMutation)
     case requestSnapshot
     case requestActivity(UUID)
     case snapshotReceived(Date)

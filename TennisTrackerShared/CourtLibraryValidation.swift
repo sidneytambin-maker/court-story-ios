@@ -1,7 +1,7 @@
 import Foundation
 
 enum CourtLibraryValidation {
-    static func message(in data: AppData) -> String? {
+    static func message(in data: AppData, validateLinks: Bool = true) -> String? {
         guard data.court.version == 1 else { return "This coaching library needs a newer version of Court Story." }
         let players = Set(data.players.map(\.id))
         let activityIDs = Set(data.matches.map(\.id) + data.trainingSessions.map(\.id) + data.tournaments.map(\.id))
@@ -34,6 +34,7 @@ enum CourtLibraryValidation {
                 data.players.first(where: { $0.id == athlete })?.court.sports.contains(where: { $0.sport == sport }) == true
         }
         func linkedActivity(_ id: UUID?, athlete: UUID, sport: CourtSportSelection) -> Bool {
+            guard validateLinks else { return true }
             guard let id else { return true }
             if data.deletedRecordIDs.contains(id) { return true }
             return data.matches.contains { $0.id == id && $0.playerID == athlete && $0.court.sport == sport } ||

@@ -4,7 +4,6 @@ struct WatchNotificationDestination: View {
     @EnvironmentObject private var store: WatchTennisStore
     @Environment(\.dismiss) private var dismiss
     let route: TennisActivityRoute
-    @AppStorage("trackTrainingAsWorkout") private var useHealth = false
     var body: some View {
         NavigationStack {
             destination.toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
@@ -21,9 +20,10 @@ struct WatchNotificationDestination: View {
                     List {
                         WatchTrainingRow(training: session)
                         if session.actualStart == nil && session.actualFinish == nil {
-                            Button("Start This Training Session") { store.beginTraining(session, useHealth: useHealth); dismiss() }
-                                .disabled(store.activeTraining != nil || store.isFinishingWorkout)
-                            Toggle("Track Training as Workout", isOn: $useHealth).disabled(!store.healthClient.available)
+                            Button("Start Workout") { if store.beginTraining(session) { dismiss() } }
+                                .accessibilityIdentifier("startWatchWorkout")
+                                .accessibilityHint(store.workoutStartHint)
+                                .disabled(store.activeTraining != nil || store.isPreparingWorkout || store.isFinishingWorkout)
                         }
                     }.navigationTitle("Training")
                 }

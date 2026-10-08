@@ -49,6 +49,12 @@ final class TennisWorkoutCoordinator: ObservableObject {
         startedAt = nil; activityID = nil; state = .idle; message = ""
     }
 
+    func cancelStart() {
+        guard state == .authorizing || state == .starting else { return }
+        discardForLibraryChange()
+        message = "Workout start cancelled. No session was recorded."
+    }
+
     @discardableResult
     func start(useHealth: Bool, activityID: UUID = UUID(), at date: Date = Date()) async -> Bool {
         guard state == .idle || state == .finished || state == .startFailed else { return false }
@@ -66,10 +72,11 @@ final class TennisWorkoutCoordinator: ObservableObject {
         do {
             guard client.available else { throw TennisWorkoutFailure.unavailable }
             switch client.workoutAuthorization {
-            case .authorized: break
             case .denied: throw TennisWorkoutFailure.savingDenied
             case .unavailable: throw TennisWorkoutFailure.unavailable
-            case .notDetermined:
+            case .authorized, .notDetermined:
+                // HealthKit decides whether any of the current types need a sheet.
+                // Existing workout write access does not cover newly requested types.
                 let allowed = try await client.requestPermission()
                 guard token == generation else { return false }
                 guard allowed, client.workoutAuthorization == .authorized else {
@@ -96,14 +103,14 @@ final class TennisWorkoutCoordinator: ObservableObject {
         }
     }
 
-    func restore(activityID: UUID, startedAt: Date) async {
+    func restore(activityID: UUID, startedAt: Date, useHealth: Bool = true) async {
         guard state == .idle || state == .finished else { return }
         let token = generation
         self.activityID = activityID
         self.startedAt = startedAt
         state = .authorizing
         do {
-            let recovered = client.available ? try await client.recover(activityID: activityID) : false
+            let recovered = useHealth && client.available ? try await client.recover(activityID: activityID) : false
             guard token == generation else { return }
             if recovered { self.startedAt = client.workoutStartedAt ?? startedAt }
             state = recovered ? (client.isWorkoutPaused ? .paused : .recording) : .recordingWithoutHealth

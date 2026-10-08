@@ -25,20 +25,33 @@ jobs:
             CourtDomain.log
             CourtDomain.xcresult
           retention-days: 7
-  watch-compile:
+  watch-workouts:
     runs-on: macos-latest
-    timeout-minutes: 25
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - run: brew install xcodegen
       - run: xcodegen generate --spec project-watch-tests.yml
-      - name: Compile shared Watch application
+      - name: Compile Watch and test workout startup and saving
         run: |
           set -euo pipefail
-          xcodebuild build -project TennisTrackeriOS.xcodeproj -scheme TennisTrackerWatchTests -destination 'generic/platform=watchOS Simulator' CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" 2>&1 | tee CourtWatch.log
+          ID=$(xcrun simctl list devices available --json | jq -r '[.devices | to_entries[] | select(.key | contains("watchOS")) | .value[] | select(.isAvailable and (.name | contains("Ultra")))][0].udid')
+          xcrun simctl bootstatus "$ID" -b
+          xcodebuild test -project TennisTrackeriOS.xcodeproj -scheme TennisTrackerWatchTests -destination "id=$ID" -only-testing:TennisTrackerWatchUITests/WatchWorkoutStartupUITests -parallel-testing-enabled NO -resultBundlePath CourtWatch.xcresult CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" 2>&1 | tee CourtWatch.log
+      - name: Export Watch workout evidence
+        if: always()
+        run: |
+          if [ -d CourtWatch.xcresult ]; then
+            mkdir -p CourtWatchReview
+            xcrun xcresulttool get test-results summary --path CourtWatch.xcresult > CourtWatchReview/summary.json
+            xcrun xcresulttool export attachments --path CourtWatch.xcresult --output-path CourtWatchReview/screenshots
+          fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: court-watch-compile
-          path: CourtWatch.log
+          name: court-watch-workouts
+          path: |
+            CourtWatch.log
+            CourtWatch.xcresult
+            CourtWatchReview
           retention-days: 7

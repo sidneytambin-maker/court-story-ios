@@ -22,7 +22,7 @@ struct WatchTodayView: View {
             if let training = nextTraining {
                 Section("Next training") {
                     WatchTrainingRow(training: training)
-                    Button("Start Session") { store.beginTraining(training) }
+                    Button("Start Workout") { store.beginTraining(training) }
                         .accessibilityIdentifier("overviewStartSession")
                         .disabled(store.activeTraining != nil || store.isPreparingWorkout || store.isFinishingWorkout)
                 }

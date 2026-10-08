@@ -32,6 +32,7 @@ final class IPhoneWatchSyncService: NSObject, ObservableObject, WCSessionDelegat
     private let session: TennisWatchSessionTransport
     private let supported: Bool
     private var pendingSnapshot: Data?
+    private var watchCourtProtocolVersion = 1
     private let snapshotKey = "snapshotData"
     private let commandKey = "commandData"
 
@@ -66,7 +67,8 @@ final class IPhoneWatchSyncService: NSObject, ObservableObject, WCSessionDelegat
             defaults.removeObject(forKey: "lastWatchHealthStatus")
             defaults.set(data.libraryID.uuidString, forKey: "watchSyncLibraryID")
         }
-        guard let encoded = try? JSONEncoder.tennisTracker.encode(TennisWatchSnapshot(data: data, including: recordID)) else { return }
+        let snapshot = TennisWatchSnapshot(data: data, including: recordID)
+        guard let encoded = try? JSONEncoder.tennisTracker.encode(watchCourtProtocolVersion >= 2 ? snapshot : snapshot.legacyCompatible) else { return }
         pendingSnapshot = encoded
         flushSnapshot()
     }
@@ -172,7 +174,11 @@ final class IPhoneWatchSyncService: NSObject, ObservableObject, WCSessionDelegat
         Task { @MainActor [weak self] in
             guard let self, let store = self.store, store.storageError == nil,
                   envelope.isAllowed(in: store.data.libraryID) else { return }
-            let command = envelope.command
+            self.watchCourtProtocolVersion = envelope.courtProtocolVersion
+            guard let command = CourtSyncCompatibility.command(envelope.command, protocolVersion: envelope.courtProtocolVersion, data: store.data) else {
+                self.syncMessage = "Update Court Story on both devices to sync this sport or coaching record. Saved iPhone data is unchanged."
+                return
+            }
             store.applyWatchCommand(command)
             if case .snapshotReceived = command {
                 let now = Date()

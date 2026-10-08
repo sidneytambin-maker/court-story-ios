@@ -164,12 +164,14 @@ struct MatchEditorView: View {
     @State var match: MatchRecord
     @State private var original: MatchRecord?
     @State private var validationMessage = ""
+    @State private var courtScoreError = ""
 
     var body: some View {
         NavigationStack {
             TennisForm {
                 if !validationMessage.isBlank { Text(validationMessage).accessibilityIdentifier("recordMatchValidation") }
                 TennisSection("Players") {
+                    CourtCaptureIdentity(athlete: store.data.players.first { $0.id == match.playerID }?.displayName ?? "Player unavailable", sport: match.court.sport, coached: match.court.enteredByCoachID != nil)
                     TennisMatchPeopleFields(players: store.data.players, match: $match, singlesTitle: "Opponent name", opponentFieldIdentifier: "matchOpponentNameField")
                 }
 
@@ -188,8 +190,10 @@ struct MatchEditorView: View {
                     }
                     OrderedChoicePicker(title: "Match round", selection: $match.matchPosition, values: MatchPosition.allCases) { $0.label }
                         .accessibilityIdentifier("matchRoundPicker")
+                    if !match.usesCourtScoring {
                     OrderedChoicePicker(title: "Match format", selection: $match.matchFormat, values: MatchFormat.allCases) { $0.label }
                         .accessibilityIdentifier("matchFormatPicker")
+                    }
                 }
 
                 TennisSection("Result") {
@@ -197,7 +201,8 @@ struct MatchEditorView: View {
                         ForEach(MatchStatus.allCases) { status in Text(status.rawValue).tag(status) }
                     }
                     if match.status == .completed {
-                        TennisRecordedScoreFields(match: $match)
+                        if match.usesCourtScoring { CourtRecordedScoreFields(match: $match, validationMessage: $courtScoreError) }
+                        else { TennisRecordedScoreFields(match: $match) }
                     } else if match.status == .inProgress {
                         SummaryRow(title: "In-progress score", value: match.liveScore == nil ? "No live score saved yet." : liveScoreSummary)
                     } else {
@@ -226,13 +231,14 @@ struct MatchEditorView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
                         keepDateInsideLinkedTournament()
+                        if match.usesCourtScoring && match.status == .completed && !courtScoreError.isEmpty { store.announce(courtScoreError); return }
                         if match.status == .completed, let error = TennisRecordedScore.validationMessage(for: match) {
                             validationMessage = error; store.announce(error); return
                         }
                         match.needsDetails = match.opponentName.isBlank || match.opponentName == "Opponent"
                             || (match.matchType == .doubles && (match.partnerName.isBlank || match.opponent2Name.isBlank))
                             || (match.status == .completed && match.setScores.isBlank)
-                        store.upsertMatch(match, original: original)
+                        guard store.upsertMatch(match, original: original) else { validationMessage = store.lastAnnouncement; return }
                         dismiss()
                     }
                     .accessibilityIdentifier("saveMatchButton")
@@ -296,6 +302,16 @@ struct MatchEditorView: View {
 }
 
 struct LiveMatchView: View {
+    @EnvironmentObject private var store: TennisStore
+    let existingMatch: MatchRecord?
+    var body: some View {
+        if existingMatch?.usesCourtScoring == true || (existingMatch == nil && store.selectedSport.sport != .tennis) {
+            CourtLiveMatchView(existingMatch: existingMatch)
+        } else { TennisLiveMatchView(existingMatch: existingMatch) }
+    }
+}
+
+struct TennisLiveMatchView: View {
     @EnvironmentObject private var store: TennisStore
     @Environment(\.dismiss) private var dismiss
     let existingMatch: MatchRecord?
