@@ -188,4 +188,56 @@ final class CourtScoreTests: XCTestCase {
         XCTAssertTrue(score.undo())
         XCTAssertEqual(score.frame, original.frame)
     }
+
+    func testPickleballFirstServeAlternatesBetweenGamesNotWithGameWinner() {
+        var score = match(.pickleball)
+        for _ in 0..<11 { score.awardRally(to: 0) }
+        XCTAssertEqual(score.frame.server, 1)
+        XCTAssertEqual(score.frame.roundsWon, [1, 0])
+    }
+
+    func testRacquetballRallyScoringAlternatesOpeningServiceAndRequiresDecidingChoice() {
+        var score = match(.racquetball, doubles: true)
+        score.awardRally(to: 1)
+        XCTAssertEqual(score.frame.points, [0, 1])
+        XCTAssertEqual(score.frame.server, 1)
+        XCTAssertEqual(score.frame.serverNumber, 1)
+        score.awardRally(to: 0)
+        XCTAssertEqual(score.frame.points, [1, 1])
+        XCTAssertEqual(score.frame.server, 1)
+        XCTAssertEqual(score.frame.serverNumber, 2)
+        score.reset()
+        for winner in [0, 1, 0, 1] {
+            for _ in 0..<11 { XCTAssertTrue(score.awardRally(to: winner)) }
+        }
+        XCTAssertNotNil(score.frame.serviceChoicePrompt)
+        XCTAssertFalse(score.awardRally(to: 0))
+        XCTAssertTrue(score.setServer(1, serverNumber: 2))
+        XCTAssertTrue(score.awardRally(to: 1))
+        XCTAssertEqual(score.frame.points, [0, 1])
+    }
+
+    func testTableTennisCorrectionRestoresServiceAtDeuce() {
+        var score = match(.tableTennis)
+        XCTAssertTrue(score.correctPoints([10, 10]))
+        XCTAssertEqual(score.frame.server, 0)
+        XCTAssertTrue(score.correctPoints([11, 10]))
+        XCTAssertEqual(score.frame.server, 1)
+        XCTAssertTrue(score.undo())
+        XCTAssertEqual(score.frame.server, 0)
+    }
+
+    func testDoublesRuleDefaultsUseTheSelectedFormatWithoutRewritingRecordedScores() {
+        for sport in [CourtSport.pickleball, .squash, .platformTennis, .racquetball] {
+            let singles = CourtOfficialFormat.choices(for: sport).last!
+            let doubles = singles.rules.forMatchKind(sport: sport, doubles: true)
+            XCTAssertEqual(CourtOfficialFormat.matching(doubles, sport: sport, doubles: true)?.id, singles.id)
+        }
+        var match = MatchRecord(playerID: UUID())
+        match.court.sport = CourtSportSelection(sport: .padel)
+        match.configureNewCourtMatch()
+        XCTAssertEqual(match.matchType, .doubles)
+        XCTAssertTrue(match.usesCourtScoring)
+        XCTAssertEqual(match.court.rules?.deuce, .starPoint)
+    }
 }

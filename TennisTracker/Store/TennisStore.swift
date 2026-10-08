@@ -333,6 +333,7 @@ final class TennisStore: ObservableObject {
         match.playerName = player.displayName
         match.matchFormat = player.defaultMatchFormat
         match.matchType = data.settings.defaultMatchType
+        match.configureNewCourtMatch()
         match.sightLevel = player.sightLevel
         match.allowedBounces = player.bounceAllowance ?? player.sightLevel.allowedBounces
         if let allowance = match.court.access?.allowedBounces(for: match.court.sport.sport) { match.allowedBounces = allowance }
@@ -352,7 +353,7 @@ final class TennisStore: ObservableObject {
     }
 
     func resumableMatches() -> [MatchRecord] {
-        selectedMatches.filter { $0.status == .inProgress && $0.liveScore != nil }
+        selectedMatches.filter { $0.status == .inProgress && ($0.liveScore != nil || $0.court.score != nil) }
     }
 
     func makeDefaultTournament() -> TournamentRecord? {

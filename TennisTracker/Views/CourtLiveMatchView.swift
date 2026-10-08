@@ -19,7 +19,10 @@ struct CourtLiveMatchView: View {
                         if started {
                             CourtScoreControls(score: scoreBinding) { saveProgress() }
                         } else {
-                            CourtScoreSetupFields(score: scoreBinding)
+                            if match.court.sport.sport != .custom {
+                                TennisMatchPeopleFields(players: store.data.players, match: namedMatchBinding)
+                            }
+                            CourtScoreSetupFields(score: scoreBinding, showsSideNames: match.court.sport.sport == .custom, doubles: match.matchType == .doubles)
                             StoredVenuePicker(id: matchBinding(\.venueID), venue: matchBinding(\.venue), location: matchBinding(\.location))
                             TennisTrainingSessionPicker(sessions: store.selectedTraining, coaches: store.data.setup.coaches, selection: matchBinding(\.trainingSessionID))
                             TennisTournamentPicker(tournaments: store.selectedTournaments, tournamentID: matchBinding(\.tournamentID), customName: matchBinding(\.customTournamentName))
@@ -39,13 +42,28 @@ struct CourtLiveMatchView: View {
                 guard match == nil else { return }
                 match = existingMatch ?? store.makeDefaultMatch()
                 score = match?.makeCourtScore()
-                started = existingMatch?.status == .inProgress
+                started = existingMatch?.court.score != nil && existingMatch?.status != .scheduled
             }
         }
     }
 
     private var scoreBinding: Binding<CourtScoreSession> {
-        Binding(get: { score! }, set: { score = $0 })
+        Binding(get: { score! }, set: { score = $0; match?.court.rules = $0.rules })
+    }
+    private var namedMatchBinding: Binding<MatchRecord> {
+        Binding(get: { match! }, set: { value in
+            match = value
+            guard var current = score else { return }
+            let sides = value.courtScoreSides
+            for side in current.sides.indices {
+                current.sides[side].name = sides[side].name
+                current.sides[side].members = sides[side].members
+            }
+            if let rules = value.court.rules, rules != current.rules {
+                current = CourtScoreSession(sport: value.court.sport, rules: rules, sides: current.sides)
+            }
+            score = current
+        })
     }
     private func matchBinding<T>(_ key: WritableKeyPath<MatchRecord, T>) -> Binding<T> {
         Binding(get: { match![keyPath: key] }, set: { match?[keyPath: key] = $0 })
@@ -63,8 +81,10 @@ struct CourtLiveMatchView: View {
         guard var match, let score else { return false }
         match.status = score.frame.complete ? .completed : .inProgress
         match.actualFinish = score.frame.complete ? Date() : nil
-        match.playerName = score.sides.first?.name ?? match.playerName
-        match.opponentName = score.sides.dropFirst().map(\.name).joined(separator: ", ")
+        if match.court.sport.sport == .custom {
+            match.playerName = score.sides.first?.name ?? match.playerName
+            match.opponentName = score.sides.dropFirst().map(\.name).joined(separator: ", ")
+        }
         match.applyCourtScore(score)
         guard store.upsertMatch(match, audibleFeedback: false) else { error = store.lastAnnouncement; errorFocused = true; return false }
         self.match = match

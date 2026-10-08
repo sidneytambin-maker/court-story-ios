@@ -16,7 +16,7 @@ struct WatchTrainingEditor: View {
             Picker("Training type", selection: $draft.trainingType) {
                 ForEach(TrainingType.allCases) { Text($0.rawValue).tag($0) }
             }
-            TennisTrainingFocusPicker(focus: $draft.focus, additionalFocus: $draft.additionalFocus)
+            TennisTrainingFocusPicker(focus: $draft.focus, additionalFocus: $draft.additionalFocus, sport: draft.court.sport.sport)
             if !draft.isActive && current?.isActive != true {
                 Section("Duration") {
                     DurationFields(minutes: Binding(
@@ -70,11 +70,14 @@ struct WatchMatchEditor: View {
     @State var draft: MatchRecord
     @State private var original: MatchRecord?
     @State private var validationMessage = ""
+    @State private var courtScoreError = ""
 
     var body: some View {
         Form {
             if !validationMessage.isBlank { Text(validationMessage) }
-            TennisMatchPeopleFields(players: store.snapshot.players, match: $draft, showsKind: draft.status == .completed)
+            if draft.court.sport.sport != .custom {
+                TennisMatchPeopleFields(players: store.snapshot.players, match: $draft, showsKind: draft.status != .inProgress)
+            }
             if draft.status != .inProgress, store.snapshot.matches.first(where: { $0.id == draft.id })?.status != .inProgress {
                 WatchMatchScheduleFields(match: $draft)
             }
@@ -84,8 +87,12 @@ struct WatchMatchEditor: View {
             TennisTournamentPicker(tournaments: store.snapshot.tournaments, tournamentID: $draft.tournamentID, customName: $draft.customTournamentName)
             TennisTrainingSessionPicker(sessions: store.snapshot.trainingSessions.filter { $0.playerID == draft.playerID }, coaches: store.snapshot.setup.coaches, selection: $draft.trainingSessionID)
             if draft.status == .completed {
+                if draft.usesCourtScoring {
+                    CourtRecordedScoreFields(match: $draft, validationMessage: $courtScoreError)
+                } else {
                 OrderedChoicePicker(title: "Match format", selection: $draft.matchFormat, values: MatchFormat.allCases) { $0.label }
                 TennisRecordedScoreFields(match: $draft)
+                }
             }
             Section("Conditions") { TennisMatchConditionsFields(match: $draft) }
             TextField("Next practice focus", text: $draft.nextPracticeFocus)
@@ -100,6 +107,10 @@ struct WatchMatchEditor: View {
             ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
             ToolbarItem(placement: .confirmationAction) {
                 Button("Save") {
+                    if draft.usesCourtScoring {
+                        if !courtScoreError.isEmpty { validationMessage = courtScoreError; store.announce(courtScoreError); return }
+                        store.updateMatchDetails(draft, original: original); dismiss(); return
+                    }
                     if draft.status == .completed, let error = TennisManualMatchEntry.validationMessage(for: draft) {
                         validationMessage = error; store.announce(error)
                     } else { store.updateMatchDetails(draft, original: original); dismiss() }

@@ -2,6 +2,9 @@ import SwiftUI
 
 struct CourtScoreSetupFields: View {
     @Binding var score: CourtScoreSession
+    var showsSideNames = true
+    var doubles = false
+    var showsService = true
     var body: some View {
         if score.sport.sport == .custom {
             Picker("Participants or teams", selection: Binding(get: { score.sides.count }, set: { count in
@@ -11,9 +14,11 @@ struct CourtScoreSetupFields: View {
                 score = CourtScoreSession(sport: score.sport, rules: score.rules, sides: sides)
             })) { ForEach(2...12, id: \.self) { Text("\($0)").tag($0) } }
         }
-        ForEach(score.sides.indices, id: \.self) { side in
-            TextField("Side \(side + 1) name", text: Binding(get: { score.sides[side].name }, set: { score.sides[side].name = $0 }))
-                .accessibilityIdentifier("courtSideName\(side)")
+        if showsSideNames {
+            ForEach(score.sides.indices, id: \.self) { side in
+                TextField("Side \(side + 1) name", text: Binding(get: { score.sides[side].name }, set: { score.sides[side].name = $0 }))
+                    .accessibilityIdentifier("courtSideName\(side)")
+            }
         }
         NavigationLink("Scoring rules") {
             Form {
@@ -21,11 +26,13 @@ struct CourtScoreSetupFields: View {
                     let first = score.frame.firstServer
                     score = CourtScoreSession(sport: score.sport, rules: $0, sides: score.sides)
                     _ = score.setServer(first, serverNumber: $0.doublesTwoServers ? 2 : 1)
-                }), doubles: score.sides.allSatisfy { $0.members.count == 2 })
+                }), doubles: doubles)
             }.navigationTitle("Match rules")
         }.accessibilityValue(score.rules.reference)
-        Picker("First server", selection: Binding(get: { score.frame.server }, set: { _ = score.setServer($0, serverNumber: score.rules.doublesTwoServers ? 2 : 1) })) {
-            ForEach(score.sides.indices, id: \.self) { Text(score.sides[$0].name).tag($0) }
+        if showsService {
+            Picker("First server", selection: Binding(get: { score.frame.server }, set: { _ = score.setServer($0, serverNumber: score.rules.doublesTwoServers ? 2 : 1) })) {
+                ForEach(score.sides.indices, id: \.self) { Text(score.sides[$0].name).tag($0) }
+            }
         }
         if let error = score.validationMessage { Text(error).accessibilityIdentifier("courtScoreSetupError") }
     }
@@ -39,7 +46,13 @@ struct CourtScoreControls: View {
     var body: some View {
         Text(score.summary).font(.headline).fixedSize(horizontal: false, vertical: true)
             .accessibilityIdentifier("courtLiveScoreSummary")
-        if !score.frame.complete {
+        if score.frame.serviceChoicePrompt != nil {
+            ForEach(score.sides.indices, id: \.self) { side in
+                Button("\(score.sides[side].name) serves first") {
+                    if score.setServer(side, serverNumber: score.rules.doublesTwoServers ? 2 : 1) { changed() }
+                }
+            }
+        } else if !score.frame.complete {
             ForEach(score.sides.indices, id: \.self) { side in
                 Button("Rally won by \(score.sides[side].name)", systemImage: "plus") {
                     if score.awardRally(to: side) { changed() }
@@ -49,7 +62,7 @@ struct CourtScoreControls: View {
         Button("Undo last score change", systemImage: "arrow.uturn.backward") {
             if score.undo() { changed() }
         }.disabled(score.history.isEmpty).accessibilityIdentifier("courtUndoScore")
-        if !score.frame.complete {
+        if !score.frame.complete && score.frame.serviceChoicePrompt == nil {
             Picker("Serving side", selection: Binding(get: { score.frame.server }, set: { if score.setServer($0) { changed() } })) {
                 ForEach(score.sides.indices, id: \.self) { Text(score.sides[$0].name).tag($0) }
             }
@@ -109,6 +122,18 @@ struct CourtRecordedScoreFields: View {
     var body: some View {
         Group {
             if let score {
+                if match.court.sport.sport == .custom {
+                    CourtScoreSetupFields(score: Binding(get: { self.score ?? score }, set: { updated in
+                        self.score = updated
+                        match.court.rules = updated.rules
+                        rounds = rounds.map { round in
+                            var value = round
+                            value.points = Array((round.points + Array(repeating: 0, count: updated.sides.count)).prefix(updated.sides.count))
+                            return value
+                        }
+                        apply()
+                    }), showsService: false)
+                }
                 ForEach(rounds.indices, id: \.self) { index in
                     Text(score.rules.system == .aggregate ? CourtScoreSession.disciplines[min(index, 3)] : "Round \(index + 1)")
                         .font(.headline).accessibilityAddTraits(.isHeader)
@@ -127,7 +152,7 @@ struct CourtRecordedScoreFields: View {
                     }
                     Button("Remove round \(index + 1)", systemImage: "trash", role: .destructive) { rounds.remove(at: index) }
                 }
-                if rounds.count < (score.rules.system == .aggregate ? 4 : score.rules.roundsToWin * score.sides.count) {
+                if rounds.count < (score.rules.system == .aggregate ? 4 : (score.rules.roundsToWin - 1) * score.sides.count + 1) {
                     Button("Add round", systemImage: "plus") { rounds.append(CourtScoreRound(points: Array(repeating: 0, count: score.sides.count))) }
                 }
                 if score.rules.system == .aggregate && rounds.count == 4 {
@@ -146,13 +171,33 @@ struct CourtRecordedScoreFields: View {
             score = value
             decidingWinner = value.frame.gummiarmPlayed ? value.frame.winningSide : nil
             rounds = value.frame.rounds.isEmpty ? [CourtScoreRound(points: Array(repeating: 0, count: value.sides.count))] : value.frame.rounds
+            apply()
         }
         .onChange(of: rounds) { _, _ in apply() }
         .onChange(of: decidingWinner) { _, _ in apply() }
+        .onChange(of: match.court.rules) { _, rules in
+            guard var value = score, let rules, rules != value.rules else { return }
+            value.rules = rules; score = value; apply()
+        }
+        .onChange(of: [match.playerName, match.partnerName, match.opponentName, match.opponent2Name]) { _, _ in
+            guard match.court.sport.sport != .custom, var value = score else { return }
+            let sides = match.courtScoreSides
+            for index in value.sides.indices {
+                value.sides[index].name = sides[index].name
+                value.sides[index].members = sides[index].members
+            }
+            score = value; apply()
+        }
     }
     private func apply() {
         guard var value = score else { return }
         validationMessage = value.recordResult(rounds, decidingWinner: decidingWinner) ?? ""
-        if validationMessage.isEmpty { match.applyCourtScore(value) }
+        if validationMessage.isEmpty {
+            if value.sport.sport == .custom {
+                match.playerName = value.sides[0].name
+                match.opponentName = value.sides.dropFirst().map(\.name).joined(separator: ", ")
+            }
+            match.applyCourtScore(value)
+        }
     }
 }

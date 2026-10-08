@@ -22,6 +22,7 @@ struct WatchWorkoutStartupView: View {
                 if !store.healthClient.diagnosticCode.isEmpty {
                     Text(store.healthClient.diagnosticCode).font(.footnote)
                         .accessibilityLabel("Health diagnostic: " + store.healthClient.diagnosticCode)
+                        .accessibilityIdentifier("healthDiagnostic")
                 }
             }
             Button("Cancel Workout Start", role: .cancel) { store.cancelPendingTrainingStart() }

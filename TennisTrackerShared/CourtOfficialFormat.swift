@@ -51,6 +51,14 @@ struct CourtOfficialFormat: Identifiable, Equatable {
 }
 
 extension CourtScoringRules {
+    func forMatchKind(sport: CourtSport, doubles: Bool) -> Self {
+        guard sport != .custom else { return self }
+        let selected = CourtOfficialFormat.matching(self, sport: sport, doubles: doubles)
+            ?? CourtOfficialFormat.matching(self, sport: sport, doubles: !doubles)
+        let choices = CourtOfficialFormat.choices(for: sport, doubles: doubles)
+        return choices.first { $0.id == selected?.id }?.rules ?? choices[0].rules
+    }
+
     func sameScoring(as other: Self) -> Bool {
         var a = self, b = other
         a.reference = ""; b.reference = ""; a.sourceURL = ""; b.sourceURL = ""

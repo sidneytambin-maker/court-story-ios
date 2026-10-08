@@ -6,44 +6,46 @@ struct WatchRecordedMatchView: View {
     @State private var match = MatchRecord(playerID: UUID())
     @State private var configured = false
     @State private var validationMessage = ""
+    @State private var scoreError = ""
 
     var body: some View {
         Form {
             if !validationMessage.isBlank { Text(validationMessage).accessibilityIdentifier("recordMatchValidation") }
-            TennisMatchPeopleFields(players: store.snapshot.players, match: $match)
+            CourtCaptureIdentity(athlete: store.selectedPlayer?.displayName ?? "Player", sport: match.court.sport, coached: match.court.enteredByCoachID != nil)
+            if match.court.sport.sport != .custom { TennisMatchPeopleFields(players: store.snapshot.players, match: $match) }
             WatchMatchScheduleFields(match: $match)
             OrderedChoicePicker(title: "Match round", selection: $match.matchPosition, values: MatchPosition.allCases) { $0.label }
                 .accessibilityIdentifier("matchRoundPicker")
             WatchVenueFields(venueID: $match.venueID, venue: $match.venue, location: $match.location)
-            TennisTournamentPicker(tournaments: store.snapshot.tournaments, tournamentID: $match.tournamentID, customName: $match.customTournamentName)
-            TennisTrainingSessionPicker(sessions: store.snapshot.trainingSessions.filter { $0.playerID == match.playerID }, coaches: store.snapshot.setup.coaches, selection: $match.trainingSessionID)
-            OrderedChoicePicker(title: "Match format", selection: $match.matchFormat, values: MatchFormat.allCases) { $0.label }
-                .accessibilityIdentifier("matchFormatPicker")
-            TennisRecordedScoreFields(match: $match)
+            TennisTournamentPicker(tournaments: store.scopedSnapshot.tournaments, tournamentID: $match.tournamentID, customName: $match.customTournamentName)
+            TennisTrainingSessionPicker(sessions: store.scopedSnapshot.trainingSessions, coaches: store.snapshot.setup.coaches, selection: $match.trainingSessionID)
+            if configured {
+                if match.court.sport.sport != .custom {
+                    NavigationLink("Scoring rules") {
+                        Form {
+                            CourtRuleFields(sport: match.court.sport.sport,
+                                rules: Binding(get: { match.court.rules ?? match.makeCourtScore().rules }, set: { match.court.rules = $0 }),
+                                doubles: match.matchType == .doubles)
+                        }.navigationTitle("Match rules")
+                    }
+                }
+                CourtRecordedScoreFields(match: $match, validationMessage: $scoreError)
+            }
             Section("Conditions") { TennisMatchConditionsFields(match: $match) }
             TextField("Next practice focus", text: $match.nextPracticeFocus)
                 .accessibilityHint("Your latest completed match review appears in What to work on on the iPhone dashboard.")
             TextField("Notes", text: $match.notes)
             Button("Save Match Result") {
-                if let error = TennisManualMatchEntry.validationMessage(for: match) {
-                    validationMessage = error
-                    store.announce(error)
-                } else {
-                    store.saveRecordedMatch(match)
-                    dismiss()
-                }
+                if !scoreError.isEmpty { validationMessage = scoreError; store.announce(scoreError); return }
+                if store.saveCourtMatch(match) { store.activeMatch = nil; dismiss() }
             }.disabled(!configured).accessibilityIdentifier("saveRecordedMatch")
         }
         .pickerStyle(.navigationLink)
         .navigationTitle("Record Match Result")
         .onAppear {
-            guard !configured, let player = store.selectedPlayer else { return }
-            match.playerID = player.id
-            match.playerName = player.displayName
-            match.matchFormat = player.defaultMatchFormat
-            match.sightLevel = player.sightLevel
-            match.allowedBounces = player.bounceAllowance ?? player.sightLevel.allowedBounces
-            match.suddenDeathDeuce = player.playerMode == .blindTennis
+            guard !configured, let draft = store.makeCourtMatch() else { return }
+            match = draft
+            match.status = .completed
             match.date = Calendar.current.startOfDay(for: Date())
             configured = true
         }

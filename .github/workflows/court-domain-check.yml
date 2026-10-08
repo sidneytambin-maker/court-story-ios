@@ -37,7 +37,8 @@ jobs:
           set -euo pipefail
           ID=$(xcrun simctl list devices available --json | jq -r '[.devices | to_entries[] | select(.key | contains("watchOS")) | .value[] | select(.isAvailable and (.name | contains("Ultra")))][0].udid')
           xcrun simctl bootstatus "$ID" -b
-          xcodebuild test -project TennisTrackeriOS.xcodeproj -scheme TennisTrackerWatchTests -destination "id=$ID" -only-testing:TennisTrackerWatchUITests/WatchWorkoutStartupUITests -parallel-testing-enabled NO -resultBundlePath CourtWatch.xcresult CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" 2>&1 | tee CourtWatch.log
+          echo "WATCH_SIMULATOR_ID=$ID" >> "$GITHUB_ENV"
+          xcodebuild test -project TennisTrackeriOS.xcodeproj -scheme TennisTrackerWatchTests -destination "id=$ID" -only-testing:TennisTrackerWatchUITests/WatchWorkoutStartupUITests -parallel-testing-enabled NO -resultBundlePath CourtWatch.xcresult CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=YES CODE_SIGN_IDENTITY="-" 2>&1 | tee CourtWatch.log
       - name: Export Watch workout evidence
         if: always()
         run: |
@@ -45,6 +46,10 @@ jobs:
             mkdir -p CourtWatchReview
             xcrun xcresulttool get test-results summary --path CourtWatch.xcresult > CourtWatchReview/summary.json
             xcrun xcresulttool export attachments --path CourtWatch.xcresult --output-path CourtWatchReview/screenshots
+          fi
+          if [ -n "${WATCH_SIMULATOR_ID:-}" ]; then
+            mkdir -p CourtWatchReview
+            xcrun simctl spawn "$WATCH_SIMULATOR_ID" log show --last 30m --style compact --predicate 'subsystem == "com.inclusophy.tennistracker.dev.watchkitapp" AND category == "Workout"' > CourtWatchReview/workout-diagnostics.log
           fi
       - uses: actions/upload-artifact@v4
         if: always()

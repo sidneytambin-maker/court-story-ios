@@ -49,6 +49,15 @@ enum TennisWatchRecordEdits {
         updated.matchConditions = draft.matchConditions
         updated.nextPracticeFocus = draft.nextPracticeFocus
         updated.matchNeedsWork = draft.matchNeedsWork
+        if draft.court.sport == current.court.sport, draft.playerID == current.playerID,
+           draft.court.enteredByCoachID == current.court.enteredByCoachID {
+            updated.court.surface = draft.court.surface
+            if current.status == .completed && draft.status == .completed &&
+                current.court.score == (original ?? draft).court.score {
+                updated.court.rules = draft.court.rules
+                updated.court.score = draft.court.score
+            }
+        }
         if current.status == .completed && draft.status == .completed {
             updated.matchType = draft.matchType
             updated.matchFormat = draft.matchFormat

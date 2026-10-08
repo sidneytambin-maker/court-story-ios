@@ -10,8 +10,13 @@ struct TennisMatchPeopleFields: View {
     var body: some View {
         if showsKind {
             Picker("Singles or doubles", selection: $match.matchType) {
-                ForEach(MatchKind.allCases) { Text($0.rawValue).tag($0) }
+                ForEach(match.court.sport.sport == .padel ? [.doubles] : MatchKind.allCases) { Text($0.rawValue).tag($0) }
             }.accessibilityIdentifier("matchKindPicker")
+                .onChange(of: match.matchType) { _, kind in
+                    guard match.usesCourtScoring else { return }
+                    match.court.rules = (match.court.rules ?? .standard(for: match.court.sport.sport))
+                        .forMatchKind(sport: match.court.sport.sport, doubles: kind == .doubles)
+                }
         }
         if match.matchType == .doubles {
             TennisPersonPicker(title: "Your doubles partner", players: choices(excluding: [match.opponentID, match.opponent2ID]),

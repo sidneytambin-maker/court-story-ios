@@ -27,6 +27,7 @@ struct CourtScoreFrame: Codable, Equatable {
     var gummiarmPlayed = false
     var complete = false
     var winningSide: Int?
+    var serviceChoicePrompt: String?
     var tennis = TennisScoreSnapshot()
 
     init(count: Int) {
@@ -80,7 +81,7 @@ struct CourtScoreSession: Codable, Equatable {
 
     @discardableResult
     mutating func awardRally(to side: Int) -> Bool {
-        guard validationMessage == nil, sides.indices.contains(side), !frame.complete else { return false }
+        guard validationMessage == nil, sides.indices.contains(side), !frame.complete, frame.serviceChoicePrompt == nil else { return false }
         checkpoint()
         if rules.system == .tennisGames { tennisPoint(to: side); return true }
         if rules.system == .aggregate { aggregatePoint(to: side); return true }
@@ -93,7 +94,17 @@ struct CourtScoreSession: Codable, Equatable {
             frame.complete = frame.roundsWon[side] >= rules.roundsToWin
             frame.winningSide = frame.complete ? side : nil
             frame.points = Array(repeating: 0, count: sides.count)
-            frame.server = rules.service == .alternateTwo ? (frame.firstServer + 1) % sides.count : side
+            let alternates = rules.service == .alternateTwo || sport.sport == .pickleball || sport.sport == .racquetball
+            frame.server = alternates ? (frame.firstServer + 1) % sides.count : side
+            if sport.sport == .racquetball, frame.rounds.count == 4, !frame.complete {
+                let totals = sides.indices.map { index in frame.rounds.reduce(0) { $0 + $1.points[index] } }
+                if totals[0] == totals[1] {
+                    frame.serviceChoicePrompt = "Deciding game: toss for the choice to serve or receive, then choose the first serving side."
+                } else {
+                    let chooser = totals[0] > totals[1] ? 0 : 1
+                    frame.serviceChoicePrompt = "Deciding game: \(sides[chooser].name) chooses to serve or receive after scoring the most points. Choose the first serving side."
+                }
+            }
             frame.firstServer = frame.server
             frame.serviceTurn = 0
             frame.serverNumber = rules.doublesTwoServers ? 2 : 1
@@ -205,7 +216,7 @@ struct CourtScoreSession: Codable, Equatable {
     @discardableResult
     mutating func setServer(_ side: Int, serverNumber: Int = 1) -> Bool {
         guard sides.indices.contains(side), (1...(rules.doublesTwoServers ? 2 : 1)).contains(serverNumber), !frame.complete else { return false }
-        checkpoint(); frame.server = side; frame.serverNumber = serverNumber
+        checkpoint(); frame.server = side; frame.serverNumber = serverNumber; frame.serviceChoicePrompt = nil
         if frame.points.allSatisfy({ $0 == 0 }) { frame.firstServer = side }
         return true
     }
@@ -224,6 +235,12 @@ struct CourtScoreSession: Codable, Equatable {
         } else if points.indices.contains(where: { isWinningScore(points, side: $0) }) || rules.cap.map({ (points.max() ?? 0) >= $0 }) == true { return false }
         checkpoint()
         frame.points = points
+        if rules.service == .alternateTwo {
+            let total = points.reduce(0, +)
+            let turns = points.allSatisfy { $0 >= rules.target - 1 } ? total - (rules.target - 1) : total / 2
+            frame.serviceTurn = turns
+            frame.server = (frame.firstServer + turns) % sides.count
+        }
         if rules.system == .tennisGames { frame.tennis.playerPoints = points[0]; frame.tennis.opponentPoints = points[1] }
         return true
     }
@@ -249,6 +266,7 @@ struct CourtScoreSession: Codable, Equatable {
 
     var summary: String {
         guard validationMessage == nil else { return validationMessage ?? "Score unavailable" }
+        if let prompt = frame.serviceChoicePrompt { return resultSummary + ". " + prompt }
         if frame.complete, let winner = frame.winningSide {
             return "\(sides[winner].name) wins. " + resultSummary
         }

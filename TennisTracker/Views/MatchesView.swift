@@ -172,7 +172,9 @@ struct MatchEditorView: View {
                 if !validationMessage.isBlank { Text(validationMessage).accessibilityIdentifier("recordMatchValidation") }
                 TennisSection("Players") {
                     CourtCaptureIdentity(athlete: store.data.players.first { $0.id == match.playerID }?.displayName ?? "Player unavailable", sport: match.court.sport, coached: match.court.enteredByCoachID != nil)
-                    TennisMatchPeopleFields(players: store.data.players, match: $match, singlesTitle: "Opponent name", opponentFieldIdentifier: "matchOpponentNameField")
+                    if match.court.sport.sport != .custom {
+                        TennisMatchPeopleFields(players: store.data.players, match: $match, singlesTitle: "Opponent name", opponentFieldIdentifier: "matchOpponentNameField")
+                    }
                 }
 
                 TennisSection("Match") {
@@ -194,6 +196,15 @@ struct MatchEditorView: View {
                     OrderedChoicePicker(title: "Match format", selection: $match.matchFormat, values: MatchFormat.allCases) { $0.label }
                         .accessibilityIdentifier("matchFormatPicker")
                     }
+                    else if match.court.sport.sport != .custom {
+                        NavigationLink("Scoring rules") {
+                            Form {
+                                CourtRuleFields(sport: match.court.sport.sport,
+                                    rules: Binding(get: { match.court.rules ?? match.makeCourtScore().rules }, set: { match.court.rules = $0 }),
+                                    doubles: match.matchType == .doubles)
+                            }.navigationTitle("Match rules")
+                        }.accessibilityValue(match.court.rules?.formatSummary ?? "")
+                    }
                 }
 
                 TennisSection("Result") {
@@ -204,7 +215,7 @@ struct MatchEditorView: View {
                         if match.usesCourtScoring { CourtRecordedScoreFields(match: $match, validationMessage: $courtScoreError) }
                         else { TennisRecordedScoreFields(match: $match) }
                     } else if match.status == .inProgress {
-                        SummaryRow(title: "In-progress score", value: match.liveScore == nil ? "No live score saved yet." : liveScoreSummary)
+                        SummaryRow(title: "In-progress score", value: match.court.score?.summary ?? (match.liveScore == nil ? "No live score saved yet." : liveScoreSummary))
                     } else {
                         Text("No result needed for a scheduled match.")
                             .foregroundStyle(.secondary)
@@ -232,7 +243,7 @@ struct MatchEditorView: View {
                     Button("Save") {
                         keepDateInsideLinkedTournament()
                         if match.usesCourtScoring && match.status == .completed && !courtScoreError.isEmpty { store.announce(courtScoreError); return }
-                        if match.status == .completed, let error = TennisRecordedScore.validationMessage(for: match) {
+                        if match.status == .completed, !match.usesCourtScoring, let error = TennisRecordedScore.validationMessage(for: match) {
                             validationMessage = error; store.announce(error); return
                         }
                         match.needsDetails = match.opponentName.isBlank || match.opponentName == "Opponent"
@@ -305,7 +316,7 @@ struct LiveMatchView: View {
     @EnvironmentObject private var store: TennisStore
     let existingMatch: MatchRecord?
     var body: some View {
-        if existingMatch?.usesCourtScoring == true || (existingMatch == nil && store.selectedSport.sport != .tennis) {
+        if existingMatch?.usesCourtScoring == true || existingMatch == nil {
             CourtLiveMatchView(existingMatch: existingMatch)
         } else { TennisLiveMatchView(existingMatch: existingMatch) }
     }

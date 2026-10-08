@@ -73,7 +73,7 @@ private struct WatchTrackView: View {
         List {
             Section {
                 NavigationLink { WatchTrainingEntryView() } label: { Label("Track Training Session", systemImage: "figure.tennis") }
-                NavigationLink { WatchMatchSetupView() } label: { Label("Live Score a Match", systemImage: "tennisball.fill") }
+                NavigationLink { WatchCourtMatchSetupView() } label: { Label("Live Score a Match", systemImage: "tennisball.fill") }
                 NavigationLink { WatchRecordedMatchView() } label: { Label("Record Match Result", systemImage: "square.and.pencil") }
                     .accessibilityHint("Enter players, a completed result, sets and conditions without live scoring.")
                 NavigationLink { WatchTournamentManagementView() } label: { Label("Manage Tournaments", systemImage: "trophy.fill") }
@@ -286,6 +286,9 @@ private struct WatchScoreView: View {
     var body: some View {
         List {
             if let match = store.activeMatch {
+                if match.usesCourtScoring {
+                    WatchCourtScoreFields(match: match)
+                } else {
                 Text(scoreText)
                     .accessibilityLabel("Current match score")
                     .accessibilityValue(scoreText)
@@ -310,9 +313,10 @@ private struct WatchScoreView: View {
                 } else {
                     scoreActions(for: match)
                 }
+                }
             } else {
                 WatchMatchScoringChoices()
-                NavigationLink("Live Score a Match") { WatchMatchSetupView() }
+                NavigationLink("Live Score a Match") { WatchCourtMatchSetupView() }
             }
         }
         .navigationTitle("Score")

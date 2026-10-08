@@ -74,7 +74,12 @@ final class WatchWorkoutStartupUITests: XCTestCase {
         let app = start("real")
         for _ in 0..<16 {
             if app.buttons["endTrainingWorkout"].waitForExistence(timeout: 2) { break }
-            if app.staticTexts["healthStartFailure"].exists { break }
+            if app.staticTexts["healthStartFailure"].exists {
+                let diagnostic = app.staticTexts["healthDiagnostic"]
+                reveal(diagnostic, in: app)
+                XCTFail(diagnostic.label + "\n" + app.debugDescription)
+                return
+            }
             for title in ["Turn On All", "Allow All", "Next", "Allow", "Done"] {
                 let button = app.buttons[title]
                 if button.exists && button.isHittable { button.tap() }
@@ -97,8 +102,10 @@ final class WatchWorkoutStartupUITests: XCTestCase {
 
     private func finish(_ app: XCUIApplication) {
         app.buttons["endTrainingWorkout"].tap()
-        XCTAssertTrue(app.buttons["confirmEndTrainingWorkout"].waitForExistence(timeout: 5))
-        app.buttons["confirmEndTrainingWorkout"].tap()
+        // watchOS confirmation dialogs expose the button label, not the SwiftUI ID.
+        let confirmation = app.buttons["End Workout and Save"]
+        XCTAssertTrue(confirmation.waitForExistence(timeout: 5), app.debugDescription)
+        confirmation.tap()
     }
 
     private func reveal(_ element: XCUIElement, in app: XCUIApplication) {

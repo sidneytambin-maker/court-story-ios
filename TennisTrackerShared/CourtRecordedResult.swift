@@ -69,14 +69,24 @@ enum CourtRecordedResult {
 }
 
 extension MatchRecord {
-    var usesCourtScoring: Bool { court.sport.sport != .tennis || court.score != nil }
+    var usesCourtScoring: Bool { court.sport.sport != .tennis || court.rules != nil || court.score != nil }
+
+    mutating func configureNewCourtMatch() {
+        if court.sport.sport == .padel { matchType = .doubles }
+        court.rules = (court.rules ?? .standard(for: court.sport.sport))
+            .forMatchKind(sport: court.sport.sport, doubles: matchType == .doubles)
+    }
+
+    var courtScoreSides: [CourtScoreSide] {
+        let yours = CourtScoreSide(name: playerTeam, members: [playerName, partnerName].filter { !$0.isBlank })
+        let theirs = CourtScoreSide(name: opponentSummary.fallback("Opponent"), members: [opponentName, opponent2Name].filter { !$0.isBlank })
+        return [yours, theirs]
+    }
 
     func makeCourtScore() -> CourtScoreSession {
         if let score = court.score { return score }
         let rules = court.rules ?? .standard(for: court.sport.sport, doubles: matchType == .doubles)
-        let yours = CourtScoreSide(name: playerTeam, members: [playerName, partnerName].filter { !$0.isBlank })
-        let theirs = CourtScoreSide(name: opponentSummary.fallback("Opponent"), members: [opponentName, opponent2Name].filter { !$0.isBlank })
-        return CourtScoreSession(sport: court.sport, rules: rules, sides: [yours, theirs])
+        return CourtScoreSession(sport: court.sport, rules: rules, sides: courtScoreSides)
     }
 
     mutating func applyCourtScore(_ score: CourtScoreSession) {

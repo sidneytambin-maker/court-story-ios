@@ -247,7 +247,10 @@ final class WatchTennisStore: NSObject, ObservableObject, WCSessionDelegate {
             announce("Set up a player on iPhone first.")
             return
         }
-        let match = TennisWatchActivityFactory.match(player: player, kind: kind, tournament: tournament)
+        var match = TennisWatchActivityFactory.match(player: player, kind: kind, tournament: tournament)
+        match.court = CourtActivity(player: player, coachID: capturingCoachID)
+        match.configureNewCourtMatch()
+        match.applyCourtScore(match.makeCourtScore())
         pointHistory = []
         persistPointHistory()
         activeMatch = match
@@ -290,6 +293,11 @@ final class WatchTennisStore: NSObject, ObservableObject, WCSessionDelegate {
         } else { match.actualStart = Date() }
         match.actualFinish = nil
         match.status = .inProgress
+        if match.usesCourtScoring {
+            match.applyCourtScore(match.makeCourtScore())
+            if saveCourtMatch(match) { page = .score }
+            return
+        }
         match.liveScore = match.liveScore ?? TennisScoreState().snapshot
         match = TennisRecordConflictResolver.prepareLocalMatch(match)
         mergeMatch(match)
@@ -910,7 +918,7 @@ final class WatchTennisStore: NSObject, ObservableObject, WCSessionDelegate {
         if let id = activeMatch?.id {
             activeMatch = snapshot.matches.first { $0.id == id && $0.status == .inProgress }
         } else {
-            activeMatch = snapshot.matches.first { $0.status == MatchStatus.inProgress && $0.liveScore != nil }
+            activeMatch = snapshot.matches.first { $0.status == MatchStatus.inProgress && ($0.liveScore != nil || $0.court.score != nil) }
         }
         activeTraining = snapshot.trainingSessions.first(where: \.isActive)
         if previousMatch?.id != activeMatch?.id || previousMatch?.liveScore != activeMatch?.liveScore {
@@ -1003,7 +1011,7 @@ final class WatchTennisStore: NSObject, ObservableObject, WCSessionDelegate {
             if let data = defaults.data(forKey: "pointHistory"), let history = try? JSONDecoder.tennisTracker.decode([TennisScoreSnapshot].self, from: data) { pointHistory = history }
             activeTournamentID = defaults.string(forKey: "activeTournamentID").flatMap(UUID.init(uuidString:))
             activeTraining = saved.trainingSessions.first(where: \.isActive)
-            activeMatch = saved.matches.first { $0.status == .inProgress && $0.liveScore != nil }
+            activeMatch = saved.matches.first { $0.status == .inProgress && ($0.liveScore != nil || $0.court.score != nil) }
             if let activeMatch { scoreState = TennisScoreState(snapshot: activeMatch.liveScore ?? TennisScoreState().snapshot) }
             lastSyncStatus = "Saved iPhone data available."
         }
@@ -1109,6 +1117,7 @@ extension WatchTennisStore {
         guard let player = selectedPlayer else { return nil }
         var match = TennisWatchActivityFactory.match(player: player, kind: snapshot.settings.defaultMatchType)
         match.court = CourtActivity(player: player, coachID: capturingCoachID)
+        match.configureNewCourtMatch()
         match.status = .scheduled; match.liveScore = nil; match.actualStart = nil
         return match
     }
@@ -1121,7 +1130,7 @@ extension WatchTennisStore {
         if let error = CourtLibraryValidation.message(in: library, validateLinks: false) { announce(error); return false }
         let saved = TennisRecordConflictResolver.prepareLocalMatch(value)
         mergeMatch(saved)
-        activeMatch = saved.status == .inProgress ? saved : nil
+        activeMatch = saved
         send(.upsertMatch(saved))
         if snapshot.settings.scoreAnnouncementMode == .automatic || saved.status == .completed { announce(score.summary) }
         return true
