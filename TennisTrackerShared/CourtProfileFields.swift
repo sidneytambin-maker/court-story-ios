@@ -64,11 +64,22 @@ struct CourtAccessFields: View {
 struct CourtRuleFields: View {
     var sport: CourtSport
     @Binding var rules: CourtScoringRules
+    var doubles = false
 
     var body: some View {
         Section("Scoring rules") {
-            Text(rules.reference).font(.subheadline)
-            if sport == .custom || sport == .pickleball || sport == .racquetball {
+            if sport != .custom {
+                let choices = CourtOfficialFormat.choices(for: sport, doubles: doubles)
+                let current = CourtOfficialFormat.matching(rules, sport: sport, doubles: doubles)
+                Picker("Official format", selection: Binding(get: { current?.id ?? "saved" }, set: { id in
+                    if let format = choices.first(where: { $0.id == id }) { rules = format.rules }
+                })) {
+                    if current == nil { Text("Previously saved format").tag("saved") }
+                    ForEach(choices) { Text($0.title).tag($0.id) }
+                }.accessibilityIdentifier("courtOfficialFormat")
+                Text(rules.formatSummary).accessibilityIdentifier("courtRulesSummary")
+                Text(rules.reference).font(.footnote)
+            } else {
                 Picker("Scoring system", selection: $rules.system) {
                     Text("Rally points").tag(CourtPointSystem.rally)
                     Text("Side-out points").tag(CourtPointSystem.sideOut)
@@ -76,28 +87,6 @@ struct CourtRuleFields: View {
                     rules.customOverride = true
                     rules.service = system == .sideOut ? .sideOut : .rallyWinner
                 }
-            }
-            if rules.system == .tennisGames {
-                Picker("Deuce rule", selection: $rules.deuce) {
-                    ForEach(CourtDeuceRule.allCases.filter { $0 != .starPoint || sport == .padel }) { Text($0.rawValue).tag($0) }
-                }
-                Picker("Games to win a set", selection: $rules.gamesPerSet) {
-                    ForEach(1...12, id: \.self) { Text("\($0)").tag($0) }
-                }
-                Picker("Tie-break at", selection: $rules.tieBreakAt) {
-                    Text("No automatic tie-break").tag(Optional<Int>.none)
-                    ForEach(1...12, id: \.self) { Text("\($0) games all").tag(Optional($0)) }
-                }
-                Picker("Tie-break target", selection: $rules.tieBreakTarget) {
-                    ForEach(1...21, id: \.self) { Text("\($0) points").tag($0) }
-                }
-                Toggle("Deciding match tie-break", isOn: $rules.decidingMatchTieBreak)
-                if rules.decidingMatchTieBreak {
-                    Picker("Deciding tie-break target", selection: $rules.decidingTieBreakTarget) {
-                        ForEach(1...21, id: \.self) { Text("\($0) points").tag($0) }
-                    }
-                }
-            } else if rules.system != .aggregate {
                 TextField("Game target", value: $rules.target, format: .number)
                     .accessibilityIdentifier("courtPointsTarget")
                 Picker("Win by", selection: $rules.winBy) {
@@ -113,9 +102,7 @@ struct CourtRuleFields: View {
                     }
                 }
                 Toggle("Two servers per side in doubles", isOn: $rules.doublesTwoServers)
-            }
-            if rules.system != .aggregate {
-                Picker(rules.system == .tennisGames ? "Sets needed to win" : "Games needed to win", selection: $rules.roundsToWin) {
+                Picker("Rounds needed to win", selection: $rules.roundsToWin) {
                     ForEach(1...9, id: \.self) { Text("\($0)").tag($0) }
                 }
             }

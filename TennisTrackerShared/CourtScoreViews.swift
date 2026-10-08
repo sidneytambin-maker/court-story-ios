@@ -16,7 +16,13 @@ struct CourtScoreSetupFields: View {
                 .accessibilityIdentifier("courtSideName\(side)")
         }
         NavigationLink("Scoring rules") {
-            Form { CourtRuleFields(sport: score.sport.sport, rules: $score.rules) }.navigationTitle("Match rules")
+            Form {
+                CourtRuleFields(sport: score.sport.sport, rules: Binding(get: { score.rules }, set: {
+                    let first = score.frame.firstServer
+                    score = CourtScoreSession(sport: score.sport, rules: $0, sides: score.sides)
+                    _ = score.setServer(first, serverNumber: $0.doublesTwoServers ? 2 : 1)
+                }), doubles: score.sides.allSatisfy { $0.members.count == 2 })
+            }.navigationTitle("Match rules")
         }.accessibilityValue(score.rules.reference)
         Picker("First server", selection: Binding(get: { score.frame.server }, set: { _ = score.setServer($0, serverNumber: score.rules.doublesTwoServers ? 2 : 1) })) {
             ForEach(score.sides.indices, id: \.self) { Text(score.sides[$0].name).tag($0) }

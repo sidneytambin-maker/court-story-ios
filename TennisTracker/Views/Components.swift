@@ -222,25 +222,6 @@ struct DurationPicker: View {
     }
 }
 
-struct NumberChoicePicker: View {
-    let title: String
-    @Binding var value: Int
-    let range: ClosedRange<Int>
-    var suffix: String = ""
-
-    var body: some View {
-        OrderedChoicePicker(title: title, selection: $value, values: Array(range), label: label)
-    }
-
-    private func label(for number: Int) -> String {
-        if suffix.isBlank { return "\(number)" }
-        if number == 1, suffix.hasSuffix("s") {
-            return "\(number) \(suffix.dropLast())"
-        }
-        return "\(number) \(suffix)"
-    }
-}
-
 struct EmptyStateView: View {
     let title: String
     let message: String

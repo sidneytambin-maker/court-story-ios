@@ -231,7 +231,9 @@ struct TennisScoringEngine {
             state.isMatchComplete = true
             return
         }
-        let wonTieBreak = state.isTiebreak
+        let wonSetTieBreak = state.isTiebreak && automaticTieBreakAt.map {
+            state.playerGames == $0 && state.opponentGames == $0
+        } == true
         if state.playerPoints > state.opponentPoints {
             state.playerGames += 1
         } else {
@@ -241,7 +243,7 @@ struct TennisScoringEngine {
         state.automaticTiebreakActive = false
         state.playerPoints = 0
         state.opponentPoints = 0
-        if setIsComplete || wonTieBreak {
+        if setIsComplete || wonSetTieBreak {
             finishSet()
         }
     }

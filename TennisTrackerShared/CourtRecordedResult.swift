@@ -31,12 +31,16 @@ enum CourtRecordedResult {
                 guard let tieWinner = winner(CourtScoreRound(points: tie)),
                       validFinish(tie, target: tieTarget, margin: 2, cap: nil) else { return prefix + "the tie-break needs a valid winning score, or mark the round unfinished." }
                 if deciding {
-                    guard round.points[tieWinner] == 1, round.points[1 - tieWinner] == 0 else { return prefix + "record the deciding match tie-break as one set to zero, with its point scores." }
+                    guard round.points == tie else { return prefix + "record the actual deciding match tie-break points, matching the tie-break score." }
                 } else {
                     guard let trigger = rules.tieBreakAt,
                           round.points[tieWinner] == trigger + 1, round.points[1 - tieWinner] == trigger else { return prefix + "the games and tie-break must show the same winner at the configured trigger." }
                 }
             } else {
+                if rules.system == .tennisGames, rules.decidingMatchTieBreak,
+                   wins.allSatisfy({ $0 == rules.roundsToWin - 1 }) {
+                    return prefix + "enter the deciding match tie-break points."
+                }
                 let margin = rules.system == .tennisGames ? 2 : rules.winBy
                 guard validFinish(round.points, target: target, margin: margin, cap: rules.system == .tennisGames ? nil : rules.cap) else {
                     return prefix + "the score is not a finished round under these rules. Correct it or mark it unfinished."

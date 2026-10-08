@@ -185,35 +185,41 @@ struct CourtScoringRules: Codable, Equatable {
         var rules = CourtScoringRules()
         switch sport {
         case .tennis:
-            rules.system = .tennisGames; rules.service = .games; rules.roundsToWin = 1
-            rules.reference = "ITF Rules of Tennis 2026"; rules.sourceURL = "https://www.itftennis.com/en/about-us/governance/rules-and-regulations/"
+            rules.system = .tennisGames; rules.service = .games; rules.roundsToWin = 2
+            rules.reference = "ITF Rules of Tennis 2026"; rules.sourceURL = "https://www.itftennis.com/media/7221/2026-rules-of-tennis-english.pdf"
         case .padel:
             rules.system = .tennisGames; rules.service = .games; rules.deuce = .starPoint
-            rules.reference = "FIP Star Point 2026; event format may differ"; rules.sourceURL = "https://www.padelfip.com/2025/12/between-innovation-and-tradition-introducing-the-star-point-the-scoring-system-that-appeals-to-everyone/"
+            rules.reference = "FIP Rules of Padel 2026, Rule 1"; rules.sourceURL = "https://www.padelfip.com/wp-content/uploads/2025/12/FIP_Rules-of-Padel-1.pdf"
         case .pickleball:
             rules.system = .sideOut; rules.service = .sideOut; rules.doublesTwoServers = doubles
-            rules.reference = "USA Pickleball 2026, side-out format"; rules.sourceURL = "https://usapickleball.org/rules/"
+            rules.reference = "USA Pickleball 2026, standard side-out scoring"; rules.sourceURL = "https://usapickleball.org/docs/rules/USAP-Official-Rulebook.pdf"
         case .badminton:
             rules.target = 21; rules.cap = 30
             rules.reference = "BWF 2026, 21-point format"; rules.sourceURL = "https://corporate.bwfbadminton.com/statutes/"
         case .squash:
             rules.roundsToWin = 3
-            rules.reference = "World Squash singles rules September 2025, PAR 11"; rules.sourceURL = "https://worldsquashofficiating.com/rules-of-squash/"
+            rules.reference = "World Squash singles rules September 2025, PAR 11"
+            rules.sourceURL = "https://worldsquashofficiating.com/rules-of-squash/"
+            if doubles {
+                rules.winBy = 1; rules.cap = 11
+                rules.reference = "WSF international softball doubles, Rule 2"
+                rules.sourceURL = "https://data.englandsquash.com/files?fileName=c4a12399-e40f-4a1b-b792-08a4253b235a.pdf"
+            }
         case .tableTennis:
             rules.roundsToWin = 3; rules.service = .alternateTwo
-            rules.reference = "ITTF 2026, games to 11; match length selectable"; rules.sourceURL = "https://www.ittf.com/statutes/"
+            rules.reference = "ITTF Statutes 2026, Laws 2.11 to 2.13"; rules.sourceURL = "https://db.ittf.com/sites/default/files/public/2026-02/2026_Statutes_v1_consolidated_clean.pdf"
         case .racquetball:
             rules.roundsToWin = 3; rules.service = .sideOut; rules.doublesTwoServers = doubles
-            rules.reference = "IRF rally scoring, best of five to 11"; rules.sourceURL = "https://www.internationalracquetball.com/rules/"
+            rules.reference = "IRF Indoor Racquetball Rules 2026-2028"; rules.sourceURL = "https://www.internationalracquetball.com/wp-content/uploads/2026/06/1-irf-rulebook_mar26-1.pdf"
         case .racketlon:
             rules.system = .aggregate; rules.target = 21; rules.service = .alternateTwo
             rules.reference = "FIR Rules of Racketlon July 2022"; rules.sourceURL = "https://www.racketlon.net/wp-content/uploads/2022/07/FIR-Rules-of-Racketlon-25.07.2022.pdf"
         case .beachTennis:
             rules.system = .tennisGames; rules.service = .games; rules.deuce = .noAd; rules.decidingMatchTieBreak = true
-            rules.reference = "ITF Rules of Beach Tennis 2026"; rules.sourceURL = "https://www.itftennis.com/media/15473/rules-of-beach-tennis-2026.pdf"
+            rules.reference = "ITF Rules of Beach Tennis 2026"; rules.sourceURL = "https://www.itftennis.com/media/15548/rules-of-beach-tennis-2026.pdf"
         case .platformTennis:
             rules.system = .tennisGames; rules.service = .games; rules.deuce = doubles ? .advantage : .noAd
-            rules.reference = "APTA rules; tour no-ad variants selectable"; rules.sourceURL = "https://platformtennis.org/rules/"
+            rules.reference = "APTA Rules of Platform Tennis"; rules.sourceURL = "https://platformtennis.org/rules/"
         case .custom:
             rules.target = 10; rules.winBy = 1; rules.roundsToWin = 1; rules.service = .manual
         }
@@ -266,6 +272,8 @@ struct CourtProfile: Codable, Equatable {
 
     static func legacy(_ player: PlayerProfile) -> CourtProfile {
         var profile = CourtProfile()
+        // Legacy profiles have no modification timestamp. Migration must be deterministic.
+        profile.modifiedAt = Date(timeIntervalSince1970: 0)
         var preferences = CourtSportPreferences()
         preferences.primaryGoal = player.primaryGoal
         preferences.access.preferences = player.playerMode == .blindTennis ? [.visuallyImpaired] : [.sighted]

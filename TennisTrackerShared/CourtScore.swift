@@ -217,7 +217,7 @@ struct CourtScoreSession: Codable, Equatable {
         if rules.system == .tennisGames {
             let deciding = rules.decidingMatchTieBreak && frame.tennis.playerSets == rules.roundsToWin - 1 && frame.tennis.opponentSets == rules.roundsToWin - 1
             let target = deciding ? rules.decidingTieBreakTarget : frame.tennis.isTiebreak ? rules.tieBreakTarget : 4
-            let margin = frame.tennis.isTiebreak || deciding || rules.deuce == .advantage ? 2 : 1
+            let margin = frame.tennis.isTiebreak || deciding || rules.deuce != .noAd ? 2 : 1
             let high = points.max() ?? 0, low = points.min() ?? 0
             if high >= target && high - low >= margin { return false }
             if rules.deuce == .starPoint && !frame.tennis.isTiebreak && !deciding && high > 5 { return false }

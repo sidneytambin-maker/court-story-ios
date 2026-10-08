@@ -98,7 +98,11 @@ final class CourtSportTests: XCTestCase {
         let once = data
         data.migrateCourtProfiles()
         XCTAssertEqual(data, once)
-        XCTAssertEqual(try TennisBackup.decode(JSONEncoder.tennisTracker.encode(data)), data)
+        let persisted = try JSONEncoder.tennisTracker.encode(data)
+        let restored = try TennisBackup.decode(persisted)
+        // The existing phone/Watch wire format records dates to whole seconds.
+        XCTAssertEqual(try JSONEncoder.tennisTracker.encode(restored), persisted)
+        XCTAssertEqual(restored.matches.map(\.id), data.matches.map(\.id))
     }
 
     func testModeGatesAreConsistentAndDoNotMutateData() {
@@ -168,7 +172,8 @@ final class CourtAttributionStoreTests: XCTestCase {
         XCTAssertEqual(store.data.matches.count, 1)
         XCTAssertTrue(store.archiveCourtPlayer(athlete.id, archived: true))
         XCTAssertTrue(store.roster.isEmpty)
-        XCTAssertEqual(TennisStore(storeURL: path).data.matches[0], store.data.matches[0])
+        XCTAssertEqual(try JSONEncoder.tennisTracker.encode(TennisStore(storeURL: path).data.matches[0]),
+                       try JSONEncoder.tennisTracker.encode(store.data.matches[0]))
         XCTAssertNotNil(TennisStore(storeURL: path).data.players.first { $0.id == athlete.id }?.court.archivedAt)
         XCTAssertTrue(store.archiveCourtPlayer(athlete.id, archived: false))
         XCTAssertTrue(store.selectCourtSport(.tennis))

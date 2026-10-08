@@ -1,5 +1,24 @@
 import SwiftUI
 
+struct NumberChoicePicker: View {
+    let title: String
+    @Binding var value: Int
+    let range: ClosedRange<Int>
+    var suffix: String = ""
+
+    var body: some View {
+        OrderedChoicePicker(title: title, selection: $value, values: Array(range), label: label)
+    }
+
+    private func label(for number: Int) -> String {
+        if suffix.isBlank { return "\(number)" }
+        if number == 1, suffix.hasSuffix("s") {
+            return "\(number) \(suffix.dropLast())"
+        }
+        return "\(number) \(suffix)"
+    }
+}
+
 enum TennisOrderedSelection {
     static func moved<Value: Equatable>(_ value: Value, in values: [Value], forward: Bool) -> Value {
         guard let index = values.firstIndex(of: value), !values.isEmpty else { return value }

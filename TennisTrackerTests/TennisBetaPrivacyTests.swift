@@ -110,6 +110,7 @@ final class TennisBetaPrivacyTests: XCTestCase {
         original.libraryID = migrated.data.libraryID
         original.dataVersion = 11
         original.onboardingCompleted = true
+        original.migrateCourtProfiles()
         XCTAssertEqual(migrated.data, original)
         XCTAssertEqual(TennisStore(storeURL: path).data, original)
     }

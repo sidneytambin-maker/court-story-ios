@@ -80,6 +80,7 @@ final class CourtScoreTests: XCTestCase {
 
     func testAdvantageSetDoesNotStopAtSevenSixWithoutTiebreak() {
         var score = match(.tennis)
+        score.rules.roundsToWin = 1
         score.rules.tieBreakAt = nil
         for _ in 0..<6 {
             for _ in 0..<4 { score.awardRally(to: 0) }
@@ -104,6 +105,55 @@ final class CourtScoreTests: XCTestCase {
         XCTAssertTrue(score.frame.complete)
         XCTAssertEqual(score.frame.rounds.last?.points, [11, 9])
         XCTAssertEqual(score.frame.rounds.last?.tieBreak, [11, 9])
+        XCTAssertNil(CourtRecordedResult.validation(score.frame.rounds, sport: score.sport, rules: score.rules, sides: 2))
+    }
+
+    func testEveryNamedSportOffersValidOfficialFormatsOnly() {
+        for sport in CourtSport.allCases where sport != .custom {
+            for doubles in [false, true] {
+                let formats = CourtOfficialFormat.choices(for: sport, doubles: doubles)
+                XCTAssertFalse(formats.isEmpty, sport.rawValue)
+                XCTAssertEqual(Set(formats.map(\.id)).count, formats.count)
+                for format in formats {
+                    XCTAssertNil(format.rules.validationMessage, format.id)
+                    XCTAssertFalse(format.rules.customOverride, format.id)
+                    XCTAssertTrue(format.rules.sourceURL.hasPrefix("https://"), format.id)
+                    XCTAssertEqual(CourtOfficialFormat.matching(format.rules, sport: sport, doubles: doubles)?.id, format.id)
+                }
+            }
+        }
+        XCTAssertTrue(CourtOfficialFormat.choices(for: .custom).isEmpty)
+    }
+
+    func testSquashSinglesAndInternationalSoftballDoublesFinishDifferently() {
+        var singles = match(.squash)
+        var doubles = match(.squash, doubles: true)
+        for _ in 0..<10 {
+            for side in 0...1 { singles.awardRally(to: side); doubles.awardRally(to: side) }
+        }
+        singles.awardRally(to: 0); doubles.awardRally(to: 0)
+        XCTAssertTrue(singles.frame.rounds.isEmpty)
+        XCTAssertEqual(doubles.frame.rounds.first?.points, [11, 10])
+        singles.awardRally(to: 0)
+        XCTAssertEqual(singles.frame.rounds.first?.points, [12, 10])
+    }
+
+    func testOfficialFormatSelectionDoesNotRewriteLegacyOneSetRules() {
+        var legacy = CourtScoringRules.standard(for: .tennis)
+        legacy.roundsToWin = 1
+        XCTAssertNil(CourtOfficialFormat.matching(legacy, sport: .tennis))
+        XCTAssertEqual(legacy.roundsToWin, 1)
+        XCTAssertEqual(CourtOfficialFormat.choices(for: .tennis).first?.rules.roundsToWin, 2)
+    }
+
+    func testStarPointCorrectionAllowsSecondAdvantageButNotAnAlreadyFinishedGame() {
+        var score = match(.padel)
+        XCTAssertTrue(score.correctPoints([5, 4]))
+        XCTAssertFalse(score.correctPoints([6, 5]))
+        score.awardRally(to: 1)
+        XCTAssertEqual(score.frame.points, [5, 5])
+        score.awardRally(to: 1)
+        XCTAssertEqual(score.frame.tennis.opponentGames, 1)
     }
 
     func testRacketlonAggregateTieRequiresGummiarmNotGamesWon() {
