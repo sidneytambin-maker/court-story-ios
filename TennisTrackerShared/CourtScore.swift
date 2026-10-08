@@ -259,7 +259,11 @@ struct CourtScoreSession: Codable, Equatable {
         let high = values.max() ?? 0
         let leaders = values.indices.filter { values[$0] == high }
         frame.complete = true
-        frame.winningSide = leaders.count == 1 ? leaders[0] : decidingWinner
+        if rules.system == .aggregate {
+            frame.winningSide = CourtRecordedResult.aggregateWinner(rounds) ?? decidingWinner
+        } else {
+            frame.winningSide = high >= rules.roundsToWin && leaders.count == 1 ? leaders[0] : nil
+        }
         frame.gummiarmPlayed = decidingWinner != nil
         return nil
     }
@@ -270,6 +274,7 @@ struct CourtScoreSession: Codable, Equatable {
         if frame.complete, let winner = frame.winningSide {
             return "\(sides[winner].name) wins. " + resultSummary
         }
+        if frame.complete { return "Play stopped before a winner was decided. " + resultSummary }
         if rules.system == .aggregate {
             let current = frame.gummiarm ? "Gummiarm, one deciding point. Toss for service, one serve only."
                 : "\(Self.disciplines[frame.disciplineIndex]), \(numericSummary(frame.points))."

@@ -240,4 +240,71 @@ final class CourtScoreTests: XCTestCase {
         XCTAssertTrue(match.usesCourtScoring)
         XCTAssertEqual(match.court.rules?.deuce, .starPoint)
     }
+
+    func testRecordedResultRequiresTheOfficialMatchLengthAndPreservesInvalidDrafts() {
+        var score = match(.badminton)
+        let original = score
+        XCTAssertNotNil(score.recordResult([CourtScoreRound(points: [21, 10])]))
+        XCTAssertEqual(score, original)
+        XCTAssertNil(score.recordResult([CourtScoreRound(points: [21, 10]), CourtScoreRound(points: [21, 19])]))
+        XCTAssertEqual(score.frame.winningSide, 0)
+        XCTAssertNotNil(score.recordResult(score.frame.rounds + [CourtScoreRound(points: [10, 21])]))
+    }
+
+    func testStoppedMatchDoesNotInventWinnerFromOneFinishedRound() {
+        var score = match(.badminton)
+        XCTAssertNil(score.recordResult([CourtScoreRound(points: [21, 10]), CourtScoreRound(points: [5, 4], unfinished: true)]))
+        XCTAssertTrue(score.frame.complete)
+        XCTAssertNil(score.frame.winningSide)
+        XCTAssertTrue(score.summary.contains("before a winner was decided"))
+        XCTAssertNotNil(score.recordResult([CourtScoreRound(points: [21, 10], unfinished: true)]))
+        XCTAssertNotNil(score.recordResult([CourtScoreRound(points: [30, 30], unfinished: true)]))
+        XCTAssertNotNil(score.recordResult([CourtScoreRound(points: [31, 29], unfinished: true)]))
+    }
+
+    func testUnfinishedTennisSetCannotBypassTiebreakRules() {
+        var score = match(.tennis)
+        XCTAssertNotNil(score.recordResult([CourtScoreRound(points: [7, 6], unfinished: true)]))
+        XCTAssertNil(score.recordResult([CourtScoreRound(points: [6, 6], tieBreak: [7, 7], unfinished: true)]))
+        XCTAssertNil(score.frame.winningSide)
+        XCTAssertNotNil(score.recordResult([CourtScoreRound(points: [6, 6], tieBreak: [9, 7], unfinished: true)]))
+    }
+
+    func testRacketlonRecordedClinchMatchesLiveScoringAndTiedAggregateNeedsGummiarm() {
+        var score = match(.racketlon)
+        let tied = [CourtScoreRound(points: [21, 19]), CourtScoreRound(points: [19, 21]),
+                    CourtScoreRound(points: [21, 19]), CourtScoreRound(points: [19, 21])]
+        XCTAssertNotNil(score.recordResult(tied))
+        XCTAssertNil(score.recordResult(tied, decidingWinner: 1))
+        XCTAssertEqual(score.frame.winningSide, 1)
+        score = match(.racketlon)
+        for _ in 0..<63 where !score.frame.complete { XCTAssertTrue(score.awardRally(to: 0)) }
+        XCTAssertTrue(score.frame.complete)
+        var recorded = match(.racketlon)
+        XCTAssertNil(recorded.recordResult(score.frame.rounds))
+        XCTAssertEqual(recorded.frame.winningSide, score.frame.winningSide)
+        XCTAssertNotNil(recorded.recordResult([CourtScoreRound(points: [21, 19])]))
+        XCTAssertNil(recorded.recordResult([CourtScoreRound(points: [5, 4], unfinished: true)]))
+        XCTAssertNil(recorded.frame.winningSide)
+    }
+
+    func testStaleWatchResultCannotOverwriteNewerCourtScoreOrDerivedSummary() {
+        var original = MatchRecord(playerID: UUID())
+        original.court.sport = CourtSportSelection(sport: .badminton)
+        var initial = match(.badminton)
+        XCTAssertNil(initial.recordResult([CourtScoreRound(points: [21, 10]), CourtScoreRound(points: [21, 12])]))
+        original.applyCourtScore(initial)
+        var current = original
+        var corrected = match(.badminton)
+        XCTAssertNil(corrected.recordResult([CourtScoreRound(points: [10, 21]), CourtScoreRound(points: [12, 21])]))
+        current.applyCourtScore(corrected)
+        var stale = original
+        stale.notes = "New review"
+        let merged = TennisWatchRecordEdits.match(stale, current: current, original: original)
+        XCTAssertEqual(merged.court.score, current.court.score)
+        XCTAssertEqual(merged.result, .loss)
+        XCTAssertEqual(merged.setScores, current.setScores)
+        XCTAssertEqual(merged.yourSetsWon, current.yourSetsWon)
+        XCTAssertEqual(merged.notes, "New review")
+    }
 }

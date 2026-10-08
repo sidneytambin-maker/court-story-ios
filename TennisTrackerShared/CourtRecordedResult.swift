@@ -10,24 +10,29 @@ enum CourtRecordedResult {
 
     static func validation(_ rounds: [CourtScoreRound], sport: CourtSportSelection, rules: CourtScoringRules, sides: Int, decidingWinner: Int? = nil) -> String? {
         guard rules.validationMessage == nil, (2...12).contains(sides), !rounds.isEmpty,
-              rounds.count <= (rules.system == .aggregate ? 4 : rules.roundsToWin * sides) else { return "Check the scoring rules and number of rounds." }
+              rounds.count <= (rules.system == .aggregate ? 4 : (rules.roundsToWin - 1) * sides + 1) else { return "Check the scoring rules and number of rounds." }
         var wins = Array(repeating: 0, count: sides)
         for (index, round) in rounds.enumerated() {
             let prefix = "Round \(index + 1): "
+            if rules.system == .aggregate, index > 0, aggregateWinner(Array(rounds.prefix(index))) != nil {
+                return prefix + "the aggregate match was already decided."
+            }
             guard round.points.count == sides, round.points.allSatisfy({ (0...9999).contains($0) }) else { return prefix + "enter a non-negative score for each side." }
             if wins.contains(where: { $0 >= rules.roundsToWin }) && rules.system != .aggregate { return prefix + "the match was already won in an earlier round." }
-            let high = round.points.max() ?? 0
-            if high == 0 { return prefix + "enter a score or remove the empty round." }
-            if round.unfinished {
-                guard index == rounds.count - 1, round.tieBreak == nil else { return prefix + "only the final round can be unfinished." }
-                continue
-            }
+            if round.unfinished && index != rounds.count - 1 { return prefix + "only the final round can be unfinished." }
             let target = rules.system == .tennisGames ? rules.gamesPerSet : rules.target
+            let deciding = rules.system == .tennisGames && rules.decidingMatchTieBreak && wins.allSatisfy { $0 == rules.roundsToWin - 1 }
             if let tie = round.tieBreak {
                 guard rules.system == .tennisGames, sides == 2, tie.count == 2,
                       tie.allSatisfy({ (0...9999).contains($0) }) else { return prefix + "tie-break points require a games-and-sets sport." }
-                let deciding = rules.decidingMatchTieBreak && wins.allSatisfy { $0 == rules.roundsToWin - 1 }
                 let tieTarget = deciding ? rules.decidingTieBreakTarget : rules.tieBreakTarget
+                if round.unfinished {
+                    guard canContinue(tie, target: tieTarget, margin: 2, cap: nil) else { return prefix + "this tie-break has already finished." }
+                    guard deciding ? round.points == tie : rules.tieBreakAt.map({ round.points == [$0, $0] }) == true else {
+                        return prefix + "an unfinished set tie-break starts at the configured tied games; a deciding match tie-break records its actual points."
+                    }
+                    continue
+                }
                 guard let tieWinner = winner(CourtScoreRound(points: tie)),
                       validFinish(tie, target: tieTarget, margin: 2, cap: nil) else { return prefix + "the tie-break needs a valid winning score, or mark the round unfinished." }
                 if deciding {
@@ -37,11 +42,20 @@ enum CourtRecordedResult {
                           round.points[tieWinner] == trigger + 1, round.points[1 - tieWinner] == trigger else { return prefix + "the games and tie-break must show the same winner at the configured trigger." }
                 }
             } else {
-                if rules.system == .tennisGames, rules.decidingMatchTieBreak,
-                   wins.allSatisfy({ $0 == rules.roundsToWin - 1 }) {
+                if deciding {
                     return prefix + "enter the deciding match tie-break points."
                 }
                 let margin = rules.system == .tennisGames ? 2 : rules.winBy
+                if round.unfinished {
+                    guard canContinue(round.points, target: target, margin: margin, cap: rules.system == .tennisGames ? nil : rules.cap) else {
+                        return prefix + "this score has already finished the round or passed its limit."
+                    }
+                    if rules.system == .tennisGames, let trigger = rules.tieBreakAt,
+                       (round.points.min() ?? 0) >= trigger, (round.points.max() ?? 0) > trigger {
+                        return prefix + "games cannot continue past the tie-break trigger. Enter the tie-break points."
+                    }
+                    continue
+                }
                 guard validFinish(round.points, target: target, margin: margin, cap: rules.system == .tennisGames ? nil : rules.cap) else {
                     return prefix + "the score is not a finished round under these rules. Correct it or mark it unfinished."
                 }
@@ -55,7 +69,36 @@ enum CourtRecordedResult {
             guard sport.sport == .racketlon, rounds.count == 4, !(rounds.last?.unfinished ?? true),
                   (0..<sides).contains(decidingWinner), Set(totals).count == 1 else { return "A Gummiarm winner applies only after four tied-aggregate Racketlon games." }
         }
+        if rules.system == .aggregate {
+            if rounds.count == 4 && !(rounds.last?.unfinished ?? true), aggregateWinner(rounds) == nil && decidingWinner == nil {
+                return "The aggregate is tied. Enter the Gummiarm winner."
+            }
+            if rounds.count < 4 && !(rounds.last?.unfinished ?? true) && aggregateWinner(rounds) == nil {
+                return "Enter the remaining disciplines, or add the final unfinished round if play stopped early."
+            }
+        } else if !wins.contains(where: { $0 >= rules.roundsToWin }) && !(rounds.last?.unfinished ?? true) {
+            return "The match is not finished under this format. Enter the remaining rounds, or add the final unfinished round if play stopped early."
+        }
         return nil
+    }
+
+    static func aggregateWinner(_ rounds: [CourtScoreRound]) -> Int? {
+        guard let last = rounds.last, (1...4).contains(rounds.count), rounds.allSatisfy({ $0.points.count == 2 }) else { return nil }
+        let totals = (0...1).map { side in rounds.reduce(0) { $0 + $1.points[side] } }
+        for side in 0...1 {
+            let other = 1 - side
+            let remaining = (4 - rounds.count) * 21
+            let currentDeficit = last.unfinished ? max(21, last.points[side] + 2) - last.points[other] : 0
+            if totals[side] - totals[other] > remaining + currentDeficit { return side }
+        }
+        return nil
+    }
+
+    private static func canContinue(_ values: [Int], target: Int, margin: Int, cap: Int?) -> Bool {
+        let sorted = values.sorted(by: >)
+        guard sorted.count >= 2 else { return false }
+        if let cap, sorted[0] >= cap { return false }
+        return sorted[0] < target || sorted[0] - sorted[1] < margin
     }
 
     private static func validFinish(_ values: [Int], target: Int, margin: Int, cap: Int?) -> Bool {

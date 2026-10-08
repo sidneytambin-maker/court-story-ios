@@ -142,7 +142,8 @@ struct CourtRecordedScoreFields: View {
                             .accessibilityIdentifier("courtRound\(index)Side\(side)")
                     }
                     Toggle("Round unfinished", isOn: $rounds[index].unfinished)
-                    if score.rules.system == .tennisGames && !rounds[index].unfinished {
+                        .accessibilityHint("Use only for the final round when play stopped early. A score lead alone does not award the match.")
+                    if score.rules.system == .tennisGames {
                         Toggle("Tie-break played", isOn: Binding(get: { rounds[index].tieBreak != nil }, set: { rounds[index].tieBreak = $0 ? [0, 0] : nil }))
                         if let points = rounds[index].tieBreak {
                             ForEach(score.sides.indices, id: \.self) { side in

@@ -37,7 +37,7 @@ struct WatchRecordedMatchView: View {
             TextField("Notes", text: $match.notes)
             Button("Save Match Result") {
                 if !scoreError.isEmpty { validationMessage = scoreError; store.announce(scoreError); return }
-                if store.saveCourtMatch(match) { store.activeMatch = nil; dismiss() }
+                if store.saveCourtMatch(match, showAsActive: false) { dismiss() }
             }.disabled(!configured).accessibilityIdentifier("saveRecordedMatch")
         }
         .pickerStyle(.navigationLink)

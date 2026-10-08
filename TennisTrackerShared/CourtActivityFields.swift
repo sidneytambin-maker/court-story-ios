@@ -1,5 +1,17 @@
 import SwiftUI
 
+struct CourtCaptureIdentity: View {
+    let athlete: String
+    let sport: CourtSportSelection
+    var coached = false
+    var body: some View {
+        Label("\(athlete), \(sport.name)\(coached ? ", coached activity" : "")", systemImage: coached ? "person.2" : "person")
+            .font(.subheadline.weight(.semibold))
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("captureAthleteIdentity")
+    }
+}
+
 struct CourtPlanFields: View {
     @Binding var plan: CourtSessionPlan
     var body: some View {

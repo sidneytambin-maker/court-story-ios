@@ -1122,15 +1122,19 @@ extension WatchTennisStore {
         return match
     }
     @discardableResult
-    func saveCourtMatch(_ value: MatchRecord) -> Bool {
+    func saveCourtMatch(_ value: MatchRecord, showAsActive: Bool = true) -> Bool {
         guard !snapshot.deletedRecordIDs.contains(value.id), let score = value.court.score else { return false }
+        if showAsActive, let activeMatch, activeMatch.id != value.id {
+            announce("Finish or close the current match before starting another.")
+            return false
+        }
         if let error = score.validationMessage { announce(error); return false }
         var library = snapshot.courtLibrary
         library.matches.removeAll { $0.id == value.id }; library.matches.append(value)
         if let error = CourtLibraryValidation.message(in: library, validateLinks: false) { announce(error); return false }
         let saved = TennisRecordConflictResolver.prepareLocalMatch(value)
         mergeMatch(saved)
-        activeMatch = saved
+        if showAsActive || activeMatch?.id == saved.id { activeMatch = saved }
         send(.upsertMatch(saved))
         if snapshot.settings.scoreAnnouncementMode == .automatic || saved.status == .completed { announce(score.summary) }
         return true
