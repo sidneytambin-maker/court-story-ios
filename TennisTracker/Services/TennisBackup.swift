@@ -21,7 +21,7 @@ enum TennisBackup {
         guard let object = try JSONSerialization.jsonObject(with: bytes) as? [String: Any],
               let version = object["dataVersion"] as? Int, version > 0,
               object["settings"] is [String: Any] else { throw TennisBackupError.invalidFile }
-        guard version <= 11 else { throw TennisBackupError.newerVersion }
+        guard version <= 12 else { throw TennisBackupError.newerVersion }
         for key in ["players", "matches", "trainingSessions", "tournaments"] { try requireIDs(object[key]) }
         if version >= 9 {
             guard let setup = object["setup"] as? [String: Any] else { throw TennisBackupError.invalidFile }
@@ -40,12 +40,16 @@ enum TennisBackup {
               let version = object["dataVersion"] as? Int, version >= 10,
               let setup = object["setup"] as? [String: Any], object["settings"] is [String: Any],
               object["deletedRecordIDs"] is [String] else { throw TennisBackupError.invalidFile }
-        guard version <= 11 else { throw TennisBackupError.newerVersion }
+        guard version <= 12 else { throw TennisBackupError.newerVersion }
         // Legacy decoders supply defaults. A restore must not silently invent missing IDs or tables.
         for key in ["players", "matches", "trainingSessions", "tournaments"] {
             try requireIDs(object[key])
         }
         for key in ["coaches", "venues", "locations", "tournamentTemplates"] { try requireIDs(setup[key]) }
+        if version >= 12 {
+            guard let court = object["court"] as? [String: Any] else { throw TennisBackupError.invalidFile }
+            for key in ["observations", "drills", "media"] { try requireIDs(court[key]) }
+        }
         let result = try JSONDecoder.tennisTracker.decode(AppData.self, from: bytes)
         try validate(result)
         return result
@@ -58,7 +62,8 @@ enum TennisBackup {
     }
 
     static func validate(_ value: AppData) throws {
-        guard (10...11).contains(value.dataVersion), !value.players.isEmpty else { throw TennisBackupError.invalidFile }
+        guard (10...12).contains(value.dataVersion), !value.players.isEmpty else { throw TennisBackupError.invalidFile }
+        guard CourtLibraryValidation.message(in: value) == nil else { throw TennisBackupError.brokenRelationships }
         let players = Set(value.players.map(\.id))
         let matches = Set(value.matches.map(\.id))
         let training = Set(value.trainingSessions.map(\.id))

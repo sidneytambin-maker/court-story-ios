@@ -113,6 +113,11 @@ struct TennisScoringEngine {
     var tieBreakTarget = 7
     var tieBreakWinByTwo = true
     var setsNeededToWin = 2
+    var gamesNeededToWinSet = 6
+    var automaticTieBreakAt: Int? = 6
+    var starPoint = false
+    var decidingMatchTieBreak = false
+    var decidingTieBreakTarget = 10
 
     init(
         playerName: String = "Player",
@@ -195,7 +200,7 @@ struct TennisScoringEngine {
 
     private mutating func resolvePoint() {
         if state.isTiebreak {
-            let targetReached = max(state.playerPoints, state.opponentPoints) >= tieBreakTarget
+            let targetReached = max(state.playerPoints, state.opponentPoints) >= (isDecidingMatchTieBreak ? decidingTieBreakTarget : tieBreakTarget)
             let margin = abs(state.playerPoints - state.opponentPoints)
             if targetReached && (!tieBreakWinByTwo || margin >= 2) {
                 finishGameAndMaybeSet()
@@ -203,11 +208,12 @@ struct TennisScoringEngine {
             return
         }
 
-        if suddenDeathDeuce && state.playerPoints >= 4 && state.opponentPoints >= 3 && state.playerPoints > state.opponentPoints {
+        let decisive = suddenDeathDeuce || (starPoint && min(state.playerPoints, state.opponentPoints) >= 5)
+        if decisive && state.playerPoints >= 4 && state.opponentPoints >= 3 && state.playerPoints > state.opponentPoints {
             finishGameAndMaybeSet()
             return
         }
-        if suddenDeathDeuce && state.opponentPoints >= 4 && state.playerPoints >= 3 && state.opponentPoints > state.playerPoints {
+        if decisive && state.opponentPoints >= 4 && state.playerPoints >= 3 && state.opponentPoints > state.playerPoints {
             finishGameAndMaybeSet()
             return
         }
@@ -217,6 +223,15 @@ struct TennisScoringEngine {
     }
 
     private mutating func finishGameAndMaybeSet() {
+        if isDecidingMatchTieBreak {
+            state.completedSetScores.append("\(state.playerPoints)-\(state.opponentPoints)")
+            if state.playerPoints > state.opponentPoints { state.playerSets += 1 } else { state.opponentSets += 1 }
+            state.playerPoints = 0; state.opponentPoints = 0
+            state.manualTiebreakActive = false; state.automaticTiebreakActive = false
+            state.isMatchComplete = true
+            return
+        }
+        let wonTieBreak = state.isTiebreak
         if state.playerPoints > state.opponentPoints {
             state.playerGames += 1
         } else {
@@ -226,28 +241,30 @@ struct TennisScoringEngine {
         state.automaticTiebreakActive = false
         state.playerPoints = 0
         state.opponentPoints = 0
-        if setIsComplete {
+        if setIsComplete || wonTieBreak {
             finishSet()
         }
     }
 
     private var setIsComplete: Bool {
-        if max(state.playerGames, state.opponentGames) >= 6 && abs(state.playerGames - state.opponentGames) >= 2 {
-            return true
-        }
-        if max(state.playerGames, state.opponentGames) == 7 {
+        if max(state.playerGames, state.opponentGames) >= gamesNeededToWinSet && abs(state.playerGames - state.opponentGames) >= 2 {
             return true
         }
         return false
     }
 
+    private var isDecidingMatchTieBreak: Bool {
+        decidingMatchTieBreak && setsNeededToWin > 1 && state.playerSets == setsNeededToWin - 1 &&
+            state.opponentSets == setsNeededToWin - 1 && state.playerGames == 0 && state.opponentGames == 0
+    }
+
     private mutating func prepareAutomaticTieBreakIfNeeded() {
         guard !state.manualTiebreakActive else { return }
-        guard state.playerGames == 6 && state.opponentGames == 6 else { return }
+        if isDecidingMatchTieBreak { state.automaticTiebreakActive = true; return }
+        guard let automaticTieBreakAt, state.playerGames == automaticTieBreakAt && state.opponentGames == automaticTieBreakAt else { return }
         switch tieBreakRule {
         case .standardAtSixAll:
             state.automaticTiebreakActive = true
-            tieBreakTarget = 7
         case .tenPoint:
             state.automaticTiebreakActive = true
             tieBreakTarget = 10

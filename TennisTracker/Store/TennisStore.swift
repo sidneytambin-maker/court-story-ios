@@ -73,8 +73,8 @@ final class TennisStore: ObservableObject {
     }
 
     var selectedPlayer: PlayerProfile? {
-        guard let id = data.selectedPlayerID else { return data.players.first }
-        return data.players.first { $0.id == id } ?? data.players.first
+        guard let id = data.selectedPlayerID else { return data.players.first { !$0.isArchived } }
+        return data.players.first { $0.id == id && !$0.isArchived }
     }
 
     var selectedPlayerID: UUID? {
@@ -83,20 +83,23 @@ final class TennisStore: ObservableObject {
 
     var selectedMatches: [MatchRecord] {
         guard let id = selectedPlayerID else { return [] }
-        return TennisMatchChronology.ordered(data.matches.filter { $0.playerID == id })
+        return TennisMatchChronology.ordered(data.matches.filter { $0.playerID == id && $0.court.sport == selectedSport })
     }
 
     var selectedTraining: [TrainingSession] {
         guard let id = selectedPlayerID else { return [] }
-        return data.trainingSessions.filter { $0.playerID == id }.sorted { $0.date > $1.date }
+        return data.trainingSessions.filter { $0.playerID == id && $0.court.sport == selectedSport }.sorted { $0.date > $1.date }
     }
 
     var selectedTournaments: [TournamentRecord] {
         guard let id = selectedPlayerID else { return [] }
-        return data.tournaments.filter { $0.playerID == id }.sorted { $0.date > $1.date }
+        return data.tournaments.filter { $0.playerID == id && $0.court.sport == selectedSport }.sorted { $0.date > $1.date }
     }
 
     func selectPlayer(_ player: PlayerProfile) {
+        guard !player.isArchived else { return }
+        data.court.ownerPlayerID = player.id
+        data.court.activeAthleteID = nil
         data.selectedPlayerID = player.id
         saveAndAnnounce("Selected \(player.displayName).")
     }
@@ -111,9 +114,7 @@ final class TennisStore: ObservableObject {
     }
 
     func deletePlayer(_ player: PlayerProfile) {
-        data.players.removeAll { $0.id == player.id }
-        if data.selectedPlayerID == player.id { data.selectedPlayerID = data.players.first?.id }
-        saveAndAnnounce("Deleted player \(player.displayName). Historical activity kept.")
+        _ = archiveCourtPlayer(player.id, archived: true)
     }
 
     func updateSetup(_ setup: TennisSetup) {
@@ -233,7 +234,9 @@ final class TennisStore: ObservableObject {
     }
 
     func linkedMatches(for tournament: TournamentRecord) -> [MatchRecord] {
-        TennisMatchChronology.ordered(data.matches.filter { $0.playerID == tournament.playerID && $0.tournamentID == tournament.id })
+        TennisMatchChronology.ordered(data.matches.filter {
+            $0.playerID == tournament.playerID && $0.tournamentID == tournament.id && $0.court.sport == tournament.court.sport
+        })
     }
 
     func deleteTournamentKeepingMatches(_ tournament: TournamentRecord) {
@@ -313,12 +316,14 @@ final class TennisStore: ObservableObject {
     func makeDefaultMatch(tournamentID: UUID? = nil) -> MatchRecord? {
         guard let player = selectedPlayer else { return nil }
         var match = MatchRecord(playerID: player.id)
+        match.court = CourtActivity(player: playerForSelectedSport(player), coachID: capturingCoachID)
         match.date = TennisScheduling.fiveMinuteDate(match.date)
         match.playerName = player.displayName
         match.matchFormat = player.defaultMatchFormat
         match.matchType = data.settings.defaultMatchType
         match.sightLevel = player.sightLevel
         match.allowedBounces = player.bounceAllowance ?? player.sightLevel.allowedBounces
+        if let allowance = match.court.access?.allowedBounces(for: match.court.sport.sport) { match.allowedBounces = allowance }
         match.suddenDeathDeuce = player.playerMode == .blindTennis
         match.tournamentID = tournamentID
         if let tournamentID, let tournament = data.tournaments.first(where: { $0.id == tournamentID }) {
@@ -327,8 +332,7 @@ final class TennisStore: ObservableObject {
             match.venueID = tournament.venueID
             match.venue = tournament.venue
             match.location = tournament.location
-            match.sightLevel = sightLevel(from: tournament.category) ?? player.sightLevel
-            match.allowedBounces = match.sightLevel.allowedBounces
+            // Tournament classification is not an override of this athlete's rules.
             match.matchPosition = tournament.format == .roundRobin ? .roundRobin : .notSpecified
         }
         match.courtSurface = player.preferredSurface.isBlank ? .notSpecified : CourtSurface(rawValue: player.preferredSurface) ?? .notSpecified
@@ -342,6 +346,7 @@ final class TennisStore: ObservableObject {
     func makeDefaultTournament() -> TournamentRecord? {
         guard let player = selectedPlayer else { return nil }
         var tournament = TournamentRecord(playerID: player.id)
+        tournament.court = CourtActivity(player: playerForSelectedSport(player), coachID: capturingCoachID)
         tournament.date = TennisScheduling.fiveMinuteDate(tournament.date)
         tournament.endDate = max(tournament.date, tournament.endDate)
         tournament.category = player.bCategory
@@ -351,6 +356,7 @@ final class TennisStore: ObservableObject {
     func makeDefaultTraining() -> TrainingSession? {
         guard let player = selectedPlayer else { return nil }
         var training = TrainingSession(playerID: player.id)
+        training.court = CourtActivity(player: playerForSelectedSport(player), coachID: capturingCoachID)
         training.date = TennisScheduling.fiveMinuteDate(training.date)
         return training
     }
@@ -361,6 +367,8 @@ final class TennisStore: ObservableObject {
         var completed = data
         completed.players = [player] + additionalPlayers
         completed.selectedPlayerID = player.id
+        completed.court.ownerPlayerID = player.id
+        completed.court.deviceOwnerPlayerID = player.id
         completed.settings = settings
         completed.setup = setup
         completed.onboardingCompleted = true
@@ -396,7 +404,7 @@ final class TennisStore: ObservableObject {
         var restored = backup
         // Preserve every record ID, but never reuse a Watch transport identity from another installation.
         restored.libraryID = UUID()
-        restored.dataVersion = 11
+        restored.migrateCourtProfiles()
         restored.onboardingCompleted = true
         try persist(restored)
         data = restored
@@ -543,5 +551,158 @@ final class TennisStore: ObservableObject {
             data.dataVersion = 11
             if !save() { storageError = "Your library update could not be saved. Your original records remain on this iPhone. Please try again." }
         }
+        if data.dataVersion < 12 {
+            var migrated = data
+            migrated.migrateCourtProfiles()
+            do {
+                try persist(migrated)
+                data = migrated
+            } catch {
+                storageError = "Your sport-profile update could not be saved. Your original records remain unchanged. Please try again."
+            }
+        }
+    }
+}
+
+extension TennisStore {
+    var workspaceOwner: PlayerProfile? {
+        data.players.first { $0.id == data.court.ownerPlayerID } ?? selectedPlayer
+    }
+    var selectedSport: CourtSportSelection { workspaceOwner?.selectedSport ?? .tennis }
+    var courtRole: CourtRole { workspaceOwner?.court.selected.role ?? .player }
+    var capturingCoachID: UUID? {
+        guard courtRole == .coach, let owner = workspaceOwner, selectedPlayerID != owner.id else { return nil }
+        return owner.id
+    }
+    var roster: [PlayerProfile] {
+        guard let owner = workspaceOwner else { return [] }
+        return data.players.filter { $0.court.coachOwnerID == owner.id && !$0.isArchived && $0.court.sports.contains { $0.sport == selectedSport } }
+            .sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
+    }
+
+    func playerForSelectedSport(_ player: PlayerProfile) -> PlayerProfile {
+        var copy = player
+        if copy.court.sports.contains(where: { $0.sport == selectedSport }) { copy.court.selectedSportID = selectedSport.id }
+        return copy
+    }
+
+    @discardableResult
+    private func saveCourtCandidate(_ candidate: AppData, announcement: String) -> Bool {
+        guard storageError == nil else { return false }
+        if let message = CourtLibraryValidation.message(in: candidate) { announce(message); return false }
+        do {
+            try persist(candidate)
+            data = candidate
+            publishSavedData()
+            announce(announcement)
+            return true
+        } catch {
+            announce("Changes could not be saved. Your original records are unchanged and your draft is still available.")
+            return false
+        }
+    }
+
+    @discardableResult
+    func saveCourtProfile(_ player: PlayerProfile) -> Bool {
+        guard !player.name.isBlank else { announce("Enter a name."); return false }
+        var candidate = data
+        var saved = player
+        saved.court.modifiedAt = Date()
+        saved.court.revision = (data.players.first { $0.id == player.id }?.court.revision ?? 0) + 1
+        if let index = candidate.players.firstIndex(where: { $0.id == player.id }) { candidate.players[index] = saved }
+        else { candidate.players.append(saved) }
+        return saveCourtCandidate(candidate, announcement: "Saved \(player.displayName).")
+    }
+
+    @discardableResult
+    func selectCourtSport(_ sport: CourtSportSelection) -> Bool {
+        guard var owner = workspaceOwner, owner.court.select(sport) else { return false }
+        var candidate = data
+        guard let index = candidate.players.firstIndex(where: { $0.id == owner.id }) else { return false }
+        owner.court.revision += 1; owner.court.modifiedAt = Date()
+        candidate.players[index] = owner
+        candidate.court.activeAthleteID = nil
+        candidate.selectedPlayerID = owner.id
+        return saveCourtCandidate(candidate, announcement: "\(sport.name) selected. Your other sports and records are retained.")
+    }
+
+    @discardableResult
+    func selectCourtRole(_ role: CourtRole) -> Bool {
+        guard var owner = workspaceOwner else { return false }
+        var preferences = owner.court.selected
+        preferences.role = role
+        guard owner.court.update(preferences) else { return false }
+        var candidate = data
+        guard let index = candidate.players.firstIndex(where: { $0.id == owner.id }) else { return false }
+        owner.court.revision += 1; owner.court.modifiedAt = Date()
+        candidate.players[index] = owner
+        candidate.court.activeAthleteID = nil
+        candidate.selectedPlayerID = owner.id
+        return saveCourtCandidate(candidate, announcement: "\(role.rawValue) mode selected for \(selectedSport.name).")
+    }
+
+    @discardableResult
+    func selectCourtAthlete(_ id: UUID?) -> Bool {
+        guard let owner = workspaceOwner else { return false }
+        if let id {
+            guard courtRole == .coach, roster.contains(where: { $0.id == id }) else { return false }
+        }
+        var candidate = data
+        candidate.court.activeAthleteID = id
+        candidate.selectedPlayerID = id ?? owner.id
+        return saveCourtCandidate(candidate, announcement: id.flatMap { athlete in roster.first { $0.id == athlete }?.displayName }
+            .map { "Recording for \($0)." } ?? "Recording your own activity.")
+    }
+
+    @discardableResult
+    func archiveCourtPlayer(_ id: UUID, archived: Bool) -> Bool {
+        guard let index = data.players.firstIndex(where: { $0.id == id }) else { return false }
+        if archived && (data.matches.contains { $0.playerID == id && $0.status == .inProgress } ||
+            data.trainingSessions.contains { $0.playerID == id && $0.isActive } ||
+            data.tournaments.contains { $0.playerID == id && $0.actualStart != nil && $0.actualFinish == nil }) {
+            announce("Finish this player's active activity before archiving.")
+            return false
+        }
+        var candidate = data
+        candidate.players[index].court.archivedAt = archived ? Date() : nil
+        candidate.players[index].court.modifiedAt = Date(); candidate.players[index].court.revision += 1
+        if archived && candidate.court.activeAthleteID == id { candidate.court.activeAthleteID = nil; candidate.selectedPlayerID = candidate.court.ownerPlayerID }
+        if archived && candidate.court.ownerPlayerID == id {
+            candidate.court.ownerPlayerID = candidate.players.first { !$0.isArchived }?.id
+            candidate.court.activeAthleteID = nil; candidate.selectedPlayerID = candidate.court.ownerPlayerID
+        }
+        return saveCourtCandidate(candidate, announcement: archived ? "Player archived. History and media are retained." : "Player restored to the roster.")
+    }
+
+    @discardableResult
+    func saveObservation(_ record: CourtObservation) -> Bool {
+        guard CourtFeature.observations.isAvailable(in: data.settings.trackingMode), !data.court.deletedIDs.contains(record.id) else { return false }
+        var candidate = data
+        var next = record
+        next.modifiedAt = Date()
+        next.revision = (data.court.observations.first { $0.id == record.id }?.revision ?? 0) + 1
+        candidate.court.observations.removeAll { $0.id == next.id }
+        candidate.court.observations.append(next)
+        return saveCourtCandidate(candidate, announcement: "Observation saved for the selected athlete.")
+    }
+
+    @discardableResult
+    func saveMeasuredDrill(_ record: CourtMeasuredDrill) -> Bool {
+        guard CourtFeature.measuredDrills.isAvailable(in: data.settings.trackingMode), !data.court.deletedIDs.contains(record.id) else { return false }
+        var candidate = data
+        var next = record
+        next.modifiedAt = Date(); next.revision = (data.court.drills.first { $0.id == record.id }?.revision ?? 0) + 1
+        candidate.court.drills.removeAll { $0.id == next.id }; candidate.court.drills.append(next)
+        return saveCourtCandidate(candidate, announcement: "Measured drill saved.")
+    }
+
+    @discardableResult
+    func removeCoachingRecord(_ id: UUID) -> Bool {
+        var candidate = data
+        candidate.court.observations.removeAll { $0.id == id }
+        candidate.court.drills.removeAll { $0.id == id }
+        candidate.court.media.removeAll { $0.id == id }
+        candidate.court.deletedIDs.insert(id)
+        return saveCourtCandidate(candidate, announcement: "Coaching record deleted.")
     }
 }

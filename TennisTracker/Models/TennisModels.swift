@@ -334,11 +334,11 @@ struct PlayerProfile: Identifiable, Codable, Equatable {
     var nationality = ""
     var ltaNumber = ""
     var itfNumber = ""
-    var bCategory = "B1"
+    var bCategory = ""
     var age = 0
-    var sightLevel: SightLevel = .b1
+    var sightLevel: SightLevel = .fullySighted
     var gender = "Prefer not to say"
-    var playerMode: PlayerMode = .blindTennis
+    var playerMode: PlayerMode = .standardTennis
     var trackingMode: TrackingMode = .basic
     var playingHand = ""
     var club = ""
@@ -351,6 +351,7 @@ struct PlayerProfile: Identifiable, Codable, Equatable {
     var isRegularPartner = false
     var bounceAllowance: Int?
     var defaultMatchFormat: MatchFormat = .oneSet
+    var courtProfile: CourtProfile?
 
     var displayName: String {
         if !preferredName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -387,12 +388,14 @@ struct PlayerProfile: Identifiable, Codable, Equatable {
         isRegularPartner = try container.decodeIfPresent(Bool.self, forKey: .isRegularPartner) ?? false
         bounceAllowance = try container.decodeIfPresent(Int.self, forKey: .bounceAllowance)
         defaultMatchFormat = try container.decodeIfPresent(MatchFormat.self, forKey: .defaultMatchFormat) ?? .oneSet
+        courtProfile = try container.decodeIfPresent(CourtProfile.self, forKey: .courtProfile)
     }
 }
 
 struct TrainingSession: Identifiable, Codable, Equatable {
     var id = UUID()
     var playerID: UUID
+    var court = CourtActivity()
     var modifiedAt = Date()
     var revision = 0
     var needsDetails = false
@@ -454,6 +457,7 @@ struct TrainingSession: Identifiable, Codable, Equatable {
         hasStartTime = try container.decodeIfPresent(Bool.self, forKey: .hasStartTime) ?? false
         let savedDurationMinutes = try container.decodeIfPresent(Int.self, forKey: .durationMinutes)
         durationMinutes = savedDurationMinutes ?? 60
+        court = try container.decodeIfPresent(CourtActivity.self, forKey: .court) ?? CourtActivity()
         trainingType = try container.decodeIfPresent(TrainingType.self, forKey: .trainingType) ?? .singlesPractice
         location = try container.decodeIfPresent(String.self, forKey: .location) ?? ""
         venue = try container.decodeIfPresent(String.self, forKey: .venue) ?? ""
@@ -484,6 +488,7 @@ struct TrainingSession: Identifiable, Codable, Equatable {
 struct MatchRecord: Identifiable, Codable, Equatable {
     var id = UUID()
     var playerID: UUID
+    var court = CourtActivity()
     var modifiedAt = Date()
     var revision = 0
     var needsDetails = false
@@ -581,6 +586,7 @@ struct MatchRecord: Identifiable, Codable, Equatable {
         location = try container.decodeIfPresent(String.self, forKey: .location) ?? ""
         status = try container.decodeIfPresent(MatchStatus.self, forKey: .status) ?? .completed
         matchType = try container.decodeIfPresent(MatchKind.self, forKey: .matchType) ?? .singles
+        court = try container.decodeIfPresent(CourtActivity.self, forKey: .court) ?? CourtActivity()
         matchFormat = try container.decodeIfPresent(MatchFormat.self, forKey: .matchFormat) ?? .bestOfThree
         playerName = try container.decodeIfPresent(String.self, forKey: .playerName) ?? ""
         opponentName = try container.decodeIfPresent(String.self, forKey: .opponentName) ?? ""
@@ -630,6 +636,7 @@ struct MatchRecord: Identifiable, Codable, Equatable {
 struct TournamentRecord: Identifiable, Codable, Equatable {
     var id = UUID()
     var playerID: UUID
+    var court = CourtActivity()
     var modifiedAt = Date()
     var revision = 0
     var needsDetails = false
@@ -686,6 +693,7 @@ struct TournamentRecord: Identifiable, Codable, Equatable {
         revision = try container.decodeIfPresent(Int.self, forKey: .revision) ?? 0
         needsDetails = try container.decodeIfPresent(Bool.self, forKey: .needsDetails) ?? false
         name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
+        court = try container.decodeIfPresent(CourtActivity.self, forKey: .court) ?? CourtActivity()
         location = try container.decodeIfPresent(String.self, forKey: .location) ?? ""
         date = try container.decodeIfPresent(Date.self, forKey: .date) ?? Date()
         endDate = try container.decodeIfPresent(Date.self, forKey: .endDate) ?? date
@@ -771,7 +779,7 @@ struct AppSettings: Codable, Equatable {
 }
 
 struct AppData: Codable, Equatable {
-    var dataVersion = 11
+    var dataVersion = 12
     var libraryID = UUID()
     var onboardingCompleted = false
     var deletedRecordIDs: Set<UUID> = []
@@ -782,6 +790,7 @@ struct AppData: Codable, Equatable {
     var trainingSessions: [TrainingSession] = []
     var tournaments: [TournamentRecord] = []
     var settings = AppSettings()
+    var court = CourtWorkspace()
 
     init() {}
 
@@ -797,6 +806,7 @@ struct AppData: Codable, Equatable {
         trainingSessions = try container.decodeIfPresent([TrainingSession].self, forKey: .trainingSessions) ?? []
         tournaments = try container.decodeIfPresent([TournamentRecord].self, forKey: .tournaments) ?? []
         settings = try container.decodeIfPresent(AppSettings.self, forKey: .settings) ?? AppSettings()
+        court = try container.decodeIfPresent(CourtWorkspace.self, forKey: .court) ?? CourtWorkspace()
         onboardingCompleted = try container.decodeIfPresent(Bool.self, forKey: .onboardingCompleted) ?? !players.isEmpty
     }
 }

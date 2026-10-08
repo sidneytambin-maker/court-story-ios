@@ -269,8 +269,6 @@ struct MatchEditorView: View {
         match.venueID = tournament.venueID
         match.venue = tournament.venue
         match.location = tournament.location
-        match.sightLevel = sightLevel(from: tournament.category) ?? match.sightLevel
-        match.allowedBounces = match.sightLevel.allowedBounces
         if tournament.format == .roundRobin, match.matchPosition == .notSpecified {
             match.matchPosition = .roundRobin
         }

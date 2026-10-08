@@ -37,6 +37,7 @@ struct DashboardView: View {
         NavigationStack {
             TennisList {
                 Section {
+                    CourtWorkspaceSwitcher()
                     if store.data.settings.theme == .tennis {
                         TennisDashboardHeader(name: store.selectedPlayer?.displayName ?? "Player")
                     } else {

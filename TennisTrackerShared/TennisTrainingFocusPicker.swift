@@ -3,6 +3,7 @@ import SwiftUI
 struct TennisTrainingFocusPicker: View {
     @Binding var focus: String
     @Binding var additionalFocus: [String]
+    var sport: CourtSport = .tennis
     @State private var showingChoices = false
 
     private var summary: String { TennisActivityContext.names(TennisTrainingFocus.selections(focus: focus, additional: additionalFocus).filter(TennisTrainingFocus.isSpecific)).fallback("No focus selected") }
@@ -14,12 +15,12 @@ struct TennisTrainingFocusPicker: View {
             .accessibilityHint("Choose one or more areas to practise.")
             .sheet(isPresented: $showingChoices) {
                 NavigationStack {
-                    TennisTrainingFocusChoices(focus: $focus, additionalFocus: $additionalFocus)
+                    TennisTrainingFocusChoices(focus: $focus, additionalFocus: $additionalFocus, sport: sport)
                         .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showingChoices = false } } }
                 }
             }
         #else
-        NavigationLink { TennisTrainingFocusSelectionScreen(focus: $focus, additionalFocus: $additionalFocus) } label: { label }
+        NavigationLink { TennisTrainingFocusSelectionScreen(focus: $focus, additionalFocus: $additionalFocus, sport: sport) } label: { label }
             .accessibilityLabel("Training focus").accessibilityValue(summary)
             .accessibilityIdentifier("trainingFocusPicker")
             .accessibilityHint("Choose one or more areas to practise.")
@@ -37,8 +38,9 @@ private struct TennisTrainingFocusSelectionScreen: View {
     @Environment(\.dismiss) private var dismiss
     @Binding var focus: String
     @Binding var additionalFocus: [String]
+    var sport: CourtSport = .tennis
     var body: some View {
-        TennisTrainingFocusChoices(focus: $focus, additionalFocus: $additionalFocus)
+        TennisTrainingFocusChoices(focus: $focus, additionalFocus: $additionalFocus, sport: sport)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
     }
 }
@@ -46,7 +48,10 @@ private struct TennisTrainingFocusSelectionScreen: View {
 struct TennisTrainingFocusChoices: View {
     @Binding var focus: String
     @Binding var additionalFocus: [String]
+    var sport: CourtSport = .tennis
     @State private var customFocus = ""
+
+    private var options: [String] { sport == .tennis ? TennisTrainingFocus.allCases.map(\.rawValue) : sport.focuses }
 
     private var selected: Binding<[String]> {
         Binding { TennisTrainingFocus.selections(focus: focus, additional: additionalFocus).filter(TennisTrainingFocus.isSpecific) } set: { values in
@@ -59,12 +64,12 @@ struct TennisTrainingFocusChoices: View {
             Button("No focus selected") { selected.wrappedValue = [] }
                 .accessibilityAddTraits(selected.wrappedValue.isEmpty ? .isSelected : [])
                 .accessibilityIdentifier("trainingFocusOption.none")
-            ForEach(TennisTrainingFocus.allCases) { option in
-                TennisSelectionRow(name: option.rawValue, id: option.rawValue, selectedIDs: selected)
-                    .accessibilityIdentifier("trainingFocusOption." + option.rawValue)
+            ForEach(options, id: \.self) { option in
+                TennisSelectionRow(name: option, id: option, selectedIDs: selected)
+                    .accessibilityIdentifier("trainingFocusOption." + option)
             }
             Section("Custom focus") {
-                ForEach(selected.wrappedValue.filter { TennisTrainingFocus(rawValue: $0) == nil }, id: \.self) { value in
+                ForEach(selected.wrappedValue.filter { !options.contains($0) }, id: \.self) { value in
                     TennisSelectionRow(name: value, id: value, selectedIDs: selected)
                 }
                 TextField("Custom training focus", text: $customFocus)

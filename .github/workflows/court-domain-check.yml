@@ -1,0 +1,44 @@
+name: Court Story native development check
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  phone-domain:
+    runs-on: macos-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - run: xcodegen generate --spec project-tests.yml
+      - name: Compile phone and run domain tests
+        run: |
+          set -euo pipefail
+          ID=$(xcrun simctl list devices available --json | jq -r '[.devices | to_entries[] | select(.key | contains("iOS")) | .value[] | select(.isAvailable and (.name | startswith("iPhone")))][0].udid')
+          xcrun simctl bootstatus "$ID" -b
+          xcodebuild test -project TennisTrackeriOS.xcodeproj -scheme TennisTracker -destination "id=$ID" -only-testing:TennisTrackerTests -parallel-testing-enabled NO -resultBundlePath CourtDomain.xcresult CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" 2>&1 | tee CourtDomain.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: court-domain-evidence
+          path: |
+            CourtDomain.log
+            CourtDomain.xcresult
+          retention-days: 7
+  watch-compile:
+    runs-on: macos-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - run: xcodegen generate --spec project-watch-tests.yml
+      - name: Compile shared Watch application
+        run: |
+          set -euo pipefail
+          xcodebuild build -project TennisTrackeriOS.xcodeproj -scheme TennisTrackerWatchTests -destination 'generic/platform=watchOS Simulator' CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" 2>&1 | tee CourtWatch.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: court-watch-compile
+          path: CourtWatch.log
+          retention-days: 7

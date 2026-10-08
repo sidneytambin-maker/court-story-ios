@@ -18,6 +18,12 @@ struct TennisTrackerRootView: View {
                 OnboardingView()
             } else {
                 TabView(selection: $router.selectedTab) {
+                    if store.courtRole == .coach {
+                        CourtCoachDashboard().tabItem { Label("Dashboard", systemImage: "chart.bar") }.tag("dashboard")
+                        NavigationStack { CourtRosterView() }.tabItem { Label("Players", systemImage: "person.2") }.tag("players")
+                        NavigationStack { CourtRecordHub() }.tabItem { Label("Record", systemImage: "plus.circle") }.tag("record")
+                        NavigationStack { CourtProgressView() }.tabItem { Label("Progress", systemImage: "chart.xyaxis.line") }.tag("progress")
+                    } else {
                     DashboardView()
                         .tabItem {
                             Label("Dashboard", systemImage: "chart.bar")
@@ -41,6 +47,7 @@ struct TennisTrackerRootView: View {
                             Label("Training", systemImage: "figure.tennis")
                         }
                         .tag("training")
+                    }
 
                     SettingsView()
                         .tabItem {
@@ -49,6 +56,7 @@ struct TennisTrackerRootView: View {
                         .tag("settings")
                 }
                 .accessibilityIdentifier("mainTabView")
+                .onChange(of: store.courtRole) { _, _ in router.selectedTab = "dashboard" }
                 .toolbarBackground(store.data.settings.theme.palette.background, for: .tabBar)
                 .toolbarBackground(.visible, for: .tabBar)
                 .onOpenURL { url in

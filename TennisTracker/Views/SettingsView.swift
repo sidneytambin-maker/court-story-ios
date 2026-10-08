@@ -8,13 +8,18 @@ struct SettingsView: View {
     @State private var settings = AppSettings()
     @State private var savedMessage = ""
     @State private var loaded = false
+    @State private var courtProfileToEdit: PlayerProfile?
     @ObservedObject private var watchSync = IPhoneWatchSyncService.shared
 
     var body: some View {
         NavigationStack(path: $router.settingsPath) {
             TennisForm {
                 Section {
-                    NavigationLink("Tennis Setup", value: TennisSettingsDestination.setup)
+                    if let owner = store.workspaceOwner {
+                        Button("Sports, roles and my profile") { courtProfileToEdit = owner }
+                            .accessibilityHint("Add sports, switch roles and edit your own preferences. Athlete preferences stay separate.")
+                    }
+                    NavigationLink("People and places", value: TennisSettingsDestination.setup)
                         .accessibilityIdentifier("tennisSetupLink")
                 }
                 Section {
@@ -141,6 +146,7 @@ struct SettingsView: View {
             }
             .tennisThemedList()
             .navigationTitle("Settings")
+            .sheet(item: $courtProfileToEdit) { CourtProfileEditor(player: $0) }
             .navigationDestination(for: TennisSettingsDestination.self) { destination in
                 switch destination {
                 case .players: PlayerView()

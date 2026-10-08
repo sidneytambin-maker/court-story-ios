@@ -16,12 +16,16 @@ struct TrainingEntryDetails: View {
                 TrainingParticipantPicker(session: $session, newPlayers: $newPlayers)
             }
             .accessibilityValue(session.context.participantSummary(in: store.data.players + newPlayers).fallback("None"))
-            TennisTournamentPicker(tournaments: store.selectedTournaments, tournamentID: $session.context.tournamentID, customName: $session.context.customTournamentName)
-            TennisLinkedMatchesPicker(matches: store.selectedMatches, sessionID: session.id, selected: $linkedMatchIDs)
-            Picker("Surface", selection: $session.surface) {
-                ForEach(CourtSurface.allCases) { Text($0.rawValue).tag($0) }
+            TennisTournamentPicker(tournaments: store.data.tournaments.filter { $0.playerID == session.playerID && $0.court.sport == session.court.sport }, tournamentID: $session.context.tournamentID, customName: $session.context.customTournamentName)
+            TennisLinkedMatchesPicker(matches: store.data.matches.filter { $0.playerID == session.playerID && $0.court.sport == session.court.sport }, sessionID: session.id, selected: $linkedMatchIDs)
+            if session.court.sport.sport == .tennis {
+                Picker("Surface", selection: $session.surface) {
+                    ForEach(CourtSurface.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .accessibilityIdentifier("trainingSurfacePicker")
+            } else {
+                CourtSurfacePicker(sport: session.court.sport.sport, selection: $session.court.surface)
             }
-            .accessibilityIdentifier("trainingSurfacePicker")
             TextField("Notes", text: $session.notes, axis: .vertical)
                 .lineLimit(3...6)
                 .accessibilityIdentifier("trainingNotesField")

@@ -4,12 +4,16 @@ struct TennisMatchConditionsFields: View {
     @Binding var match: MatchRecord
 
     var body: some View {
+        if match.court.sport.sport == .tennis {
         Picker("Court surface", selection: Binding(get: { match.courtSurface == .indoor ? .notSpecified : match.courtSurface }, set: { value in
             if match.courtSurface == .indoor && match.environment.setting == .notRecorded { match.environment.setting = .indoors }
             match.courtSurface = value
         })) {
             ForEach(CourtSurface.allCases.filter { $0 != .indoor }) { Text($0.rawValue).tag($0) }
         }.accessibilityIdentifier("matchCourtSurface")
+        } else {
+            CourtSurfacePicker(sport: match.court.sport.sport, selection: $match.court.surface)
+        }
         Picker("Indoor or outdoor", selection: Binding(get: { match.effectiveCourtSetting }, set: { value in
             match.environment.setting = value
             if match.courtSurface == .indoor { match.courtSurface = .notSpecified }

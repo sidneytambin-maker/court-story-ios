@@ -182,11 +182,12 @@ struct TrainingEditorView: View {
                     Text(validationMessage).accessibilityIdentifier("trainingValidation")
                 }
                 TennisSection("Session") {
+                    CourtCaptureIdentity(athlete: store.data.players.first { $0.id == session.playerID }?.displayName ?? "Player unavailable", sport: session.court.sport, coached: session.court.enteredByCoachID != nil)
                     Picker("Training type", selection: $session.trainingType) {
                         ForEach(TrainingType.allCases) { Text($0.rawValue).tag($0) }
                     }
                     .accessibilityIdentifier("trainingTypePicker")
-                    TennisTrainingFocusPicker(focus: $session.focus, additionalFocus: $session.additionalFocus)
+                    TennisTrainingFocusPicker(focus: $session.focus, additionalFocus: $session.additionalFocus, sport: session.court.sport.sport)
                     DatePicker("Date", selection: $session.date, displayedComponents: .date)
                         .accessibilityIdentifier("trainingDatePicker")
                 }
@@ -195,6 +196,9 @@ struct TrainingEditorView: View {
                     set: { session.setManualDuration(minutes: $0) }
                 ))
                 TrainingEntryDetails(session: $session, newPlayers: $newPlayers, linkedMatchIDs: $linkedMatchIDs)
+                if session.court.enteredByCoachID != nil {
+                    Section("Session plan") { CourtPlanFields(plan: Binding(get: { session.court.plan ?? CourtSessionPlan() }, set: { session.court.plan = $0 })) }
+                }
                 if store.data.settings.trackingMode == .power {
                     TennisSection("Session ratings") {
                         TrainingRatingsFields(session: $session)
