@@ -46,16 +46,11 @@ final class WatchCourtCoachingUITests: XCTestCase {
         XCTAssertTrue(confirmation.waitForExistence(timeout: 5))
         confirmation.tap()
         let roster = app.navigationBars["Players"]
-        let changedAction = app.buttons[title == "Archive Player" ? "Restore Player" : "Archive Player"]
-        let changed = NSPredicate { _, _ in roster.isHittable || changedAction.exists }
-        expectation(for: changed, evaluatedWith: app)
+        let detail = app.navigationBars["Demo Player Morgan"]
+        // Test the completed presentation transition, not an off-screen action
+        // in a lazily rendered detail list or the roster hidden behind it.
+        expectation(for: NSPredicate { _, _ in roster.exists && !detail.exists && !confirmation.exists }, evaluatedWith: app)
         waitForExpectations(timeout: 10)
-        // A presented detail keeps the underlying roster in XCTest's tree.
-        // Return through its real Back control before asserting roster contents.
-        let back = app.navigationBars["Demo Player Morgan"].buttons.matching(NSPredicate(format: "label == %@", "Back to players")).firstMatch
-        if back.exists && back.isHittable { back.tap() }
-        expectation(for: NSPredicate { _, _ in roster.isHittable }, evaluatedWith: app)
-        waitForExpectations(timeout: 5)
     }
     private func evidence(_ name: String) {
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = name; screenshot.lifetime = .keepAlways; add(screenshot)
@@ -150,6 +145,12 @@ final class WatchCourtCoachingUITests: XCTestCase {
         toggle(archived, label: "Show archived players")
         XCTAssertTrue(app.buttons["Demo Player Morgan"].waitForExistence(timeout: 10))
         evidence("Watch roster refreshed after archive and restore")
+        app.terminate()
+        app.launchArguments = []
+        app.launch()
+        XCTAssertTrue(app.buttons["Your Players"].waitForExistence(timeout: 20))
+        tap("Your Players")
+        XCTAssertTrue(app.buttons["Demo Player Morgan"].waitForExistence(timeout: 10))
     }
     func testWelcomeValidatesNameAndCancelRetainsRoleChoice() {
         app.launchArguments = ["-ui-testing-watch", "-ui-testing-court-welcome", "-ui-testing-reset-setup"]

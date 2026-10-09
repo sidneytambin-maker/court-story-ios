@@ -60,7 +60,7 @@ struct WatchCourtRosterView: View {
             .sheet(item: $newPlayer) { player in NavigationStack { WatchCourtProfileEditor(player: player, isNew: true) } }
             .sheet(item: $selectedPlayer) { player in
                 NavigationStack {
-                    WatchCourtPlayerView(playerID: player.id)
+                    WatchCourtPlayerView(playerID: player.id, archiveCompleted: { selectedPlayer = nil })
                         .toolbar {
                             ToolbarItem(placement: .cancellationAction) {
                                 Button("Back", systemImage: "chevron.backward") { selectedPlayer = nil }
@@ -75,6 +75,7 @@ struct WatchCourtRosterView: View {
 private struct WatchCourtPlayerView: View {
     @EnvironmentObject private var store: WatchTennisStore
     let playerID: UUID
+    let archiveCompleted: () -> Void
     @State private var confirmArchive = false
     private var player: PlayerProfile? { store.snapshot.players.first { $0.id == playerID } }
     var body: some View {
@@ -117,7 +118,7 @@ private struct WatchCourtPlayerView: View {
                     Button(player.isArchived ? "Restore Player" : "Archive Player") {
                         player.court.archivedAt = player.isArchived ? nil : Date()
                         player.court.modifiedAt = Date(); player.court.revision += 1
-                        _ = store.saveCourtMutation(.profile(player))
+                        if store.saveCourtMutation(.profile(player)) { archiveCompleted() }
                     }
                     .accessibilityIdentifier("watchConfirmPlayerArchiveChange")
                 }
