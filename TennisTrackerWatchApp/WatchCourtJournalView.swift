@@ -164,7 +164,7 @@ private struct WatchCourtObservationEditor: View {
         Form {
             if CourtFeature.observations.isAvailable(in: store.snapshot.settings.trackingMode) {
                 CourtCaptureIdentity(athlete: store.snapshot.players.first { $0.id == draft.athleteID }?.displayName ?? "Unavailable player", sport: draft.sport, coached: true)
-                DatePicker("Observation date", selection: $draft.date, displayedComponents: .date)
+                WatchDateField(title: "Observation date", date: $draft.date)
                 Picker("Focus", selection: $draft.focus) {
                     Text("Not specified").tag("")
                     ForEach(Array(Set(draft.sport.sport.focuses + (draft.focus.isBlank ? [] : [draft.focus]))).sorted(), id: \.self) { Text($0).tag($0) }
@@ -213,7 +213,7 @@ private struct WatchCourtDrillEditor: View {
             if CourtFeature.measuredDrills.isAvailable(in: store.snapshot.settings.trackingMode) {
                 CourtCaptureIdentity(athlete: store.snapshot.players.first { $0.id == draft.athleteID }?.displayName ?? "Unavailable player", sport: draft.sport, coached: true)
                 TextField("Drill name", text: $draft.name)
-                DatePicker("Measurement date", selection: $draft.date, displayedComponents: .date)
+                WatchDateField(title: "Measurement date", date: $draft.date)
                 TextField("Focus", text: $draft.focus)
                 TextField("Successful attempts", value: $draft.successfulAttempts, format: .number)
                 TextField("Total attempts", value: $draft.totalAttempts, format: .number)

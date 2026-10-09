@@ -248,6 +248,9 @@ struct CourtRecordedScoreFields: View {
                 }
                 if !validationMessage.isEmpty { Text(validationMessage).accessibilityIdentifier("courtRecordedScoreError") }
                 else { Text(match.court.score?.summary ?? "Enter the recorded scores.").accessibilityIdentifier("courtRecordedScoreSummary") }
+            } else {
+                // A lazy Form cannot call onAppear for an entirely empty Group.
+                ProgressView().accessibilityLabel("Loading score")
             }
         }
         .onAppear {

@@ -120,7 +120,7 @@ struct WatchCourtProfileEditor: View {
             TextField("Development notes", text: selected.developmentNotes)
             Toggle("Plan a review date", isOn: Binding(get: { selected.wrappedValue.reviewDate != nil }, set: { selected.wrappedValue.reviewDate = $0 ? Date() : nil }))
             if selected.wrappedValue.reviewDate != nil {
-                DatePicker("Review date", selection: Binding(get: { selected.wrappedValue.reviewDate ?? Date() }, set: { selected.wrappedValue.reviewDate = $0 }), displayedComponents: .date)
+                WatchDateField(title: "Review date", date: Binding(get: { selected.wrappedValue.reviewDate ?? Date() }, set: { selected.wrappedValue.reviewDate = $0 }))
             }
             NavigationLink("Access Preferences") { Form { CourtAccessFields(sport: player.selectedSport.sport, access: selected.access) } }
             NavigationLink("Default Match Format") { Form { CourtRuleFields(sport: player.selectedSport.sport, rules: selected.rules) } }

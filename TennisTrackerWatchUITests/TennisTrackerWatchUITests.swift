@@ -532,8 +532,9 @@ final class TennisTrackerWatchUITests: XCTestCase {
         var upward = true
         var previousVisibleRows = ""
         for _ in 0..<60 {
-            let upperEdge = max(app.frame.minY + 40, app.navigationBars.firstMatch.frame.maxY) + 8
-            let lowerEdge = app.frame.maxY - 32
+            let navigation = app.navigationBars.allElementsBoundByIndex.last(where: { $0.isHittable })
+            let upperEdge = max(app.frame.minY + 28, navigation?.frame.maxY ?? 0) + 4
+            let lowerEdge = app.frame.maxY - 6
             if element.exists {
                 let center = element.frame.midY
                 if element.isHittable && center > upperEdge && center < lowerEdge { return }
@@ -547,6 +548,9 @@ final class TennisTrackerWatchUITests: XCTestCase {
             scroll(in: app, upward: upward)
         }
         print(app.debugDescription)
+        capture(app, name: "Failed Watch control reveal")
+        let tree = XCTAttachment(string: app.debugDescription)
+        tree.name = "Failed Watch control accessibility tree"; tree.lifetime = .keepAlways; add(tree)
         XCTFail("Could not reveal \(element) after searching both directions")
     }
 

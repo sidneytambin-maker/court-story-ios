@@ -6,9 +6,9 @@ Build 33 is the previous approved external beta. Build 34 must pass new native t
 
 ## Beta Description
 
-Court Story is a tennis activity, match and training companion for iPhone and Apple Watch, designed around accessible, independent use.
+Court Story is a racket-sport activity, match, training and coaching companion for iPhone and Apple Watch, designed around accessible, independent use.
 
-Record singles and doubles matches, training sessions and tournaments. Save player profiles, regular doubles partners, multiple coaches, venues and reusable tennis details. Log completed match results or score a match live, including one-set and multi-set formats and tie-break results. Link matches to training and tournaments without entering the same details twice.
+Record singles and doubles matches, training sessions and tournaments in ten racket sports, or name a custom numeric sport. Save player profiles, regular partners, multiple coaches and venues. Use the selected sport's official scoring formats to log results or score live. Link matches to training and tournaments without entering the same details twice. Coaches can follow their players with observations, practice plans, measured drills, progress reports and optional photos or short clips on iPhone.
 
 The personalised dashboard brings together results, training focus, upcoming tennis, goals and achievements. Accessible summaries accompany visual charts and progress displays. Notification reminders open the relevant activity or reflection area, and optional tennis sounds can be previewed and selected in Settings.
 
@@ -22,28 +22,18 @@ New testers start with an empty personal library and an accessible setup flow. T
 
 Please use Court Story naturally on iPhone and Apple Watch. Test with VoiceOver, without VoiceOver, or both, according to your normal preferences.
 
-- Correct a recorded training duration on either device. Verify the editor, Training list, Dashboard, weekly complication and shared summary agree after saving, reopening and synchronising. Original Health measurements remain unchanged and are identified separately.
-- Start scheduled training from Watch Overview with Health workout saving already allowed. There should be a single Start Session action, without the routine with/without Health choice. The app must only report Health recording after it has started. Check live measurements and the saved Health workout on your physical Watch.
-- If Health cannot start, confirm a clear retry or explicit Start Without Health choice. Cancelling must not create an active session. Check pause, interruption, ending and recovery without duplicate records or invented measurements.
-- Tournament stage and final position: choose Round robin, a group stage or a placement play-off, separately choose a final position from 1st through 16th, and verify both survive editing and phone/Watch sync.
-- Tournament VoiceOver actions: Mark Tournament Complete, then Mark Tournament Entered. Check the spoken confirmation, visible status and sync, without losing stage or final position.
-- Basic mode: quick entry and a compact Dashboard, with optional details available when requested. Standard mode retains guided detail. Advanced professional metrics and coach-summary sharing belong to Power mode only.
-- Power mode coach summary: choose included sections, inspect the preview and use the system share sheet. Nothing is sent automatically. Health measurements and personal names are not included in the default summary.
-- Updating an existing installation: your records, saved people and venues, preferences and Watch connection remain available. Do not delete the app to change its name.
-- First-time setup: your own profile, optional classification and handedness, match defaults, optional people and places, and skipping permissions.
-- Empty first installation: no other person's records, coaches, venues, goals or workout information should appear.
-- Saved players, regular doubles partners, coaches, venues and locations throughout every relevant picker.
-- Training with multiple coaches and players, more than one focus, duration including seconds, completion, reflection, editing and deletion.
-- Singles and doubles entry order, one-set and multi-set formats, tied games and tie-break result pickers.
-- Match lists: populated status headings only, earliest date/time first regardless of entry order. Choose a match round in any mode; check spoken time and venue.
-- Live scoring, undo, saving progress, resuming, and clearly ending an activity on Watch.
-- Tournament dates, linked scheduled/completed match counts, and optional links to matches and training.
-- Dashboard and Watch all-time results, weekly summaries, training focus, goals, achievements and direct links to relevant editors.
-- Notifications that open the exact activity or reflection, and the five selectable tennis sounds without excessive playback or interference with speech.
-- Watch Overview, Track, Live, Recent and Score, including the Menu button, VoiceOver actions, empty states and complications.
-- Two-way sync, including edits made while the other device is temporarily unreachable. Reopen both apps to confirm the final result.
-- Optional Health workouts, denied permissions, accurate measured summaries and no invented measurements.
-- Text contrast, larger text, visual charts and all three themes, as well as VoiceOver labels, values, hints, focus and reading order.
+- Coach or Player welcome on each device. Choose a sport and mode, use Back or Cancel, and resume setup. A fresh install must contain no other person's records.
+- Switch between multiple sports and roles. History must retain its original sport, rules and player. A coach's own access preferences and Health measurements must stay separate from each athlete's.
+- Record or live-score official formats for Tennis, Padel, Pickleball, Badminton, Squash, Table tennis, Racquetball, Racketlon, Beach tennis and Platform tennis. Check singles/doubles service, tie-breaks, correction, undo and completion. Custom sports use numeric scores and named sides.
+- Coach roster, player selection and archiving; observations, next-action practice plans, measured drills, period-based progress and explicit missing-data descriptions. Confirm the selected athlete on every capture screen.
+- Photos and short video clips on iPhone: import, cancel, playback, moments, descriptions, deletion and private package backup. Watch shows linked context without claiming to hold the originals. Only share files or reports after checking their preview.
+- Basic keeps entry simple; Standard adds guided reflection and observations; Power adds advanced metrics. Switching modes must retain existing richer records.
+- Watch Health authorization, workout start, pause, end and saved measurements. Test these on a physical Watch. Cancelled or failed starts must not create an active session or pretend to have Health data.
+- Training duration including seconds, corrected manual duration, multiple coaches, focuses and saved venues. Original Health measurement windows stay separate from corrected activity duration.
+- Scheduled matches sort by date/time, tournament counts include linked future matches, and stage reached is separate from final position. Check completion, edit and delete actions with VoiceOver.
+- Sport-scoped dashboard, weekly complications, 25 achievements, notifications that open the exact activity and purpose, calendar confirmations and five selectable sounds.
+- Two-way sync after offline changes, relaunch and restore. Updating must preserve your records and settings; do not delete the app to update it.
+- Small screens, larger text, three themes, visual charts and VoiceOver labels, values, hints, actions and focus. Please report any duplicated or unreachable controls.
 
 For a bug report, include what you were trying to do, what happened, what you expected, iPhone or Watch, whether VoiceOver was enabled, and the version/build. Do not attach a private backup or other people's personal details to public feedback.
 

@@ -11,10 +11,14 @@ final class WatchCourtCoachingUITests: XCTestCase {
     }
     private func tap(_ label: String) {
         let button = app.buttons[label]
+        reveal(button, label: label)
+        button.tap()
+    }
+    private func reveal(_ button: XCUIElement, label: String) {
         for step in 0..<40 {
             let top = app.navigationBars.allElementsBoundByIndex.last(where: { $0.isHittable })?.frame.maxY ?? 48
             if button.exists && button.isHittable && (button.frame.midY > top || ["Cancel", "Save"].contains(label)) {
-                button.tap(); return
+                return
             }
             let up = button.exists ? button.frame.midY > top : (step < 12 || step >= 32)
             let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: up ? 0.80 : 0.53))
@@ -33,11 +37,14 @@ final class WatchCourtCoachingUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Demo Player Morgan"].waitForExistence(timeout: 10))
         tap("Journal and Progress")
         tap("Add Observation")
-        XCTAssertTrue(app.textFields["What happened"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.navigationBars["Observation"].waitForExistence(timeout: 10))
+        reveal(app.textFields["What happened"], label: "What happened")
+        XCTAssertTrue(app.textFields["What happened"].exists)
         evidence("Watch observation editor")
         tap("Cancel")
         tap("Record Measured Drill")
-        XCTAssertTrue(app.textFields["Drill name"].waitForExistence(timeout: 10))
+        reveal(app.textFields["Drill name"], label: "Drill name")
+        XCTAssertTrue(app.textFields["Drill name"].exists)
         evidence("Watch measured drill editor")
         tap("Cancel")
     }

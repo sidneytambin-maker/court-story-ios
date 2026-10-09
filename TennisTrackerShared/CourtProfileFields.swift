@@ -125,7 +125,11 @@ struct CourtCoachCredentialsFields: View {
             TextField("Organisation", text: $credentials.organisation)
             Toggle("Track qualification renewal", isOn: Binding(get: { credentials.renewalDate != nil }, set: { credentials.renewalDate = $0 ? Date() : nil }))
             if credentials.renewalDate != nil {
+                #if os(watchOS)
+                WatchDateField(title: "Renewal date", date: Binding(get: { credentials.renewalDate ?? Date() }, set: { credentials.renewalDate = $0 }))
+                #else
                 DatePicker("Renewal date", selection: Binding(get: { credentials.renewalDate ?? Date() }, set: { credentials.renewalDate = $0 }), displayedComponents: .date)
+                #endif
             }
             TextField("Safeguarding training notes", text: $credentials.safeguardingNotes, axis: .vertical)
             Text("Private, self-reported information. Court Story does not verify qualifications.").font(.footnote)
