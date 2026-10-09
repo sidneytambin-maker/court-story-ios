@@ -454,7 +454,7 @@ final class TennisTrackerWatchUITests: XCTestCase {
 
     func testNotificationReflectionOpensExactCompletedSessionOnWatch() {
         let app = XCUIApplication()
-        app.launchArguments = ["-ui-testing-watch", "-watch-completed-training", "-test-notification=reflection"]
+        app.launchArguments = ["-ui-testing-watch", "-watch-mode=Standard", "-watch-completed-training", "-test-notification=reflection"]
         app.launch()
         XCTAssertTrue(app.navigationBars["Training Reflection"].waitForExistence(timeout: 8))
         let focus = app.buttons["trainingFocusPicker"]
@@ -463,6 +463,17 @@ final class TennisTrackerWatchUITests: XCTestCase {
         reveal(save, in: app); save.tap()
         XCTAssertTrue(app.buttons.matching(identifier: "watchScreenMenu").matching(NSPredicate(format: "value BEGINSWITH %@", "Current screen:")).firstMatch.waitForExistence(timeout: 8))
         capture(app, name: "Watch notification reflection saved")
+    }
+
+    func testBasicReflectionReminderOpensTrainingWithoutAdvancedControls() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing-watch", "-watch-mode=Basic", "-watch-completed-training", "-test-notification=reflection"]
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Training"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.buttons["Training summary"].exists)
+        XCTAssertFalse(app.buttons["saveTrainingReflection"].exists)
+        XCTAssertFalse(app.buttons["trainingFocusPicker"].exists)
+        capture(app, name: "Watch Basic reminder keeps exact training without reflection controls")
     }
 
     func testNotificationResultOpensScorePickersOnWatch() {

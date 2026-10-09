@@ -6,10 +6,15 @@ on:
         description: Run only the new coaching journeys
         type: boolean
         default: false
+      watch_navigation_only:
+        description: Diagnose Watch scoring and coaching navigation
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
   phone-interface:
+    if: ${{ !inputs.watch_navigation_only }}
     runs-on: macos-latest
     timeout-minutes: 100
     steps:
@@ -53,13 +58,22 @@ jobs:
       - name: Run small Watch interface journeys
         env:
           EXPANSION_ONLY: ${{ inputs.expansion_only }}
+          WATCH_NAVIGATION_ONLY: ${{ inputs.watch_navigation_only }}
         run: |
           set -euo pipefail
-          ID=$(python3 Scripts/create_apple_test_simulator.py small-watch)
+          SIZE=small-watch
+          if [ "$WATCH_NAVIGATION_ONLY" = true ]; then SIZE=watch; fi
+          ID=$(python3 Scripts/create_apple_test_simulator.py "$SIZE")
           test "$ID" != null
           xcrun simctl bootstatus "$ID" -b
           TEST_SELECTION=(-skip-testing:TennisTrackerWatchUITests/WatchWorkoutStartupUITests)
           if [ "$EXPANSION_ONLY" = true ]; then TEST_SELECTION=(-only-testing:TennisTrackerWatchUITests/WatchCourtCoachingUITests); fi
+          if [ "$WATCH_NAVIGATION_ONLY" = true ]; then
+            TEST_SELECTION=(-only-testing:TennisTrackerWatchUITests/TennisTrackerWatchUITests/testManualMatchResultSavesWithoutStartingLiveScoringAndWeatherAllowsMultipleChoices -only-testing:TennisTrackerWatchUITests/TennisTrackerWatchUITests/testRecordedWatchTiebreakAndTrainingLinkPersist -only-testing:TennisTrackerWatchUITests/TennisTrackerWatchUITests/testNotificationReflectionOpensExactCompletedSessionOnWatch -only-testing:TennisTrackerWatchUITests/TennisTrackerWatchUITests/testBasicReflectionReminderOpensTrainingWithoutAdvancedControls -only-testing:TennisTrackerWatchUITests/WatchCourtCoachingUITests)
+            python3 Scripts/sample_watch_test_process.py --output CourtWatchReview/thread-samples &
+            SAMPLER_PID=$!
+            trap 'kill "$SAMPLER_PID" 2>/dev/null || true' EXIT
+          fi
           xcodebuild test -project TennisTrackeriOS.xcodeproj -scheme TennisTrackerWatchTests -destination "id=$ID" "${TEST_SELECTION[@]}" -parallel-testing-enabled NO -resultBundlePath CourtWatchUI.xcresult CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=YES CODE_SIGN_IDENTITY="-" 2>&1 | tee CourtWatchUI.log
       - name: Export interface evidence
         if: always()
