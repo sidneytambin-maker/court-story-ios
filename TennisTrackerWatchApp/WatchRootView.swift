@@ -6,6 +6,9 @@ struct WatchRootView: View {
     @State private var quickTraining = false
     @State private var notificationRoute: TennisActivityRoute?
     var body: some View {
+        #if DEBUG && targetEnvironment(simulator)
+        let _ = WatchNavigationDiagnostics.trace("root") { Self._printChanges() }
+        #endif
         NavigationStack {
             if store.snapshot.players.isEmpty {
                 WatchCourtOnboardingView()

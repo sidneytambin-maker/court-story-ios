@@ -14,6 +14,14 @@ on:
         description: Capture paired Watch threads during the two reproducing navigation journeys
         type: boolean
         default: false
+      diagnostic_small_watch:
+        description: Use the small Watch for the navigation diagnostic
+        type: boolean
+        default: false
+      diagnostic_unpaired:
+        description: Leave the navigation diagnostic Watch unpaired to isolate pairing from size
+        type: boolean
+        default: false
       phone_regression_only:
         description: Check large-text navigation and saved tie-break persistence
         type: boolean
@@ -71,13 +79,16 @@ jobs:
           EXPANSION_ONLY: ${{ inputs.expansion_only }}
           WATCH_NAVIGATION_ONLY: ${{ inputs.watch_navigation_only || inputs.watch_hang_diagnostic }}
           WATCH_HANG_DIAGNOSTIC: ${{ inputs.watch_hang_diagnostic }}
+          DIAGNOSTIC_SMALL_WATCH: ${{ inputs.diagnostic_small_watch }}
+          DIAGNOSTIC_UNPAIRED: ${{ inputs.diagnostic_unpaired }}
         run: |
           set -euo pipefail
           SIZE=small-watch
           if [ "$WATCH_NAVIGATION_ONLY" = true ]; then SIZE=watch; fi
+          if [ "$WATCH_HANG_DIAGNOSTIC" = true ] && [ "$DIAGNOSTIC_SMALL_WATCH" = true ]; then SIZE=small-watch; fi
           ID=$(python3 Scripts/create_apple_test_simulator.py "$SIZE")
           test "$ID" != null
-          if [ "$WATCH_NAVIGATION_ONLY" = true ]; then
+          if [ "$WATCH_NAVIGATION_ONLY" = true ] && [ "$DIAGNOSTIC_UNPAIRED" != true ]; then
             PHONE=$(python3 Scripts/create_apple_test_simulator.py phone)
             PAIR=$(xcrun simctl pair "$ID" "$PHONE")
             if ACTIVATE_OUTPUT=$(xcrun simctl pair_activate "$PAIR" 2>&1); then
@@ -95,9 +106,11 @@ jobs:
           TEST_SELECTION=(-skip-testing:TennisTrackerWatchUITests/WatchWorkoutStartupUITests)
           if [ "$EXPANSION_ONLY" = true ]; then TEST_SELECTION=(-only-testing:TennisTrackerWatchUITests/WatchCourtCoachingUITests); fi
           if [ "$WATCH_NAVIGATION_ONLY" = true ]; then
+            if [ "$DIAGNOSTIC_UNPAIRED" != true ]; then
             xcodebuild build -project TennisTrackeriOS.xcodeproj -scheme TennisTracker -destination 'generic/platform=iOS Simulator' -derivedDataPath CourtPaired CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=YES CODE_SIGN_IDENTITY="-" > CourtPaired.log 2>&1
             python3 Scripts/verify_paired_test_app.py --app CourtPaired/Build/Products/Debug-iphonesimulator/TennisTracker.app
             xcrun simctl install "$PHONE" CourtPaired/Build/Products/Debug-iphonesimulator/TennisTracker.app
+            fi
             TEST_SELECTION=(-only-testing:TennisTrackerWatchUITests/TennisTrackerWatchUITests/testManualMatchResultSavesWithoutStartingLiveScoringAndWeatherAllowsMultipleChoices -only-testing:TennisTrackerWatchUITests/TennisTrackerWatchUITests/testRecordedWatchTiebreakAndTrainingLinkPersist -only-testing:TennisTrackerWatchUITests/TennisTrackerWatchUITests/testNotificationReflectionOpensExactCompletedSessionOnWatch -only-testing:TennisTrackerWatchUITests/TennisTrackerWatchUITests/testBasicReflectionReminderOpensTrainingWithoutAdvancedControls -only-testing:TennisTrackerWatchUITests/TennisTrackerWatchUITests/testActiveWatchEditorDoesNotOfferDurationOverride -only-testing:TennisTrackerWatchUITests/TennisTrackerWatchUITests/testCompletedWorkoutCanBeMarkedCompleteOnWatch -only-testing:TennisTrackerWatchUITests/TennisTrackerWatchUITests/testWatchDurationCorrectionKeepsOriginalHealthWindow -only-testing:TennisTrackerWatchUITests/WatchCourtCoachingUITests -only-testing:TennisTrackerWatchUITests/WatchMatchListUITests/testReverseInsertionPlaces1205FirstInRecentScoreAndOverview)
             python3 Scripts/sample_watch_test_process.py --output CourtWatchReview/thread-samples &
             SAMPLER_PID=$!

@@ -9,6 +9,9 @@ struct WatchRecordedMatchView: View {
     @State private var scoreError = ""
 
     var body: some View {
+        #if DEBUG && targetEnvironment(simulator)
+        let _ = WatchNavigationDiagnostics.trace("recorded match") { Self._printChanges() }
+        #endif
         Form {
             if !validationMessage.isBlank { Text(validationMessage).accessibilityIdentifier("recordMatchValidation") }
             CourtCaptureIdentity(athlete: store.snapshot.players.first { $0.id == match.playerID }?.displayName ?? "Player", sport: match.court.sport, coached: match.court.enteredByCoachID != nil)
@@ -64,6 +67,9 @@ struct WatchRecordedMatchView: View {
 private struct WatchRecordedMatchRulesView: View {
     @Binding var match: MatchRecord
     var body: some View {
+        #if DEBUG && targetEnvironment(simulator)
+        let _ = WatchNavigationDiagnostics.trace("recorded rules") { Self._printChanges() }
+        #endif
         Form {
             CourtRuleFields(sport: match.court.sport.sport,
                 rules: Binding(get: { match.court.rules ?? match.makeCourtScore().rules }, set: { match.court.rules = $0 }),

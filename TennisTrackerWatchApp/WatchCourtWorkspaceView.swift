@@ -36,6 +36,9 @@ struct WatchCourtRosterView: View {
         }.sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
     }
     var body: some View {
+        #if DEBUG && targetEnvironment(simulator)
+        let _ = WatchNavigationDiagnostics.trace("roster") { Self._printChanges() }
+        #endif
         List {
             Button("Add Player", systemImage: "person.badge.plus") {
                 guard let owner = store.workspaceOwner else { return }
@@ -63,6 +66,9 @@ private struct WatchCourtPlayerView: View {
     @State private var confirmArchive = false
     private var player: PlayerProfile? { store.snapshot.players.first { $0.id == playerID } }
     var body: some View {
+        #if DEBUG && targetEnvironment(simulator)
+        let _ = WatchNavigationDiagnostics.trace("athlete") { Self._printChanges() }
+        #endif
         List {
             if let player {
                 CourtCaptureIdentity(athlete: player.displayName, sport: store.courtSport, coached: true)
