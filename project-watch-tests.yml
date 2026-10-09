@@ -1,6 +1,14 @@
 include:
   - project-health.yml
 targets:
+  TennisTracker:
+    dependencies:
+      - target: TennisTrackerWatchApp
+        embed: true
+        link: false
+        copy:
+          destination: productsDirectory
+          subpath: $(CONTENTS_FOLDER_PATH)/Watch
   TennisTrackerWatchUITests:
     type: bundle.ui-testing
     platform: watchOS

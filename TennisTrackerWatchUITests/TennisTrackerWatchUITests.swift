@@ -106,8 +106,9 @@ final class TennisTrackerWatchUITests: XCTestCase {
         app.buttons["trainingFocusPicker"].tap()
         app.buttons["trainingFocusOption.Serves"].tap()
         app.buttons["Done"].tap()
-        XCTAssertTrue(app.buttons["Save"].waitForExistence(timeout: 5))
-        app.buttons["Save"].tap()
+        let save = app.navigationBars["Edit Training"].buttons["saveWatchTraining"].firstMatch
+        XCTAssertTrue(save.waitForExistence(timeout: 5))
+        save.tap()
         XCTAssertTrue(complete.waitForNonExistence(timeout: 5))
         XCTAssertTrue(app.buttons["Completed training summary"].label.contains("72 beats per minute"))
         XCTAssertTrue(app.buttons["Completed training summary"].label.contains("Focus: Serves"))
@@ -131,7 +132,7 @@ final class TennisTrackerWatchUITests: XCTestCase {
         minutes.tap()
         let zeroMinutes = app.buttons["0 minutes"]
         reveal(zeroMinutes, in: app); zeroMinutes.tap()
-        app.buttons["Save"].tap()
+        app.navigationBars["Edit Training"].buttons["saveWatchTraining"].firstMatch.tap()
         let summary = app.buttons["Completed training summary"]
         XCTAssertTrue(summary.waitForExistence(timeout: 5))
         XCTAssertTrue(summary.label.contains("2 hours"))
@@ -160,10 +161,11 @@ final class TennisTrackerWatchUITests: XCTestCase {
         reveal(app.buttons["Edit Training and Focus"], in: app)
         app.buttons["Edit Training and Focus"].tap()
         XCTAssertTrue(app.navigationBars["Edit Training"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["Save"].waitForExistence(timeout: 5))
+        let save = app.navigationBars["Edit Training"].buttons["saveWatchTraining"].firstMatch
+        XCTAssertTrue(save.waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["durationHours"].exists)
         XCTAssertFalse(app.buttons["durationMinutes"].exists)
-        app.buttons["Save"].tap()
+        save.tap()
         let summary = app.buttons["Active training summary"]
         XCTAssertTrue(summary.waitForExistence(timeout: 5))
         XCTAssertTrue(summary.label.contains("elapsed"))

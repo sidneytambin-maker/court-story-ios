@@ -72,11 +72,28 @@ jobs:
           if [ "$WATCH_NAVIGATION_ONLY" = true ]; then SIZE=watch; fi
           ID=$(python3 Scripts/create_apple_test_simulator.py "$SIZE")
           test "$ID" != null
+          if [ "$WATCH_NAVIGATION_ONLY" = true ]; then
+            PHONE=$(python3 Scripts/create_apple_test_simulator.py phone)
+            PAIR=$(xcrun simctl pair "$ID" "$PHONE")
+            if ACTIVATE_OUTPUT=$(xcrun simctl pair_activate "$PAIR" 2>&1); then
+              printf '%s\n' "$ACTIVATE_OUTPUT"
+            else
+              ACTIVATE_STATUS=$?
+              if [ "$ACTIVATE_STATUS" -ne 37 ] || [[ "$ACTIVATE_OUTPUT" != *"This pair is already active."* ]]; then
+                printf '%s\n' "$ACTIVATE_OUTPUT" >&2
+                exit "$ACTIVATE_STATUS"
+              fi
+            fi
+            xcrun simctl bootstatus "$PHONE" -b
+          fi
           xcrun simctl bootstatus "$ID" -b
           TEST_SELECTION=(-skip-testing:TennisTrackerWatchUITests/WatchWorkoutStartupUITests)
           if [ "$EXPANSION_ONLY" = true ]; then TEST_SELECTION=(-only-testing:TennisTrackerWatchUITests/WatchCourtCoachingUITests); fi
           if [ "$WATCH_NAVIGATION_ONLY" = true ]; then
-            TEST_SELECTION=(-only-testing:TennisTrackerWatchUITests/TennisTrackerWatchUITests/testManualMatchResultSavesWithoutStartingLiveScoringAndWeatherAllowsMultipleChoices -only-testing:TennisTrackerWatchUITests/TennisTrackerWatchUITests/testRecordedWatchTiebreakAndTrainingLinkPersist -only-testing:TennisTrackerWatchUITests/TennisTrackerWatchUITests/testNotificationReflectionOpensExactCompletedSessionOnWatch -only-testing:TennisTrackerWatchUITests/TennisTrackerWatchUITests/testBasicReflectionReminderOpensTrainingWithoutAdvancedControls -only-testing:TennisTrackerWatchUITests/WatchCourtCoachingUITests)
+            xcodebuild build -project TennisTrackeriOS.xcodeproj -scheme TennisTracker -destination 'generic/platform=iOS Simulator' -derivedDataPath CourtPaired CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=YES CODE_SIGN_IDENTITY="-" > CourtPaired.log 2>&1
+            python3 Scripts/verify_paired_test_app.py --app CourtPaired/Build/Products/Debug-iphonesimulator/TennisTracker.app
+            xcrun simctl install "$PHONE" CourtPaired/Build/Products/Debug-iphonesimulator/TennisTracker.app
+            TEST_SELECTION=(-only-testing:TennisTrackerWatchUITests/TennisTrackerWatchUITests/testManualMatchResultSavesWithoutStartingLiveScoringAndWeatherAllowsMultipleChoices -only-testing:TennisTrackerWatchUITests/TennisTrackerWatchUITests/testRecordedWatchTiebreakAndTrainingLinkPersist -only-testing:TennisTrackerWatchUITests/TennisTrackerWatchUITests/testNotificationReflectionOpensExactCompletedSessionOnWatch -only-testing:TennisTrackerWatchUITests/TennisTrackerWatchUITests/testBasicReflectionReminderOpensTrainingWithoutAdvancedControls -only-testing:TennisTrackerWatchUITests/TennisTrackerWatchUITests/testActiveWatchEditorDoesNotOfferDurationOverride -only-testing:TennisTrackerWatchUITests/TennisTrackerWatchUITests/testCompletedWorkoutCanBeMarkedCompleteOnWatch -only-testing:TennisTrackerWatchUITests/TennisTrackerWatchUITests/testWatchDurationCorrectionKeepsOriginalHealthWindow -only-testing:TennisTrackerWatchUITests/WatchCourtCoachingUITests -only-testing:TennisTrackerWatchUITests/WatchMatchListUITests/testReverseInsertionPlaces1205FirstInRecentScoreAndOverview)
             python3 Scripts/sample_watch_test_process.py --output CourtWatchReview/thread-samples &
             SAMPLER_PID=$!
             trap 'kill "$SAMPLER_PID" 2>/dev/null || true' EXIT
@@ -96,6 +113,7 @@ jobs:
           name: court-watch-interface
           path: |
             CourtWatchUI.log
+            CourtPaired.log
             CourtWatchUI.xcresult
             CourtWatchReview
           retention-days: 7
