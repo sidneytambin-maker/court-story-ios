@@ -16,7 +16,7 @@ struct WatchCourtWorkspaceView: View {
                         Text("My own activity, \(owner.displayName)").tag(Optional<UUID>.none)
                         ForEach(store.roster) { Text($0.displayName).tag(Optional($0.id)) }
                     }.accessibilityIdentifier("watchRecordingAthlete")
-                    NavigationLink("Players") { WatchCourtRosterView().equatable() }
+                    NavigationLink("Players") { WatchCourtRosterView() }
                 }
                 NavigationLink("My Profile") { WatchCourtProfileEditor(player: owner) }
                 NavigationLink("Add Sport") { WatchCourtAddSportView(player: owner) }
@@ -25,12 +25,11 @@ struct WatchCourtWorkspaceView: View {
     }
 }
 
-struct WatchCourtRosterView: View, Equatable {
+struct WatchCourtRosterView: View {
     @EnvironmentObject private var store: WatchTennisStore
     @State private var showArchived = false
     @State private var newPlayer: PlayerProfile?
-    // There are no route inputs. Store and local-state changes remain observed.
-    static func == (lhs: Self, rhs: Self) -> Bool { true }
+    @State private var selectedPlayer: PlayerProfile?
     private var players: [PlayerProfile] {
         store.snapshot.players.filter {
             $0.court.coachOwnerID == store.workspaceOwner?.id && $0.isArchived == showArchived &&
@@ -54,11 +53,22 @@ struct WatchCourtRosterView: View, Equatable {
             }
             Toggle("Show archived players", isOn: $showArchived)
             ForEach(players) { player in
-                NavigationLink(player.displayName) { WatchCourtPlayerView(playerID: player.id) }
+                Button(player.displayName) { selectedPlayer = player }
             }
             if players.isEmpty { Text(showArchived ? "No archived players for this sport." : "No players added for this sport.") }
         }.navigationTitle("Players")
             .sheet(item: $newPlayer) { player in NavigationStack { WatchCourtProfileEditor(player: player, isNew: true) } }
+            .sheet(item: $selectedPlayer) { player in
+                NavigationStack {
+                    WatchCourtPlayerView(playerID: player.id)
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("Back", systemImage: "chevron.backward") { selectedPlayer = nil }
+                                    .labelStyle(.iconOnly).accessibilityLabel("Back to players")
+                            }
+                        }
+                }
+            }
     }
 }
 

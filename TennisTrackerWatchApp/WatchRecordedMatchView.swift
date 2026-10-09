@@ -1,15 +1,13 @@
 import SwiftUI
 
-struct WatchRecordedMatchView: View, Equatable {
+struct WatchRecordedMatchView: View {
     @EnvironmentObject private var store: WatchTennisStore
     var linkedTraining: TrainingSession?
     @State private var match = MatchRecord(playerID: UUID())
     @State private var configured = false
     @State private var validationMessage = ""
     @State private var scoreError = ""
-
-    // Compare route inputs, not SwiftUI's changing navigation environment.
-    static func == (lhs: Self, rhs: Self) -> Bool { lhs.linkedTraining == rhs.linkedTraining }
+    @State private var showingRules = false
 
     var body: some View {
         #if DEBUG && targetEnvironment(simulator)
@@ -27,9 +25,7 @@ struct WatchRecordedMatchView: View, Equatable {
             TennisTrainingSessionPicker(sessions: store.snapshot.trainingSessions.filter { $0.playerID == match.playerID && $0.court.sport == match.court.sport }, coaches: store.snapshot.setup.coaches, selection: $match.trainingSessionID)
             if configured {
                 if match.court.sport.sport != .custom {
-                    NavigationLink("Scoring rules") { [match = $match] in
-                        WatchRecordedMatchRulesView(match: match)
-                    }
+                    Button("Scoring rules") { showingRules = true }
                 }
                 CourtRecordedScoreFields(match: $match, validationMessage: $scoreError)
             }
@@ -46,6 +42,17 @@ struct WatchRecordedMatchView: View, Equatable {
         }
         .pickerStyle(.navigationLink)
         .navigationTitle("Record Match Result")
+        .sheet(isPresented: $showingRules) {
+            NavigationStack {
+                WatchRecordedMatchRulesView(match: $match)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Back", systemImage: "chevron.backward") { showingRules = false }
+                                .labelStyle(.iconOnly).accessibilityLabel("Back to match result")
+                        }
+                    }
+            }
+        }
         .onChange(of: match.matchType) { _, _ in if configured { match.configureNewCourtMatch() } }
         .onAppear {
             guard !configured, let draft = store.makeCourtMatch() else { return }

@@ -6,6 +6,7 @@ struct WatchCourtJournalView: View {
     @State private var observation: CourtObservation?
     @State private var drill: CourtMeasuredDrill?
     @State private var deleting: UUID?
+    @State private var showingProgress = false
     private var athlete: PlayerProfile? { store.snapshot.players.first { $0.id == athleteID } }
     private var observations: [CourtObservation] {
         store.snapshot.court.observations.filter { $0.athleteID == athleteID && $0.sport == store.courtSport }
@@ -19,9 +20,8 @@ struct WatchCourtJournalView: View {
         List {
             if let athlete, let coach = store.workspaceOwner {
                 CourtCaptureIdentity(athlete: athlete.displayName, sport: store.courtSport, coached: true)
-                NavigationLink("Progress by Period") {
-                    WatchCourtProgressView(athleteID: athleteID, sport: store.courtSport)
-                }.accessibilityHint("Review this player's results, training, focus and goals for the selected period.")
+                Button("Progress by Period") { showingProgress = true }
+                    .accessibilityHint("Review this player's results, training, focus and goals for the selected period.")
                 if CourtFeature.observations.isAvailable(in: store.snapshot.settings.trackingMode) {
                     if !athlete.isArchived {
                         Button("Add Observation", systemImage: "square.and.pencil") {
@@ -90,6 +90,17 @@ struct WatchCourtJournalView: View {
                 }
             } else { Text("This player is no longer available.") }
         }.navigationTitle("Player Journal")
+            .sheet(isPresented: $showingProgress) {
+                NavigationStack {
+                    WatchCourtProgressView(athleteID: athleteID, sport: store.courtSport)
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("Back", systemImage: "chevron.backward") { showingProgress = false }
+                                    .labelStyle(.iconOnly).accessibilityLabel("Back to player journal")
+                            }
+                        }
+                }
+            }
             .sheet(item: $observation) { value in NavigationStack { WatchCourtObservationEditor(draft: value) } }
             .sheet(item: $drill) { value in NavigationStack { WatchCourtDrillEditor(draft: value) } }
             .confirmationDialog("Delete this coaching record?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible) {
