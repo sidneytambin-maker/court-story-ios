@@ -202,8 +202,8 @@ struct CourtScoringRules: Codable, Equatable {
             rules.sourceURL = "https://worldsquashofficiating.com/rules-of-squash/"
             if doubles {
                 rules.winBy = 1; rules.cap = 11
-                rules.reference = "WSF international softball doubles, Rule 2"
-                rules.sourceURL = "https://data.englandsquash.com/files?fileName=c4a12399-e40f-4a1b-b792-08a4253b235a.pdf"
+                rules.reference = "WSF international softball doubles 2022, Rules 2 and 5"
+                rules.sourceURL = "https://squash.nl/media/uujcphje/2022-international-doubles-squash-rules-v2.pdf"
             }
         case .tableTennis:
             rules.roundsToWin = 3; rules.service = .alternateTwo

@@ -33,6 +33,10 @@ struct CourtScoreSetupFields: View {
             Picker("First server", selection: Binding(get: { score.frame.server }, set: { _ = score.setServer($0, serverNumber: score.rules.doublesTwoServers ? 2 : 1) })) {
                 ForEach(score.sides.indices, id: \.self) { Text(score.sides[$0].name).tag($0) }
             }
+            if score.hasDoublesMembers {
+                NavigationLink("Doubles service order") { CourtDoublesServiceFields(score: $score) }
+                    .accessibilityValue(score.serviceSummary)
+            }
         }
         if let error = score.validationMessage { Text(error).accessibilityIdentifier("courtScoreSetupError") }
     }
@@ -44,6 +48,7 @@ struct CourtScoreControls: View {
     @State private var confirmReset = false
     @State private var correcting = false
     @State private var confirmStop = false
+    @State private var confirmExpedite = false
     var body: some View {
         Text(score.summary).font(.headline).fixedSize(horizontal: false, vertical: true)
             .accessibilityIdentifier("courtLiveScoreSummary")
@@ -64,6 +69,38 @@ struct CourtScoreControls: View {
             if score.undo() { changed() }
         }.disabled(score.history.isEmpty).accessibilityIdentifier("courtUndoScore")
         if !score.frame.complete && score.frame.serviceChoicePrompt == nil {
+            if score.canChooseDoublesOrder {
+                NavigationLink("Doubles service order") { CourtDoublesServiceFields(score: $score, changed: changed) }
+            }
+            if score.canSwapRacketlonReceivers {
+                ForEach(score.sides.indices, id: \.self) { side in
+                    Button("Swap receivers for \(score.sides[side].name)", systemImage: "arrow.left.arrow.right") {
+                        if score.swapRacketlonReceivers(side: side) { changed() }
+                    }.accessibilityHint("Optional change at the 11-point interval. Undo restores the previous order.")
+                }
+            }
+            if let service = score.frame.doublesService,
+               service.isDecidingPoint(rules: score.rules, frame: score.frame) && score.sport.sport != .beachTennis || score.canChooseSquashBox || score.frame.gummiarm {
+                Picker("Service court", selection: Binding(get: { score.frame.doublesService?.box ?? .right }, set: {
+                    if score.chooseServiceBox($0) { changed() }
+                })) { ForEach(CourtServiceBox.allCases) { Text($0.rawValue).tag($0) } }
+            }
+            if score.frame.gummiarm && score.hasDoublesMembers {
+                Picker("Gummiarm server", selection: Binding(get: { score.frame.doublesService?.serverMember ?? 0 }, set: {
+                    if score.chooseGummiarmServer(member: $0) { changed() }
+                })) {
+                    ForEach(score.sides[score.frame.server].members.indices, id: \.self) { Text(score.sides[score.frame.server].members[$0]).tag($0) }
+                }
+            }
+            if score.canStartExpedite {
+                Button("Start expedite system", systemImage: "timer") { confirmExpedite = true }
+                    .accessibilityHint("After 10 minutes of play, or at both sides' request, before 18 total points. Choose whether a rally was interrupted.")
+                    .confirmationDialog("Introduce the official expedite system?", isPresented: $confirmExpedite, titleVisibility: .visible) {
+                        Button("Between rallies") { if score.startExpedite(interruptedRally: false) { changed() } }
+                        Button("Current rally interrupted") { if score.startExpedite(interruptedRally: true) { changed() } }
+                        Button("Cancel", role: .cancel) {}
+                    }
+            }
             Picker("Serving side", selection: Binding(get: { score.frame.server }, set: { if score.setServer($0) { changed() } })) {
                 ForEach(score.sides.indices, id: \.self) { Text(score.sides[$0].name).tag($0) }
             }
@@ -90,6 +127,41 @@ struct CourtScoreControls: View {
                 Button("Cancel", role: .cancel) {}
             }
             .sheet(isPresented: $correcting) { CourtPointCorrection(score: $score, changed: changed) }
+    }
+}
+
+private struct CourtDoublesServiceFields: View {
+    @Binding var score: CourtScoreSession
+    var changed: () -> Void = {}
+    var body: some View {
+        Form {
+            Text(score.serviceSummary).accessibilityIdentifier("courtDoublesServiceSummary")
+            ForEach(score.sides.indices, id: \.self) { side in
+                Picker("\(score.sides[side].name), first player", selection: Binding(get: {
+                    score.frame.doublesService?.firstMembers[side] ?? 0
+                }, set: { member in
+                    var first = score.frame.doublesService?.firstMembers ?? [0, 0]
+                    var right = score.frame.doublesService?.rightMembers ?? [0, 0]
+                    first[side] = member
+                    if [.badminton, .pickleball, .tableTennis].contains(score.sport.sport) { right[side] = member }
+                    if score.chooseDoublesOrder(firstMembers: first, rightMembers: right) { changed() }
+                })) {
+                    ForEach(score.sides[side].members.indices, id: \.self) { Text(score.sides[side].members[$0]).tag($0) }
+                }.disabled(!score.canChooseDoublesOrder || (score.sport.sport == .squash && !score.frame.rounds.isEmpty))
+                    .accessibilityHint(side == score.frame.server ? "Chooses who serves first for this side." : "Chooses the first receiver or starting player for this side.")
+                if [.tennis, .padel, .platformTennis, .squash, .racketlon].contains(score.sport.sport) {
+                    Picker("\(score.sides[side].name), right-court receiver", selection: Binding(get: {
+                        score.frame.doublesService?.rightMembers[side] ?? 0
+                    }, set: { member in
+                        var right = score.frame.doublesService?.rightMembers ?? [0, 0]
+                        right[side] = member
+                        if score.chooseDoublesOrder(firstMembers: score.frame.doublesService?.firstMembers ?? [0, 0], rightMembers: right) { changed() }
+                    })) {
+                        ForEach(score.sides[side].members.indices, id: \.self) { Text(score.sides[side].members[$0]).tag($0) }
+                    }.disabled(!score.canChooseDoublesOrder)
+                }
+            }
+        }.navigationTitle("Service order")
     }
 }
 

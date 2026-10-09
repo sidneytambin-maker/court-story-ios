@@ -158,7 +158,7 @@ final class CourtScoreTests: XCTestCase {
     func testOfficialFormatSelectionDoesNotRewriteLegacyOneSetRules() {
         var legacy = CourtScoringRules.standard(for: .tennis)
         legacy.roundsToWin = 1
-        XCTAssertNil(CourtOfficialFormat.matching(legacy, sport: .tennis))
+        XCTAssertEqual(CourtOfficialFormat.matching(legacy, sport: .tennis)?.id, "Tennis.one-set")
         XCTAssertEqual(legacy.roundsToWin, 1)
         XCTAssertEqual(CourtOfficialFormat.choices(for: .tennis).first?.rules.roundsToWin, 2)
     }

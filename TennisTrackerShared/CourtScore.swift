@@ -28,6 +28,8 @@ struct CourtScoreFrame: Codable, Equatable {
     var complete = false
     var winningSide: Int?
     var serviceChoicePrompt: String?
+    var doublesService: CourtDoublesService?
+    var expedite: Bool?
     var tennis = TennisScoreSnapshot()
 
     init(count: Int) {
@@ -50,6 +52,7 @@ struct CourtScoreSession: Codable, Equatable {
         self.sport = sport; self.rules = rules; self.sides = sides
         frame = CourtScoreFrame(count: sides.count)
         frame.serverNumber = rules.doublesTwoServers ? 2 : 1
+        prepareDoublesService()
     }
 
     var validationMessage: String? {
@@ -71,6 +74,7 @@ struct CourtScoreSession: Codable, Equatable {
               sides.indices.contains(value.server), sides.indices.contains(value.firstServer),
               (1...2).contains(value.serverNumber), (0...3).contains(value.disciplineIndex),
               value.winningSide.map({ sides.indices.contains($0) }) ?? true else { return false }
+        if let service = value.doublesService, !service.isValid || !hasDoublesMembers { return false }
         return value.rounds.allSatisfy { $0.points.count == count && $0.points.allSatisfy { (0...1000000).contains($0) } }
     }
 
@@ -83,6 +87,14 @@ struct CourtScoreSession: Codable, Equatable {
     mutating func awardRally(to side: Int) -> Bool {
         guard validationMessage == nil, sides.indices.contains(side), !frame.complete, frame.serviceChoicePrompt == nil else { return false }
         checkpoint()
+        prepareDoublesService()
+        let old = frame
+        defer {
+            if var service = frame.doublesService {
+                service.advance(sport: sport.sport, rules: rules, from: old, to: frame)
+                frame.doublesService = service
+            }
+        }
         if rules.system == .tennisGames { tennisPoint(to: side); return true }
         if rules.system == .aggregate { aggregatePoint(to: side); return true }
         let serving = frame.server
@@ -123,12 +135,12 @@ struct CourtScoreSession: Codable, Equatable {
         case .sideOut:
             if winner != previousServer {
                 if rules.doublesTwoServers && frame.serverNumber == 1 { frame.serverNumber = 2 }
-                else { frame.server = winner; frame.serverNumber = 1 }
+                else { frame.server = winner; frame.serverNumber = 1; frame.serviceTurn += 1 }
             }
         case .rallyWinner: frame.server = winner
         case .alternateTwo:
             let count = frame.points.reduce(0, +)
-            if count % 2 == 0 || frame.points.allSatisfy({ $0 >= rules.target - 1 }) {
+            if frame.expedite == true || count % 2 == 0 || frame.points.allSatisfy({ $0 >= rules.target - 1 }) {
                 frame.server = (previousServer + 1) % sides.count
                 frame.serviceTurn += 1
             }
@@ -230,6 +242,7 @@ struct CourtScoreSession: Codable, Equatable {
         checkpoint()
         frame = CourtScoreFrame(count: sides.count)
         frame.serverNumber = rules.doublesTwoServers ? 2 : 1
+        prepareDoublesService()
     }
 
     @discardableResult
@@ -237,6 +250,106 @@ struct CourtScoreSession: Codable, Equatable {
         guard sides.indices.contains(side), (1...(rules.doublesTwoServers ? 2 : 1)).contains(serverNumber), !frame.complete else { return false }
         checkpoint(); frame.server = side; frame.serverNumber = serverNumber; frame.serviceChoicePrompt = nil
         if frame.points.allSatisfy({ $0 == 0 }) { frame.firstServer = side }
+        if var service = frame.doublesService, frame.points.allSatisfy({ $0 == 0 }), !frame.gummiarm {
+            service.begin(sport: sport.sport, frame: frame)
+            frame.doublesService = service
+        }
+        if frame.gummiarm, var service = frame.doublesService {
+            service.receiverMember = service.box == .right ? service.rightMembers[1 - side] : 1 - service.rightMembers[1 - side]
+            frame.doublesService = service
+        }
+        return true
+    }
+
+    private mutating func prepareDoublesService() {
+        guard hasDoublesMembers, frame.doublesService == nil, frame.rounds.isEmpty,
+              frame.serviceTurn == 0, frame.points.allSatisfy({ $0 == 0 }),
+              frame.tennis.playerGames == 0, frame.tennis.opponentGames == 0 else { return }
+        var service = CourtDoublesService()
+        service.begin(sport: sport.sport, frame: frame)
+        frame.doublesService = service
+    }
+
+    var canChooseDoublesOrder: Bool {
+        guard hasDoublesMembers, !frame.complete, frame.points.allSatisfy({ $0 == 0 }) else { return false }
+        return rules.system == .tennisGames ? (frame.tennis.playerGames == 0 && frame.tennis.opponentGames == 0) : frame.serviceTurn == 0
+    }
+
+    @discardableResult
+    mutating func chooseDoublesOrder(firstMembers: [Int], rightMembers: [Int]) -> Bool {
+        guard canChooseDoublesOrder, firstMembers.count == 2, rightMembers.count == 2,
+              (firstMembers + rightMembers).allSatisfy({ (0...1).contains($0) }) else { return false }
+        if sport.sport == .squash, !frame.rounds.isEmpty, firstMembers != frame.doublesService?.firstMembers { return false }
+        checkpoint()
+        var service = frame.doublesService ?? CourtDoublesService()
+        service.firstMembers = firstMembers
+        if rules.system == .tennisGames { frame.firstServer = frame.server; frame.serviceTurn = 0 }
+        let previous = history.last(where: { $0.rounds.count < frame.rounds.count })
+        service.begin(sport: sport.sport, frame: frame, previous: previous)
+        service.rightMembers = rightMembers
+        if rules.system == .tennisGames { service.refreshTennis(sport: sport.sport, rules: rules, frame: frame) }
+        if sport.sport == .squash { service.receiverMember = rightMembers[1 - frame.server] }
+        frame.doublesService = service
+        return true
+    }
+
+    @discardableResult
+    mutating func chooseServiceBox(_ box: CourtServiceBox) -> Bool {
+        guard var service = frame.doublesService, !frame.complete else { return false }
+        let squashChoice = canChooseSquashBox
+        let decidingChoice = service.isDecidingPoint(rules: rules, frame: frame) && sport.sport != .beachTennis
+        guard squashChoice || decidingChoice || frame.gummiarm else { return false }
+        checkpoint()
+        service.box = box
+        service.receiverMember = box == .right ? service.rightMembers[1 - frame.server] : 1 - service.rightMembers[1 - frame.server]
+        if decidingChoice { service.selectedDecidingBox = box }
+        frame.doublesService = service
+        return true
+    }
+
+    var canChooseSquashBox: Bool {
+        sport.sport == .squash && !frame.complete && frame.doublesService != nil
+            && (frame.points.allSatisfy { $0 == 0 } || history.last(where: { $0.points != frame.points })?.server != frame.server)
+    }
+
+    var canSwapRacketlonReceivers: Bool {
+        guard hasDoublesMembers, sport.sport == .racketlon, [1, 3].contains(frame.disciplineIndex),
+              !frame.complete, !frame.gummiarm, frame.points.max() == 11 else { return false }
+        return (history.last(where: { $0.points != frame.points })?.points.max() ?? 0) < 11
+    }
+
+    @discardableResult
+    mutating func swapRacketlonReceivers(side: Int) -> Bool {
+        guard canSwapRacketlonReceivers, (0...1).contains(side), var service = frame.doublesService else { return false }
+        checkpoint()
+        service.chooseRacketlonReceiverSwap(side: side, frame: frame)
+        frame.doublesService = service
+        return true
+    }
+
+    @discardableResult
+    mutating func chooseGummiarmServer(member: Int) -> Bool {
+        guard frame.gummiarm, !frame.complete, (0...1).contains(member), var service = frame.doublesService else { return false }
+        checkpoint(); service.serverMember = member; frame.doublesService = service
+        return true
+    }
+
+    var canStartExpedite: Bool { sport.sport == .tableTennis && frame.expedite != true && !frame.complete && frame.points.reduce(0, +) < 18 }
+
+    @discardableResult
+    mutating func startExpedite(interruptedRally: Bool) -> Bool {
+        guard canStartExpedite else { return false }
+        let preceding = history.last(where: { $0.points != frame.points && $0.rounds.count == frame.rounds.count })
+        checkpoint()
+        if !interruptedRally, let preceding {
+            frame.server = 1 - preceding.server
+            if var service = preceding.doublesService {
+                service.rotateTable(previousServer: preceding.server, nextServer: frame.server)
+                service.rememberTablePair(server: frame.server)
+                frame.doublesService = service
+            }
+        }
+        frame.expedite = true
         return true
     }
 
@@ -297,15 +410,15 @@ struct CourtScoreSession: Codable, Equatable {
         if rules.system == .aggregate {
             let current = frame.gummiarm ? "Gummiarm, one deciding point. Toss for service, one serve only."
                 : "\(Self.disciplines[frame.disciplineIndex]), \(numericSummary(frame.points))."
-            return current + " Aggregate \(numericSummary(frame.aggregate)). Serving: \(sides[frame.server].name)."
+            return current + " Aggregate \(numericSummary(frame.aggregate)). " + serviceSummary
         }
         if rules.system == .tennisGames {
             return TennisScoreState(snapshot: frame.tennis).spokenScore(playerName: sides[0].name, opponentName: sides[1].name,
                 suddenDeathDeuce: rules.deuce == .noAd || (rules.deuce == .starPoint && min(frame.points[0], frame.points[1]) >= 5))
-                + ". Serving: \(sides[frame.server].name)."
+                + ". " + serviceSummary
         }
-        return "\(numericSummary(frame.points)). Games \(numericSummary(frame.roundsWon)). Serving: \(sides[frame.server].name)"
-            + (rules.doublesTwoServers ? ", server \(frame.serverNumber)." : ".")
+        return "\(numericSummary(frame.points)). Games \(numericSummary(frame.roundsWon)). " + serviceSummary
+            + (frame.expedite == true ? " Expedite: one serve each; 13 correct returns wins the rally for the receiving side." : "")
     }
 
     var resultSummary: String {

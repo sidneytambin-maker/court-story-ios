@@ -131,8 +131,8 @@ extension MatchRecord {
     }
 
     var courtScoreSides: [CourtScoreSide] {
-        let yours = CourtScoreSide(name: playerTeam, members: [playerName, partnerName].filter { !$0.isBlank })
-        let theirs = CourtScoreSide(name: opponentSummary.fallback("Opponent"), members: [opponentName, opponent2Name].filter { !$0.isBlank })
+        let yours = CourtScoreSide(name: playerTeam, members: (matchType == .doubles ? [playerName, partnerName] : [playerName]).filter { !$0.isBlank })
+        let theirs = CourtScoreSide(name: opponentSummary.fallback("Opponent"), members: (matchType == .doubles ? [opponentName, opponent2Name] : [opponentName]).filter { !$0.isBlank })
         return [yours, theirs]
     }
 
