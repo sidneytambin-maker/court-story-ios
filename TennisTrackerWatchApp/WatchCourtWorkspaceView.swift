@@ -127,11 +127,16 @@ private struct WatchCourtPlayerView: View {
 }
 
 struct WatchCourtProfileEditor: View {
+    private enum SectionEditor: String, Identifiable {
+        case access = "Access Preferences", format = "Match Format", coaching = "Coaching Profile"
+        var id: String { rawValue }
+    }
     @EnvironmentObject private var store: WatchTennisStore
     @State var player: PlayerProfile
     var isNew = false
     @State private var original: PlayerProfile?
     @State private var error = ""
+    @State private var sectionEditor: SectionEditor?
     @AccessibilityFocusState private var errorFocused: Bool
     private var selected: Binding<CourtSportPreferences> {
         let draft = $player
@@ -152,21 +157,32 @@ struct WatchCourtProfileEditor: View {
             if selected.wrappedValue.reviewDate != nil {
                 WatchDateField(title: "Review date", date: Binding(get: { selected.wrappedValue.reviewDate ?? Date() }, set: { selected.wrappedValue.reviewDate = $0 }))
             }
-            NavigationLink("Access Preferences") { [sport = player.selectedSport.sport, access = selected.access] in
-                Form { CourtAccessFields(sport: sport, access: access) }.navigationTitle("Access Preferences")
-            }
-            NavigationLink("Default Match Format") { [sport = player.selectedSport.sport, rules = selected.rules] in
-                Form { CourtRuleFields(sport: sport, rules: rules) }.navigationTitle("Match Format")
-            }
+            Button("Access Preferences") { sectionEditor = .access }
+            Button("Default Match Format") { sectionEditor = .format }
             if player.court.selected.role == .coach && player.court.coachOwnerID == nil {
-                NavigationLink("Coaching Profile") { [credentials = $player.court.coaching] in
-                    Form { CourtCoachCredentialsFields(credentials: credentials) }.navigationTitle("Coaching Profile")
-                }
+                Button("Coaching Profile") { sectionEditor = .coaching }
             }
             if !error.isEmpty { Text(error).accessibilityFocused($errorFocused) }
             WatchSaveAndDismissButton(title: "Save Player", save: save).disabled(player.name.isBlank)
                 .accessibilityIdentifier("watchSaveCourtPlayer")
         }.navigationTitle(isNew ? "Add Player" : "Edit Player").pickerStyle(.navigationLink)
+            .sheet(item: $sectionEditor) { section in
+                NavigationStack {
+                    Form {
+                        switch section {
+                        case .access: CourtAccessFields(sport: player.selectedSport.sport, access: selected.access)
+                        case .format: CourtRuleFields(sport: player.selectedSport.sport, rules: selected.rules)
+                        case .coaching: CourtCoachCredentialsFields(credentials: $player.court.coaching)
+                        }
+                    }.navigationTitle(section.rawValue).pickerStyle(.navigationLink)
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("Back", systemImage: "chevron.backward") { sectionEditor = nil }
+                                    .labelStyle(.iconOnly).accessibilityLabel("Back to player editor")
+                            }
+                        }
+                }
+            }
             .onAppear {
                 if original == nil {
                     original = player
