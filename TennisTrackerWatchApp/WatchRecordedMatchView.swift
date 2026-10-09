@@ -4,7 +4,6 @@ private enum WatchRecordedMatchRoute: Hashable { case rules }
 
 struct WatchRecordedMatchView: View {
     @EnvironmentObject private var store: WatchTennisStore
-    @Environment(\.dismiss) private var dismiss
     var linkedTraining: TrainingSession?
     @State private var match = MatchRecord(playerID: UUID())
     @State private var configured = false
@@ -34,9 +33,9 @@ struct WatchRecordedMatchView: View {
                 .accessibilityHint("Your latest completed match review appears in What to work on on the iPhone dashboard.")
             }
             TextField("Notes", text: $match.notes)
-            Button("Save Match Result") {
-                if !scoreError.isEmpty { validationMessage = scoreError; store.announce(scoreError); return }
-                if store.saveCourtMatch(match, showAsActive: false) { dismiss() }
+            WatchSaveAndDismissButton(title: "Save Match Result") {
+                if !scoreError.isEmpty { validationMessage = scoreError; store.announce(scoreError); return false }
+                return store.saveCourtMatch(match, showAsActive: false)
             }.disabled(!configured).accessibilityIdentifier("saveRecordedMatch")
         }
         .pickerStyle(.navigationLink)

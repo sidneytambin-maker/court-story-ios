@@ -125,7 +125,6 @@ private struct WatchCourtPlayerView: View {
 
 struct WatchCourtProfileEditor: View {
     @EnvironmentObject private var store: WatchTennisStore
-    @Environment(\.dismiss) private var dismiss
     @State var player: PlayerProfile
     var isNew = false
     @State private var original: PlayerProfile?
@@ -162,7 +161,7 @@ struct WatchCourtProfileEditor: View {
                 }
             }
             if !error.isEmpty { Text(error).accessibilityFocused($errorFocused) }
-            Button("Save Player") { save() }.disabled(player.name.isBlank)
+            WatchSaveAndDismissButton(title: "Save Player", save: save).disabled(player.name.isBlank)
                 .accessibilityIdentifier("watchSaveCourtPlayer")
         }.navigationTitle(isNew ? "Add Player" : "Edit Player").pickerStyle(.navigationLink)
             .onAppear {
@@ -172,14 +171,15 @@ struct WatchCourtProfileEditor: View {
                 }
             }
     }
-    private func save() {
+    private func save() -> Bool {
         if !isNew, let current = store.snapshot.players.first(where: { $0.id == player.id }), current != original {
             error = "This profile changed while you were editing. Go back and reopen it before saving. Your changes have not overwritten it."
-            errorFocused = true; return
+            errorFocused = true; return false
         }
         player.court.modifiedAt = Date(); player.court.revision += 1
-        if store.saveCourtMutation(.profile(player)) { dismiss() }
-        else { error = "Player could not be saved. Check the sport, access preferences and iPhone connection status."; errorFocused = true }
+        if store.saveCourtMutation(.profile(player)) { return true }
+        error = "Player could not be saved. Check the sport, access preferences and iPhone connection status."; errorFocused = true
+        return false
     }
 }
 

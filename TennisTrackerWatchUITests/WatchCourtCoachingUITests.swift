@@ -17,12 +17,13 @@ final class WatchCourtCoachingUITests: XCTestCase {
         }
         let button = app.buttons[label]
         reveal(button, label: label)
-        button.tap()
+        button.press(forDuration: 0.15)
     }
     private func reveal(_ button: XCUIElement, label: String) {
         for step in 0..<40 {
             let top = app.navigationBars.allElementsBoundByIndex.last(where: { $0.isHittable })?.frame.maxY ?? 48
-            if button.exists && button.isHittable && (button.frame.midY > top || ["Cancel", "Save"].contains(label)) {
+            if button.exists && button.isHittable &&
+                ((button.frame.midY > top && button.frame.midY < app.frame.maxY - 6) || ["Cancel", "Save"].contains(label)) {
                 return
             }
             let up = button.exists ? button.frame.midY > top : (step < 12 || step >= 32)
