@@ -10,6 +10,10 @@ on:
         description: Diagnose Watch scoring and coaching navigation
         type: boolean
         default: false
+      watch_hang_diagnostic:
+        description: Capture paired Watch threads during the two reproducing navigation journeys
+        type: boolean
+        default: false
       phone_regression_only:
         description: Check large-text navigation and saved tie-break persistence
         type: boolean
@@ -18,7 +22,7 @@ permissions:
   contents: read
 jobs:
   phone-interface:
-    if: ${{ !inputs.watch_navigation_only }}
+    if: ${{ !inputs.watch_navigation_only && !inputs.watch_hang_diagnostic }}
     runs-on: macos-latest
     timeout-minutes: 100
     steps:
@@ -65,7 +69,8 @@ jobs:
       - name: Run small Watch interface journeys
         env:
           EXPANSION_ONLY: ${{ inputs.expansion_only }}
-          WATCH_NAVIGATION_ONLY: ${{ inputs.watch_navigation_only }}
+          WATCH_NAVIGATION_ONLY: ${{ inputs.watch_navigation_only || inputs.watch_hang_diagnostic }}
+          WATCH_HANG_DIAGNOSTIC: ${{ inputs.watch_hang_diagnostic }}
         run: |
           set -euo pipefail
           SIZE=small-watch
@@ -97,6 +102,9 @@ jobs:
             python3 Scripts/sample_watch_test_process.py --output CourtWatchReview/thread-samples &
             SAMPLER_PID=$!
             trap 'kill "$SAMPLER_PID" 2>/dev/null || true' EXIT
+          fi
+          if [ "$WATCH_HANG_DIAGNOSTIC" = true ]; then
+            TEST_SELECTION=(-only-testing:TennisTrackerWatchUITests/TennisTrackerWatchUITests/testManualMatchResultSavesWithoutStartingLiveScoringAndWeatherAllowsMultipleChoices -only-testing:TennisTrackerWatchUITests/WatchCourtCoachingUITests/testAthleteProgressHasPeriodAndScopedResults)
           fi
           xcodebuild test -project TennisTrackeriOS.xcodeproj -scheme TennisTrackerWatchTests -destination "id=$ID" "${TEST_SELECTION[@]}" -parallel-testing-enabled NO -resultBundlePath CourtWatchUI.xcresult CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=YES CODE_SIGN_IDENTITY="-" 2>&1 | tee CourtWatchUI.log
       - name: Export interface evidence
