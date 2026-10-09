@@ -118,6 +118,10 @@ struct WatchCourtProfileEditor: View {
             Text(player.selectedSport.name)
             TextField("Primary goal", text: selected.primaryGoal)
             TextField("Development notes", text: selected.developmentNotes)
+            Toggle("Plan a review date", isOn: Binding(get: { selected.wrappedValue.reviewDate != nil }, set: { selected.wrappedValue.reviewDate = $0 ? Date() : nil }))
+            if selected.wrappedValue.reviewDate != nil {
+                DatePicker("Review date", selection: Binding(get: { selected.wrappedValue.reviewDate ?? Date() }, set: { selected.wrappedValue.reviewDate = $0 }), displayedComponents: .date)
+            }
             NavigationLink("Access Preferences") { Form { CourtAccessFields(sport: player.selectedSport.sport, access: selected.access) } }
             NavigationLink("Default Match Format") { Form { CourtRuleFields(sport: player.selectedSport.sport, rules: selected.rules) } }
             if player.court.selected.role == .coach && player.court.coachOwnerID == nil {
@@ -127,7 +131,12 @@ struct WatchCourtProfileEditor: View {
             Button("Save Player") { save() }.disabled(player.name.isBlank)
                 .accessibilityIdentifier("watchSaveCourtPlayer")
         }.navigationTitle(isNew ? "Add Player" : "Edit Player").pickerStyle(.navigationLink)
-            .onAppear { if original == nil { original = player } }
+            .onAppear {
+                if original == nil {
+                    original = player
+                    if player.court.sports.contains(where: { $0.sport == store.courtSport }) { player.court.selectedSportID = store.courtSport.id }
+                }
+            }
     }
     private func save() {
         if !isNew, let current = store.snapshot.players.first(where: { $0.id == player.id }), current != original {

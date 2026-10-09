@@ -238,7 +238,7 @@ struct CourtAthleteDetail: View {
             } else { Text("This player is unavailable. No activity will be recorded against another player.") }
         }
         .navigationTitle(athlete?.displayName ?? "Player unavailable").tennisThemedList()
-        .sheet(isPresented: $editing) { if let athlete { CourtProfileEditor(player: athlete) } }
+        .sheet(isPresented: $editing) { if let athlete { CourtProfileEditor(player: store.playerForSelectedSport(athlete)) } }
     }
 }
 

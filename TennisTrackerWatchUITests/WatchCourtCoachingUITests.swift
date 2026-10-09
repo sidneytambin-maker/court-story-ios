@@ -1,0 +1,38 @@
+import XCTest
+
+final class WatchCourtCoachingUITests: XCTestCase {
+    private let app = XCUIApplication()
+    override func setUp() { continueAfterFailure = false }
+    private func launch(_ mode: String = "Power", large: Bool = false) {
+        app.launchArguments = ["-ui-testing-watch", "-ui-testing-court-coach", "-watch-page=Overview", "-watch-mode=" + mode]
+        if large { app.launchArguments.append("-watch-large-text") }
+        app.launch()
+        XCTAssertTrue(app.buttons["Your Players"].waitForExistence(timeout: 30))
+    }
+    private func tap(_ label: String) {
+        let button = app.buttons[label]
+        for _ in 0..<15 { if button.exists && button.isHittable { button.tap(); return }; app.swipeUp() }
+        XCTFail("Could not reach \(label)")
+    }
+    private func evidence(_ name: String) {
+        let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = name; screenshot.lifetime = .keepAlways; add(screenshot)
+        let tree = XCTAttachment(string: app.debugDescription); tree.name = name + " accessibility"; tree.lifetime = .keepAlways; add(tree)
+    }
+    func testPlayerJournalProvidesObservationAndMeasurementJourneys() {
+        launch(); tap("Your Players"); tap("Demo Player Morgan"); tap("Journal and Progress")
+        tap("Add Observation")
+        XCTAssertTrue(app.textFields["What happened"].waitForExistence(timeout: 10))
+        evidence("Watch observation editor")
+        tap("Cancel")
+        tap("Record Measured Drill")
+        XCTAssertTrue(app.textFields["Drill name"].waitForExistence(timeout: 10))
+        evidence("Watch measured drill editor")
+        tap("Cancel")
+    }
+    func testBasicRosterKeepsHistoryWithoutAdvancedJournalRoute() {
+        launch("Basic", large: true); tap("Your Players"); tap("Demo Player Morgan")
+        for _ in 0..<8 { app.swipeUp() }
+        XCTAssertFalse(app.buttons["Journal and Progress"].exists)
+        evidence("Large text Basic player details")
+    }
+}

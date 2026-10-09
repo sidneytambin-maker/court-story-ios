@@ -1,6 +1,11 @@
 name: Court Story interface regression check
 on:
   workflow_dispatch:
+    inputs:
+      expansion_only:
+        description: Run only the new coaching journeys
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -12,12 +17,15 @@ jobs:
       - run: brew install xcodegen
       - run: xcodegen generate --spec project-tests.yml
       - name: Run iPhone interface journeys
+        env:
+          EXPANSION_ONLY: ${{ inputs.expansion_only }}
         run: |
           set -euo pipefail
-          RUNTIME=$(xcrun simctl list runtimes --json | jq -r '[.runtimes[] | select(.isAvailable and (.identifier | contains("iOS")))][-1].identifier')
-          ID=$(xcrun simctl create CourtSmallPhone com.apple.CoreSimulator.SimDeviceType.iPhone-SE-3rd-generation "$RUNTIME")
+          ID=$(python3 Scripts/create_apple_test_simulator.py small-phone)
           xcrun simctl bootstatus "$ID" -b
-          xcodebuild test -project TennisTrackeriOS.xcodeproj -scheme TennisTracker -destination "id=$ID" -only-testing:TennisTrackerUITests -parallel-testing-enabled NO -resultBundlePath CourtPhoneUI.xcresult CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" 2>&1 | tee CourtPhoneUI.log
+          TEST_SELECTION=(-only-testing:TennisTrackerUITests)
+          if [ "$EXPANSION_ONLY" = true ]; then TEST_SELECTION=(-only-testing:TennisTrackerUITests/CourtCoachingUITests); fi
+          xcodebuild test -project TennisTrackeriOS.xcodeproj -scheme TennisTracker -destination "id=$ID" "${TEST_SELECTION[@]}" -parallel-testing-enabled NO -resultBundlePath CourtPhoneUI.xcresult CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" 2>&1 | tee CourtPhoneUI.log
       - name: Export interface evidence
         if: always()
         run: |
@@ -43,12 +51,16 @@ jobs:
       - run: brew install xcodegen
       - run: xcodegen generate --spec project-watch-tests.yml
       - name: Run small Watch interface journeys
+        env:
+          EXPANSION_ONLY: ${{ inputs.expansion_only }}
         run: |
           set -euo pipefail
-          ID=$(xcrun simctl list devices available --json | jq -r '[.devices | to_entries[] | select(.key | contains("watchOS")) | .value[] | select(.isAvailable and (.name | test("40mm|41mm|42mm")))][0].udid')
+          ID=$(python3 Scripts/create_apple_test_simulator.py small-watch)
           test "$ID" != null
           xcrun simctl bootstatus "$ID" -b
-          xcodebuild test -project TennisTrackeriOS.xcodeproj -scheme TennisTrackerWatchTests -destination "id=$ID" -skip-testing:TennisTrackerWatchUITests/WatchWorkoutStartupUITests -parallel-testing-enabled NO -resultBundlePath CourtWatchUI.xcresult CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=YES CODE_SIGN_IDENTITY="-" 2>&1 | tee CourtWatchUI.log
+          TEST_SELECTION=(-skip-testing:TennisTrackerWatchUITests/WatchWorkoutStartupUITests)
+          if [ "$EXPANSION_ONLY" = true ]; then TEST_SELECTION=(-only-testing:TennisTrackerWatchUITests/WatchCourtCoachingUITests); fi
+          xcodebuild test -project TennisTrackeriOS.xcodeproj -scheme TennisTrackerWatchTests -destination "id=$ID" "${TEST_SELECTION[@]}" -parallel-testing-enabled NO -resultBundlePath CourtWatchUI.xcresult CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=YES CODE_SIGN_IDENTITY="-" 2>&1 | tee CourtWatchUI.log
       - name: Export interface evidence
         if: always()
         run: |

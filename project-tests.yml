@@ -21,6 +21,18 @@ targets:
         CFBundleName: Court Story
         CFBundleShortVersionString: "0.9.0"
         CFBundleVersion: "21"
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: app.courtstory.private-backup
+            UTTypeDescription: Court Story Private Backup
+            UTTypeConformsTo: [com.apple.package]
+            UTTypeTagSpecification:
+              public.filename-extension: [courtstorybackup]
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Court Story Private Backup
+            CFBundleTypeRole: Editor
+            LSHandlerRank: Owner
+            LSItemContentTypes: [app.courtstory.private-backup]
+            LSTypeIsPackage: true
         CFBundleURLTypes:
           - CFBundleURLName: com.inclusophy.tennistracker.dev
             CFBundleURLSchemes:

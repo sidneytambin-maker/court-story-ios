@@ -31,6 +31,11 @@ final class TennisStore: ObservableObject {
         load()
         if storageError == nil { migrateIfNeeded() }
         #if DEBUG && targetEnvironment(simulator)
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-court-coach") {
+            data = CourtDemoLibrary.make()
+            if ProcessInfo.processInfo.arguments.contains("-ui-court-basic") { data.settings.trackingMode = .basic }
+            if ProcessInfo.processInfo.arguments.contains("-ui-court-standard") { data.settings.trackingMode = .standard }
+        }
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-match-list") {
             data = TennisMatchListUITestFixture.make()
         }
@@ -662,6 +667,9 @@ extension TennisStore {
     @discardableResult
     func saveCourtProfile(_ player: PlayerProfile) -> Bool {
         guard !player.name.isBlank else { announce("Enter a name."); return false }
+        if let current = data.players.first(where: { $0.id == player.id }), current.court.revision != player.court.revision {
+            announce("This profile changed while you were editing. Reopen it before saving so the newer changes are kept."); return false
+        }
         var candidate = data
         var saved = player
         saved.court.modifiedAt = Date()
@@ -734,6 +742,9 @@ extension TennisStore {
     @discardableResult
     func saveObservation(_ record: CourtObservation) -> Bool {
         guard CourtFeature.observations.isAvailable(in: data.settings.trackingMode), !data.court.deletedIDs.contains(record.id) else { return false }
+        if let current = data.court.observations.first(where: { $0.id == record.id }), current.revision != record.revision {
+            announce("This observation changed while you were editing. Reopen it before saving."); return false
+        }
         var candidate = data
         var next = record
         next.modifiedAt = Date()
@@ -746,6 +757,9 @@ extension TennisStore {
     @discardableResult
     func saveMeasuredDrill(_ record: CourtMeasuredDrill) -> Bool {
         guard CourtFeature.measuredDrills.isAvailable(in: data.settings.trackingMode), !data.court.deletedIDs.contains(record.id) else { return false }
+        if let current = data.court.drills.first(where: { $0.id == record.id }), current.revision != record.revision {
+            announce("This measurement changed while you were editing. Reopen it before saving."); return false
+        }
         var candidate = data
         var next = record
         next.modifiedAt = Date(); next.revision = (data.court.drills.first { $0.id == record.id }?.revision ?? 0) + 1

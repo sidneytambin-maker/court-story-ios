@@ -27,6 +27,9 @@ enum CourtWatchMutation: Codable, Equatable {
             data.settings = settings; data.onboardingCompleted = true
         case .profile(let value):
             guard !value.name.isBlank else { return false }
+            if value.isArchived && (data.matches.contains { $0.playerID == value.id && $0.status == .inProgress } ||
+                data.trainingSessions.contains { $0.playerID == value.id && $0.isActive } ||
+                data.tournaments.contains { $0.playerID == value.id && $0.actualStart != nil && $0.actualFinish == nil }) { return false }
             if let index = data.players.firstIndex(where: { $0.id == value.id }) {
                 let old = data.players[index].court, next = value.court
                 guard old.coachOwnerID == next.coachOwnerID,

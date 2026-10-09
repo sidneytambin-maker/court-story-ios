@@ -31,6 +31,7 @@ struct CourtObservationEditor: View {
                         Section {
                             Button("Plan practice from this observation", systemImage: "calendar.badge.plus") {
                                 if store.saveObservation(observation) {
+                                    observation = store.data.court.observations.first { $0.id == observation.id } ?? observation
                                     var draft = observation.practicePlan(on: Date().addingTimeInterval(86400))
                                     draft.court.rules = athlete.court.sports.first { $0.sport == observation.sport }?.rules
                                     draft.court.access = athlete.court.sports.first { $0.sport == observation.sport }?.access

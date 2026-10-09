@@ -14,7 +14,7 @@ jobs:
       - name: Compile phone and run domain tests
         run: |
           set -euo pipefail
-          ID=$(xcrun simctl list devices available --json | jq -r '[.devices | to_entries[] | select(.key | contains("iOS")) | .value[] | select(.isAvailable and (.name | startswith("iPhone")))][0].udid')
+          ID=$(python3 Scripts/create_apple_test_simulator.py phone)
           xcrun simctl bootstatus "$ID" -b
           xcodebuild test -project TennisTrackeriOS.xcodeproj -scheme TennisTracker -destination "id=$ID" -only-testing:TennisTrackerTests -parallel-testing-enabled NO -resultBundlePath CourtDomain.xcresult CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" 2>&1 | tee CourtDomain.log
       - uses: actions/upload-artifact@v4
@@ -35,8 +35,8 @@ jobs:
       - name: Compile Watch and test workout startup and saving
         run: |
           set -euo pipefail
-          ID=$(xcrun simctl list devices available --json | jq -r '[.devices | to_entries[] | select(.key | contains("watchOS")) | .value[] | select(.isAvailable and (.name | contains("Ultra")))][0].udid')
-          PHONE=$(xcrun simctl list devices available --json | jq -r '[.devices | to_entries[] | select(.key | contains("iOS")) | .value[] | select(.isAvailable and (.name | startswith("iPhone")))][0].udid')
+          ID=$(python3 Scripts/create_apple_test_simulator.py watch)
+          PHONE=$(python3 Scripts/create_apple_test_simulator.py phone)
           PAIR=$(xcrun simctl list pairs --json | jq -r --arg watch "$ID" '.pairs | to_entries[] | select(.value.watch.udid == $watch) | .key' | head -1)
           if [ -z "$PAIR" ]; then
             PAIR=$(xcrun simctl pair "$ID" "$PHONE")
