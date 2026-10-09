@@ -82,7 +82,11 @@ jobs:
           python3 Scripts/sample_watch_test_process.py --output WatchReview/thread-samples --seconds 5400 &
           SAMPLER_PID=$!
           trap 'kill "$SAMPLER_PID" 2>/dev/null || true' EXIT
-          xcodebuild test -project TennisTrackeriOS.xcodeproj -scheme TennisTrackerWatchTests -destination "id=$ID" -parallel-testing-enabled NO -configuration Debug -resultBundlePath WatchBetaTests.xcresult CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=YES CODE_SIGN_IDENTITY="-" 2>&1 | tee WatchBetaTests.log
+          # Health owns simulator-global permission and sensor services. Exercise
+          # the real save/readback on fresh services, before the long UI suite.
+          # Both invocations must pass; no Health test is replaced or retried.
+          xcodebuild test -project TennisTrackeriOS.xcodeproj -scheme TennisTrackerWatchTests -destination "id=$ID" -only-testing:TennisTrackerWatchUITests/WatchWorkoutStartupUITests -parallel-testing-enabled NO -configuration Debug -resultBundlePath WatchWorkoutTests.xcresult CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=YES CODE_SIGN_IDENTITY="-" 2>&1 | tee WatchWorkoutTests.log
+          xcodebuild test -project TennisTrackeriOS.xcodeproj -scheme TennisTrackerWatchTests -destination "id=$ID" -skip-testing:TennisTrackerWatchUITests/WatchWorkoutStartupUITests -parallel-testing-enabled NO -configuration Debug -resultBundlePath WatchBetaTests.xcresult CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=YES CODE_SIGN_IDENTITY="-" 2>&1 | tee WatchBetaTests.log
       - name: Export Watch test summary and screenshots
         if: always()
         run: |
@@ -91,9 +95,15 @@ jobs:
             xcrun xcresulttool get test-results summary --path WatchBetaTests.xcresult > WatchReview/summary.json
             xcrun xcresulttool export attachments --path WatchBetaTests.xcresult --output-path WatchReview/screenshots
           fi
+          if [ -d WatchWorkoutTests.xcresult ]; then
+            mkdir -p WatchWorkoutReview
+            xcrun xcresulttool get test-results summary --path WatchWorkoutTests.xcresult > WatchWorkoutReview/summary.json
+            xcrun xcresulttool export attachments --path WatchWorkoutTests.xcresult --output-path WatchWorkoutReview/screenshots
+          fi
           if [ -n "${WATCH_SIMULATOR_ID:-}" ]; then
             mkdir -p WatchReview
             xcrun simctl spawn "$WATCH_SIMULATOR_ID" log show --last 100m --style compact --predicate 'subsystem == "com.inclusophy.tennistracker.dev.watchkitapp" AND category == "Workout"' > WatchReview/workout-diagnostics.log
+            xcrun simctl spawn "$WATCH_SIMULATOR_ID" log show --last 100m --style compact --info --predicate '(process == "healthd" OR subsystem BEGINSWITH "com.apple.HealthKit") AND (eventMessage CONTAINS[c] "session" OR eventMessage CONTAINS[c] "workout" OR eventMessage CONTAINS[c] "aggregation")' > WatchReview/health-system-diagnostics.log
           fi
       - uses: actions/upload-artifact@v4
         if: always()
@@ -103,6 +113,9 @@ jobs:
             WatchBetaTests.xcresult
             WatchReview
             WatchBetaTests.log
+            WatchWorkoutTests.xcresult
+            WatchWorkoutTests.log
+            WatchWorkoutReview
             CourtPaired.log
           retention-days: 7
   release-privacy:

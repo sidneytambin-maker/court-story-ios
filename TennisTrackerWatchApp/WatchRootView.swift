@@ -217,7 +217,14 @@ private struct WatchLiveView: View {
                 WatchTournamentRow(tournament: tournament)
             }
             if store.activeTraining == nil, let training = store.completedTraining {
-                if store.isFinishingWorkout { ProgressView("Saving workout") }
+                if store.isFinishingWorkout {
+                    VStack(spacing: 8) {
+                        ProgressView().accessibilityHidden(true)
+                        Text(store.workoutMessage).font(.body)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier("workoutSaveProgress")
+                    }
+                }
                 else if !store.workoutMessage.isEmpty {
                     Text(store.workoutMessage).font(.body)
                         .accessibilityIdentifier("workoutSaveOutcome")

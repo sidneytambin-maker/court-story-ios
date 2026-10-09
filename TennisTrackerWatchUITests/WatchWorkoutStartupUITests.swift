@@ -73,6 +73,21 @@ final class WatchWorkoutStartupUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["Workout saved to Apple Health."].exists)
     }
 
+    func testPendingHealthSaveShowsProgressWithoutPrematureSuccess() {
+        let app = start("delayed-save")
+        assertRecording(app)
+        finish(app)
+        let progress = app.staticTexts["workoutSaveProgress"]
+        XCTAssertTrue(progress.waitForExistence(timeout: 5), app.debugDescription)
+        XCTAssertEqual(progress.label, "Session timing saved. Apple Health is still finishing the workout.")
+        XCTAssertFalse(app.staticTexts["Workout saved to Apple Health."].exists)
+        XCTAssertFalse(app.buttons["endTrainingWorkout"].exists)
+        capture(app, "Watch pending Health save with readable progress")
+        XCTAssertTrue(app.staticTexts["Workout saved to Apple Health."].waitForExistence(timeout: 25))
+        XCTAssertFalse(progress.exists)
+        XCTAssertEqual(app.buttons.matching(identifier: "Completed training summary").count, 1)
+    }
+
     func testNativeHealthKitStartAndSave() {
         // Uses HKWorkoutSession and HKLiveWorkoutBuilder, not the fault-injection
         // client. Simulator success still cannot establish physical sensor data.

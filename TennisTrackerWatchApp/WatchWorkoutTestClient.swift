@@ -54,6 +54,10 @@ final class WatchWorkoutTestClient: TennisWorkoutClient {
         guard isWorkoutRunning else { throw TennisWorkoutFailure.notRunning }
         isWorkoutRunning = false
         if mode == "save-failure" { throw TennisWorkoutFailure.saveTimedOut }
+        if mode == "delayed-save" {
+            onHealthStateChange?(.finishing, "Session timing saved. Apple Health is still finishing the workout.")
+            try await Task.sleep(nanoseconds: 15_000_000_000)
+        }
         return TennisWorkoutResult(workoutID: UUID(), durationSeconds: max(0, date.timeIntervalSince(workoutStartedAt ?? date)))
     }
 
