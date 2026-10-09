@@ -72,11 +72,23 @@ struct TennisAchievementsView: View {
 
 struct TennisAchievementsSummary: View {
     let achievements: [TennisAchievement]
+    @Environment(\.dynamicTypeSize) private var typeSize
+    @Environment(\.colorScheme) private var colorScheme
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("\(achievements.filter(\.earned).count) of \(achievements.count) earned").font(.headline)
             if let next = achievements.filter({ !$0.earned }).max(by: { $0.fraction < $1.fraction }) {
-                TennisAchievementRow(achievement: next)
+                HStack(alignment: .top, spacing: 12) {
+                    if !typeSize.isAccessibilitySize { TennisAchievementBadge(achievement: next) }
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(next.title).font(.callout.weight(.semibold))
+                        Text("\(next.progress) of \(next.target)").font(.caption).monospacedDigit()
+                        ProgressView(value: next.fraction)
+                            .tint(colorScheme == .dark ? TennisSportStyle.ball : TennisSportStyle.court)
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+                .accessibilityHidden(true)
             } else { Text("Every badge earned. Congratulations!") }
         }
         .accessibilityElement(children: .ignore)
