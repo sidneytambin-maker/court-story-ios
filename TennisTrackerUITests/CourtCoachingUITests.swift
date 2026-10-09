@@ -58,7 +58,14 @@ final class CourtCoachingUITests: XCTestCase {
         let files = app.buttons["addCoachingMediaFiles"]; reveal(files); evidence("Large text media library")
         files.tap()
         let cancel = app.buttons["Cancel"].firstMatch
-        XCTAssertTrue(cancel.waitForExistence(timeout: 10)); cancel.tap()
+        // Files runs in a separate service, which may still be starting on a fresh device.
+        XCTAssertTrue(cancel.waitForExistence(timeout: 40))
+        XCTAssertTrue(cancel.isHittable)
+        XCTAssertGreaterThanOrEqual(cancel.frame.width, 40)
+        evidence("Large text Files picker ready to cancel")
+        cancel.tap()
         XCTAssertTrue(app.buttons["addCoachingMediaFiles"].waitForExistence(timeout: 10))
+        XCTAssertFalse(cancel.exists)
+        XCTAssertFalse(app.buttons["saveCoachingMedia"].exists)
     }
 }
