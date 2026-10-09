@@ -98,6 +98,10 @@ final class WatchCourtCoachingUITests: XCTestCase {
         tap("Access Preferences")
         XCTAssertTrue(app.navigationBars["Access Preferences"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["accessPreferenceSummary"].exists)
+        let wheelchair = app.switches["accessPreference_Wheelchair"]
+        reveal(wheelchair, label: "Wheelchair preference")
+        wheelchair.press(forDuration: 0.15)
+        XCTAssertEqual(wheelchair.value as? String, "1")
         evidence("Watch athlete access preferences")
         app.navigationBars["Access Preferences"].buttons.firstMatch.tap()
         tap("Default Match Format")
@@ -108,6 +112,28 @@ final class WatchCourtCoachingUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Demo Player Morgan"].waitForExistence(timeout: 10))
         tap("Edit Player")
         XCTAssertEqual(app.textFields["watchCourtPlayerName"].value as? String, "Demo Player Morgan")
+        tap("Access Preferences")
+        XCTAssertTrue(app.staticTexts["accessPreferenceSummary"].label.contains("Wheelchair"))
+    }
+    func testRosterUpdatesAfterArchivingAndRestoringAthlete() {
+        launch(); tap("Your Players"); tap("Demo Player Morgan")
+        tap("Archive Player")
+        tap("watchConfirmPlayerArchiveChange")
+        XCTAssertTrue(app.buttons["Restore Player"].waitForExistence(timeout: 10))
+        app.navigationBars["Demo Player Morgan"].buttons.firstMatch.tap()
+        XCTAssertFalse(app.buttons["Demo Player Morgan"].exists)
+        let archived = app.switches["Show archived players"]
+        reveal(archived, label: "Show archived players")
+        archived.press(forDuration: 0.15)
+        tap("Demo Player Morgan"); tap("Restore Player")
+        tap("watchConfirmPlayerArchiveChange")
+        XCTAssertTrue(app.buttons["Archive Player"].waitForExistence(timeout: 10))
+        app.navigationBars["Demo Player Morgan"].buttons.firstMatch.tap()
+        XCTAssertFalse(app.buttons["Demo Player Morgan"].exists)
+        reveal(archived, label: "Show archived players")
+        archived.press(forDuration: 0.15)
+        XCTAssertTrue(app.buttons["Demo Player Morgan"].waitForExistence(timeout: 10))
+        evidence("Watch roster refreshed after archive and restore")
     }
     func testWelcomeValidatesNameAndCancelRetainsRoleChoice() {
         app.launchArguments = ["-ui-testing-watch", "-ui-testing-court-welcome", "-ui-testing-reset-setup"]

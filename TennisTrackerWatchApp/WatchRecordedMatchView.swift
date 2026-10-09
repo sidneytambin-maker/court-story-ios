@@ -1,12 +1,15 @@
 import SwiftUI
 
-struct WatchRecordedMatchView: View {
+struct WatchRecordedMatchView: View, Equatable {
     @EnvironmentObject private var store: WatchTennisStore
     var linkedTraining: TrainingSession?
     @State private var match = MatchRecord(playerID: UUID())
     @State private var configured = false
     @State private var validationMessage = ""
     @State private var scoreError = ""
+
+    // Compare route inputs, not SwiftUI's changing navigation environment.
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.linkedTraining == rhs.linkedTraining }
 
     var body: some View {
         #if DEBUG && targetEnvironment(simulator)

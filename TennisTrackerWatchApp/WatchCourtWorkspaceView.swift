@@ -16,7 +16,7 @@ struct WatchCourtWorkspaceView: View {
                         Text("My own activity, \(owner.displayName)").tag(Optional<UUID>.none)
                         ForEach(store.roster) { Text($0.displayName).tag(Optional($0.id)) }
                     }.accessibilityIdentifier("watchRecordingAthlete")
-                    NavigationLink("Players") { WatchCourtRosterView() }
+                    NavigationLink("Players") { WatchCourtRosterView().equatable() }
                 }
                 NavigationLink("My Profile") { WatchCourtProfileEditor(player: owner) }
                 NavigationLink("Add Sport") { WatchCourtAddSportView(player: owner) }
@@ -25,10 +25,12 @@ struct WatchCourtWorkspaceView: View {
     }
 }
 
-struct WatchCourtRosterView: View {
+struct WatchCourtRosterView: View, Equatable {
     @EnvironmentObject private var store: WatchTennisStore
     @State private var showArchived = false
     @State private var newPlayer: PlayerProfile?
+    // There are no route inputs. Store and local-state changes remain observed.
+    static func == (lhs: Self, rhs: Self) -> Bool { true }
     private var players: [PlayerProfile] {
         store.snapshot.players.filter {
             $0.court.coachOwnerID == store.workspaceOwner?.id && $0.isArchived == showArchived &&
@@ -107,6 +109,7 @@ private struct WatchCourtPlayerView: View {
                         player.court.modifiedAt = Date(); player.court.revision += 1
                         _ = store.saveCourtMutation(.profile(player))
                     }
+                    .accessibilityIdentifier("watchConfirmPlayerArchiveChange")
                 }
                 Button("Cancel", role: .cancel) {}
             }

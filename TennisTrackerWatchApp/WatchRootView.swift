@@ -81,7 +81,7 @@ private struct WatchTrackView: View {
             Section {
                 NavigationLink { WatchTrainingEntryView() } label: { Label("Track Training Session", systemImage: "figure.tennis") }
                 NavigationLink { WatchCourtMatchSetupView() } label: { Label("Live Score a Match", systemImage: "tennisball.fill") }
-                NavigationLink { WatchRecordedMatchView() } label: { Label("Record Match Result", systemImage: "square.and.pencil") }
+                NavigationLink { WatchRecordedMatchView().equatable() } label: { Label("Record Match Result", systemImage: "square.and.pencil") }
                     .accessibilityHint("Enter players, a completed result, sets and conditions without live scoring.")
                 NavigationLink { WatchTournamentManagementView() } label: { Label("Manage Tournaments", systemImage: "trophy.fill") }
                     .accessibilityHint("Add, review, edit or delete your tournaments.")
@@ -235,7 +235,7 @@ private struct WatchLiveView: View {
                 if training.trainingType == .matchPlay {
                     NavigationLink("Record Practice Result") {
                         if training.court.rules != nil || training.court.sport.sport != .tennis {
-                            WatchRecordedMatchView(linkedTraining: training)
+                            WatchRecordedMatchView(linkedTraining: training).equatable()
                         } else { WatchPracticeResultView() }
                     }
                 }

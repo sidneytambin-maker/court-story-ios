@@ -18,7 +18,7 @@ struct WatchTodayView: View {
                 }.accessibilityHint("Change sport, role or the player you are recording for.")
             }
             if store.courtRole == .coach {
-                NavigationLink("Your Players") { WatchCourtRosterView() }
+                NavigationLink("Your Players") { WatchCourtRosterView().equatable() }
                 if let athlete = store.snapshot.court.activeAthleteID,
                    CourtFeature.observations.isAvailable(in: store.snapshot.settings.trackingMode) {
                     NavigationLink("Player Journal") { WatchCourtJournalView(athleteID: athlete) }
