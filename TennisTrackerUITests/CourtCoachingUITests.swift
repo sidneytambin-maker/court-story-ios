@@ -32,7 +32,7 @@ final class CourtCoachingUITests: XCTestCase {
         XCTAssertTrue(happened.waitForExistence(timeout: 10)); happened.tap(); happened.typeText(". UI edit retained")
         app.buttons["saveObservation"].tap()
         let report = app.buttons["Preview progress report"]
-        reveal(report); report.tap()
+        revealPhoneElement(report, in: app, searchingUp: true); report.tap()
         XCTAssertTrue(app.switches["Include private observations"].waitForExistence(timeout: 10))
         XCTAssertEqual(app.switches["Include private observations"].value as? String, "0")
         XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", "UI edit retained", "UI edit retained")).firstMatch.exists)
