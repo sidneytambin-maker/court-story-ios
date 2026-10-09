@@ -9,6 +9,8 @@ struct TennisAchievementRecord: Codable, Equatable, Identifiable {
     var seconds: Double = 0
     var linkedTrainingID: UUID?
     var legacyPractice = false
+    var courtSport: CourtSportSelection?
+    var usesCourtScoring: Bool?
 
     static func collect(matches: [MatchRecord], training: [TrainingSession], tournaments: [TournamentRecord], now: Date = Date()) -> [Self] {
         var records = [Self]()
@@ -25,7 +27,8 @@ struct TennisAchievementRecord: Codable, Equatable, Identifiable {
                 }
             }
             records.append(Self(id: session.id, playerID: session.playerID, date: session.actualStart ?? session.date,
-                metrics: metrics, seconds: TennisDurationFormatter.trainingSeconds(session), legacyPractice: session.practiceResult != nil))
+                metrics: metrics, seconds: TennisDurationFormatter.trainingSeconds(session), legacyPractice: session.practiceResult != nil,
+                courtSport: session.court.sport))
         }
         for match in matches {
             var metrics = [String]()
@@ -36,12 +39,12 @@ struct TennisAchievementRecord: Codable, Equatable, Identifiable {
             }
             records.append(Self(id: match.id, playerID: match.playerID, date: match.date,
                 metrics: metrics,
-                linkedTrainingID: match.trainingSessionID))
+                linkedTrainingID: match.trainingSessionID, courtSport: match.court.sport, usesCourtScoring: match.usesCourtScoring))
         }
         for tournament in tournaments {
             var metrics = tournament.name.isBlank ? [] : ["tournament"]
             if !metrics.isEmpty && tournament.finalResult == .completed { metrics.append("completedTournament") }
-            records.append(Self(id: tournament.id, playerID: tournament.playerID, date: tournament.date, metrics: metrics))
+            records.append(Self(id: tournament.id, playerID: tournament.playerID, date: tournament.date, metrics: metrics, courtSport: tournament.court.sport))
         }
         var seen = Set<UUID>()
         return records.filter { seen.insert($0.id).inserted }

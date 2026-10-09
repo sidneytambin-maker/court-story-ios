@@ -22,14 +22,16 @@ struct WatchPageSelector: View {
         }
         .accessibilityLabel("Menu")
         .accessibilityIdentifier("watchScreenMenu")
-        .accessibilityHint("Opens app screens, achievements, sound preview and privacy policy. You can also choose a screen using Actions.")
+        .accessibilityHint("Opens screens, sport and player selection, Health access and settings. You can also choose a screen using Actions.")
         .sheet(isPresented: $showingPages) {
             NavigationStack {
                 List {
                     ForEach(TennisWatchPage.allCases) { page in
                         Button(page.rawValue) { store.page = page; showingPages = false }
                     }
-                    NavigationLink("Achievements") { TennisAchievementsView(achievements: store.snapshot.achievements) }
+                    NavigationLink("Sport and Player") { WatchCourtWorkspaceView() }
+                        .accessibilityIdentifier("watchMenuWorkspace")
+                    NavigationLink("Achievements") { TennisAchievementsView(achievements: store.scopedSnapshot.achievements) }
                         .accessibilityIdentifier("watchMenuAchievements")
                     NavigationLink("Health Access") { WatchWorkoutSettingsView() }
                         .accessibilityIdentifier("watchMenuHealthAccess")

@@ -23,7 +23,7 @@ struct WatchMatchScoringChoices: View {
     @EnvironmentObject private var store: WatchTennisStore
 
     var body: some View {
-        let groups = TennisMatchListGroups(matches: store.snapshot.matches)
+        let groups = TennisMatchListGroups(matches: store.scopedSnapshot.matches)
         if groups[.inProgress].isEmpty && groups[.upcoming].isEmpty {
             Text("No unfinished matches")
         }

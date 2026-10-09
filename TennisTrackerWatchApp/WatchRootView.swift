@@ -107,7 +107,7 @@ struct WatchTrainingSetupView: View {
                 WatchPlayerChoices(players: store.snapshot.players.filter { $0.id != store.selectedPlayer?.id }, selectedIDs: $context.participantIDs, otherSelected: $otherPlayers)
             }
             .accessibilityValue(context.participantSummary(in: store.snapshot.players).fallback("None"))
-            TennisTournamentPicker(tournaments: store.snapshot.tournaments, tournamentID: $context.tournamentID, customName: $context.customTournamentName)
+            TennisTournamentPicker(tournaments: store.scopedSnapshot.tournaments, tournamentID: $context.tournamentID, customName: $context.customTournamentName)
             Button("Start Workout") {
                 context.captureLegacyNames(coaches: store.snapshot.setup.coaches, players: store.snapshot.players)
                 context.coachesNeedDetails = context.needsOtherCoachName
@@ -164,7 +164,7 @@ struct WatchTournamentSetupView: View {
     var body: some View {
         Form {
             Section("Existing tournament") {
-                ForEach(store.snapshot.tournaments.filter { !$0.isCompleted }) { tournament in
+                ForEach(store.scopedSnapshot.tournaments.filter { !$0.isCompleted }) { tournament in
                     Button(tournament.name) { store.beginTournament(tournament); dismiss() }
                 }
             }
@@ -177,6 +177,7 @@ struct WatchTournamentSetupView: View {
                 Button("Begin Tournament") {
                     guard let player = store.selectedPlayer else { return }
                     var tournament = TennisWatchActivityFactory.tournament(playerID: player.id)
+                    tournament.court = CourtActivity(player: player, coachID: store.capturingCoachID)
                     tournament.name = customName.trimmingCharacters(in: .whitespacesAndNewlines)
                     if let template = store.snapshot.setup.tournamentTemplates.first(where: { $0.id == templateID }) {
                         tournament.templateID = template.id; tournament.name = template.name
@@ -198,6 +199,7 @@ struct WatchTournamentSetupView: View {
 
 private struct WatchLiveView: View {
     @EnvironmentObject private var store: WatchTennisStore
+    @AccessibilityFocusState private var outcomeFocused: Bool
     var body: some View {
         List {
             if store.pendingHealthStart != nil { WatchWorkoutStartupView() }
@@ -208,9 +210,13 @@ private struct WatchLiveView: View {
                 WatchTournamentRow(tournament: tournament)
             }
             if store.activeTraining == nil, let training = store.completedTraining {
-                WatchTrainingRow(training: training, identifier: "Completed training summary")
                 if store.isFinishingWorkout { ProgressView("Saving workout") }
-                else if !store.workoutMessage.isEmpty { Text(store.workoutMessage).font(.footnote) }
+                else if !store.workoutMessage.isEmpty {
+                    Text(store.workoutMessage).font(.body)
+                        .accessibilityIdentifier("workoutSaveOutcome")
+                        .accessibilityFocused($outcomeFocused)
+                }
+                WatchTrainingRow(training: training, identifier: "Completed training summary")
                 if training.trainingType == .matchPlay {
                     NavigationLink("Record Practice Result") { WatchPracticeResultView() }
                 }
@@ -219,6 +225,9 @@ private struct WatchLiveView: View {
             }
         }
         .navigationTitle("Live")
+        .onChange(of: store.isFinishingWorkout) { _, saving in
+            if !saving && store.completedTraining != nil { outcomeFocused = true }
+        }
     }
 }
 
@@ -248,11 +257,11 @@ private struct WatchPracticeResultView: View {
 
 private struct WatchRecentView: View {
     @EnvironmentObject private var store: WatchTennisStore
-    private var matches: [MatchRecord] { store.snapshot.matches }
-    private var training: [TrainingSession] { Array(store.snapshot.trainingSessions.filter { !$0.needsDetails && !$0.isActive && ($0.actualFinish != nil || $0.expectedEndDate < Date()) }.sorted { $0.date > $1.date }.prefix(5)) }
-    private var tournaments: [TournamentRecord] { Array(store.snapshot.tournaments.filter { $0.isCompleted && !$0.needsDetails }.sorted { $0.date > $1.date }.prefix(3)) }
-    private var trainingNeedingDetails: [TrainingSession] { store.snapshot.trainingSessions.filter { $0.needsDetails && !$0.isActive } }
-    private var tournamentsNeedingDetails: [TournamentRecord] { store.snapshot.tournaments.filter { $0.needsDetails && $0.id != store.activeTournamentID } }
+    private var matches: [MatchRecord] { store.scopedSnapshot.matches }
+    private var training: [TrainingSession] { Array(store.scopedSnapshot.trainingSessions.filter { !$0.needsDetails && !$0.isActive && ($0.actualFinish != nil || $0.expectedEndDate < Date()) }.sorted { $0.date > $1.date }.prefix(5)) }
+    private var tournaments: [TournamentRecord] { Array(store.scopedSnapshot.tournaments.filter { $0.isCompleted && !$0.needsDetails }.sorted { $0.date > $1.date }.prefix(3)) }
+    private var trainingNeedingDetails: [TrainingSession] { store.scopedSnapshot.trainingSessions.filter { $0.needsDetails && !$0.isActive } }
+    private var tournamentsNeedingDetails: [TournamentRecord] { store.scopedSnapshot.tournaments.filter { $0.needsDetails && $0.id != store.activeTournamentID } }
     var body: some View {
         List {
             WatchRecentMatchSections(matches: matches)

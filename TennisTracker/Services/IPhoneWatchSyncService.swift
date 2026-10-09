@@ -150,7 +150,21 @@ final class IPhoneWatchSyncService: NSObject, ObservableObject, WCSessionDelegat
     }
 
     nonisolated func sessionDidDeactivate(_ session: WCSession) {
-        session.activate()
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.resetWatchCapabilities()
+            session.activate()
+        }
+    }
+
+    func resetWatchCapabilities() {
+        watchCourtProtocolVersion = 1
+        pendingSnapshot = nil
+        healthStatus = nil
+        lastSuccessfulSync = nil
+        UserDefaults.standard.removeObject(forKey: "lastWatchHealthStatus")
+        UserDefaults.standard.removeObject(forKey: "lastWatchSyncReceipt")
+        refreshConnectionState()
     }
 
     nonisolated func session(_ session: WCSession, didReceiveMessageData messageData: Data) {
@@ -173,7 +187,7 @@ final class IPhoneWatchSyncService: NSObject, ObservableObject, WCSessionDelegat
         guard let envelope = try? JSONDecoder.tennisTracker.decode(TennisWatchCommandEnvelope.self, from: data) else { return }
         Task { @MainActor [weak self] in
             guard let self, let store = self.store, store.storageError == nil,
-                  envelope.isAllowed(in: store.data.libraryID) else { return }
+                  envelope.isAllowed(in: store.data.libraryID), (1...2).contains(envelope.courtProtocolVersion) else { return }
             self.watchCourtProtocolVersion = envelope.courtProtocolVersion
             guard let command = CourtSyncCompatibility.command(envelope.command, protocolVersion: envelope.courtProtocolVersion, data: store.data) else {
                 self.syncMessage = "Update Court Story on both devices to sync this sport or coaching record. Saved iPhone data is unchanged."

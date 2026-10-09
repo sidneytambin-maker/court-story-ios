@@ -72,7 +72,8 @@ final class WatchWorkoutStartupUITests: XCTestCase {
         // Uses HKWorkoutSession and HKLiveWorkoutBuilder, not the fault-injection
         // client. Simulator success still cannot establish physical sensor data.
         let app = start("real")
-        for _ in 0..<16 {
+        let system = XCUIApplication(bundleIdentifier: "com.apple.Carousel")
+        for _ in 0..<24 {
             if app.buttons["endTrainingWorkout"].waitForExistence(timeout: 2) { break }
             if app.staticTexts["healthStartFailure"].exists {
                 let diagnostic = app.staticTexts["healthDiagnostic"]
@@ -80,17 +81,38 @@ final class WatchWorkoutStartupUITests: XCTestCase {
                 XCTFail(diagnostic.label + "\n" + app.debugDescription)
                 return
             }
-            for title in ["Turn On All", "Allow All", "Next", "Allow", "Done"] {
-                let button = app.buttons[title]
-                if button.exists && button.isHittable { button.tap() }
-            }
-            for toggle in app.switches.allElementsBoundByIndex where toggle.isHittable && toggle.value as? String == "0" { toggle.tap() }
+            if advanceHealthAuthorization(in: system) { continue }
+            _ = advanceHealthAuthorization(in: app)
         }
         capture(app, "Native Watch HealthKit startup")
+        let systemTree = XCTAttachment(string: system.debugDescription)
+        systemTree.name = "Watch system Health authorization hierarchy"
+        systemTree.lifetime = .keepAlways; add(systemTree)
         assertRecording(app)
         finish(app)
         XCTAssertTrue(app.staticTexts["Tennis workout saved."].waitForExistence(timeout: 35))
         capture(app, "Native Watch HealthKit saved workout")
+    }
+
+    private func advanceHealthAuthorization(in root: XCUIApplication) -> Bool {
+        guard root.state != .notRunning else { return false }
+        // watchOS presents Health's Review screen in the system shell, not the
+        // tested app's accessibility tree. Never replace permission with a stub.
+        for title in ["Review", "Turn On All", "Allow All"] {
+            let button = root.buttons[title]
+            if button.exists && button.isHittable { button.tap(); return true }
+        }
+        for toggle in root.switches.allElementsBoundByIndex where toggle.isHittable && toggle.value as? String == "0" {
+            toggle.tap(); return true
+        }
+        for title in ["Next", "Allow", "Done"] {
+            let button = root.buttons[title]
+            if button.exists && button.isHittable { button.tap(); return true }
+        }
+        if root.staticTexts["Health Access"].exists || !root.switches.allElementsBoundByIndex.isEmpty {
+            root.swipeUp(); return true
+        }
+        return false
     }
 
     private func assertRecording(_ app: XCUIApplication) {

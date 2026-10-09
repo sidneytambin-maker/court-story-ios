@@ -251,6 +251,26 @@ final class CourtScoreTests: XCTestCase {
         XCTAssertNotNil(score.recordResult(score.frame.rounds + [CourtScoreRound(points: [10, 21])]))
     }
 
+    func testEveryOfficialFormatProducesARecordableLiveResultForSinglesAndDoubles() {
+        for sport in CourtSport.allCases where sport != .custom {
+            for doubles in [false, true] {
+                for format in CourtOfficialFormat.choices(for: sport, doubles: doubles) {
+                    var live = CourtScoreSession(sport: CourtSportSelection(sport: sport), rules: format.rules,
+                        sides: [CourtScoreSide(name: "Demo A"), CourtScoreSide(name: "Demo B")])
+                    for _ in 0..<500 where !live.frame.complete {
+                        XCTAssertTrue(live.awardRally(to: 0), format.id)
+                    }
+                    XCTAssertTrue(live.frame.complete, format.id)
+                    XCTAssertEqual(live.frame.winningSide, 0, format.id)
+                    var recorded = CourtScoreSession(sport: live.sport, rules: live.rules, sides: live.sides)
+                    XCTAssertNil(recorded.recordResult(live.frame.rounds), format.id)
+                    XCTAssertEqual(recorded.frame.winningSide, live.frame.winningSide, format.id)
+                    XCTAssertEqual(recorded.resultSummary, live.resultSummary, format.id)
+                }
+            }
+        }
+    }
+
     func testStoppedMatchDoesNotInventWinnerFromOneFinishedRound() {
         var score = match(.badminton)
         XCTAssertNil(score.recordResult([CourtScoreRound(points: [21, 10]), CourtScoreRound(points: [5, 4], unfinished: true)]))

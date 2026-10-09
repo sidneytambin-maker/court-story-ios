@@ -162,16 +162,16 @@ final class WatchTennisStore: NSObject, ObservableObject, WCSessionDelegate {
     }
 
     var upcomingTournament: TournamentRecord? {
-        snapshot.tournaments
+        scopedSnapshot.tournaments
             .filter { !$0.isCompleted }
             .sorted { $0.date < $1.date }
             .first
     }
 
     var needsDetailsCount: Int {
-        snapshot.matches.filter(\.needsDetails).count
-        + snapshot.trainingSessions.filter(\.needsDetails).count
-        + snapshot.tournaments.filter(\.needsDetails).count
+        scopedSnapshot.matches.filter(\.needsDetails).count
+        + scopedSnapshot.trainingSessions.filter(\.needsDetails).count
+        + scopedSnapshot.tournaments.filter(\.needsDetails).count
     }
 
     var recentSummary: [String] {
@@ -1073,6 +1073,7 @@ extension WatchTennisStore {
         scoped.matches = snapshot.matches.filter { $0.playerID == id && $0.court.sport == courtSport }
         scoped.trainingSessions = snapshot.trainingSessions.filter { $0.playerID == id && $0.court.sport == courtSport }
         scoped.tournaments = snapshot.tournaments.filter { $0.playerID == id && $0.court.sport == courtSport }
+        scoped.achievementHistory = snapshot.achievementHistory.filter { $0.playerID == id && ($0.courtSport ?? .tennis) == courtSport }
         return scoped
     }
     func mayUseHealth(for playerID: UUID) -> Bool {

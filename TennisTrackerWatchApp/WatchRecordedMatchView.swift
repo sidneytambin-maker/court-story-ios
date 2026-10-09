@@ -61,11 +61,12 @@ struct WatchTournamentManagementView: View {
             Button("Add Tournament") {
                 if let player = store.selectedPlayer {
                     var tournament = TournamentRecord(playerID: player.id)
+                    tournament.court = CourtActivity(player: player, coachID: store.capturingCoachID)
                     tournament.category = player.bCategory
                     newTournament = tournament
                 }
             }.disabled(store.selectedPlayer == nil)
-            ForEach(store.snapshot.tournaments.sorted { $0.date > $1.date }) { WatchTournamentRow(tournament: $0) }
+            ForEach(store.scopedSnapshot.tournaments.sorted { $0.date > $1.date }) { WatchTournamentRow(tournament: $0) }
             NavigationLink("Start Tournament Timing") { WatchTournamentSetupView() }
         }
         .navigationTitle("Tournaments")

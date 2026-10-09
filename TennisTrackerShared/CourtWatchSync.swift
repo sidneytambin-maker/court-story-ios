@@ -33,6 +33,15 @@ enum CourtWatchMutation: Codable, Equatable {
                       TennisRecordConflictResolver.shouldReplace(incomingRevision: next.revision, incomingModifiedAt: next.modifiedAt, existingRevision: old.revision, existingModifiedAt: old.modifiedAt) else { return false }
                 data.players[index] = value
             } else { data.players.append(value) }
+            if let athleteID = data.court.activeAthleteID, let ownerID = data.court.ownerPlayerID {
+                let owner = data.players.first { $0.id == ownerID }
+                let athlete = data.players.first { $0.id == athleteID }
+                if athlete?.isArchived != false || owner?.court.selected.role != .coach ||
+                    athlete?.court.sports.contains(where: { $0.sport == owner?.selectedSport }) != true {
+                    data.court.activeAthleteID = nil
+                    data.selectedPlayerID = ownerID
+                }
+            }
         case .observation(let value):
             guard !data.court.deletedIDs.contains(value.id), CourtFeature.observations.isAvailable(in: data.settings.trackingMode) else { return false }
             if let old = data.court.observations.first(where: { $0.id == value.id }), !TennisRecordConflictResolver.shouldReplace(incomingRevision: value.revision, incomingModifiedAt: value.modifiedAt, existingRevision: old.revision, existingModifiedAt: old.modifiedAt) { return false }
@@ -86,9 +95,16 @@ extension TennisWatchSnapshot {
         let owner = court.deviceOwnerPlayerID ?? selectedPlayerID
         legacy.selectedPlayerID = owner
         legacy.players = players.filter { $0.court.coachOwnerID == nil }
-        legacy.matches = matches.filter { $0.playerID == owner && $0.court.sport == .tennis && $0.court.score == nil }
+        legacy.matches = matches.filter { $0.playerID == owner && !$0.usesCourtScoring }
         legacy.trainingSessions = trainingSessions.filter { $0.playerID == owner && $0.court.sport == .tennis }
         legacy.tournaments = tournaments.filter { $0.playerID == owner && $0.court.sport == .tennis }
+        legacy.achievementHistory = achievementHistory.filter {
+            $0.playerID == owner && ($0.courtSport ?? .tennis) == .tennis && $0.usesCourtScoring != true
+        }
+        if let id = requestedActivityID {
+            legacy.requestedActivityFound = !deletedRecordIDs.contains(id) &&
+                (legacy.matches.contains { $0.id == id } || legacy.trainingSessions.contains { $0.id == id } || legacy.tournaments.contains { $0.id == id })
+        }
         // Coaching metadata must not be sent to a version that cannot display or preserve it.
         legacy.court = CourtWorkspace()
         legacy.courtProtocolVersion = 1
@@ -108,10 +124,10 @@ enum CourtSyncCompatibility {
         case .court: return nil
         case .upsertMatch(var record):
             if let existing = data.matches.first(where: { $0.id == record.id }) {
-                guard existing.playerID == record.playerID, allowed(existing.playerID, existing.court) else { return nil }
+                guard existing.playerID == record.playerID, !existing.usesCourtScoring, allowed(existing.playerID, existing.court) else { return nil }
                 record.court = existing.court
             }
-            return allowed(record.playerID, record.court) ? .upsertMatch(record) : nil
+            return !record.usesCourtScoring && allowed(record.playerID, record.court) ? .upsertMatch(record) : nil
         case .upsertTraining(var record):
             if let existing = data.trainingSessions.first(where: { $0.id == record.id }) {
                 guard existing.playerID == record.playerID, allowed(existing.playerID, existing.court) else { return nil }
@@ -125,11 +141,12 @@ enum CourtSyncCompatibility {
             }
             return allowed(record.playerID, record.court) ? .upsertTournament(record) : nil
         case .deleteRecord(let deletion):
+            if data.matches.contains(where: { $0.id == deletion.id && $0.usesCourtScoring }) { return nil }
             let contexts = data.matches.filter { $0.id == deletion.id }.map { ($0.playerID, $0.court) } +
                 data.trainingSessions.filter { $0.id == deletion.id }.map { ($0.playerID, $0.court) } +
                 data.tournaments.filter { $0.id == deletion.id }.map { ($0.playerID, $0.court) }
             return contexts.allSatisfy { allowed($0.0, $0.1) } ? command : nil
-        case .markMatchDetailsComplete(let id): return data.matches.first { $0.id == id }.map { allowed($0.playerID, $0.court) } == true ? command : nil
+        case .markMatchDetailsComplete(let id): return data.matches.first { $0.id == id }.map { !$0.usesCourtScoring && allowed($0.playerID, $0.court) } == true ? command : nil
         case .markTrainingDetailsComplete(let id): return data.trainingSessions.first { $0.id == id }.map { allowed($0.playerID, $0.court) } == true ? command : nil
         case .markTournamentDetailsComplete(let id): return data.tournaments.first { $0.id == id }.map { allowed($0.playerID, $0.court) } == true ? command : nil
         case .requestSnapshot, .requestActivity, .snapshotReceived: return command

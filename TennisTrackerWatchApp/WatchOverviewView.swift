@@ -5,13 +5,18 @@ struct WatchTodayView: View {
     @State private var showingSyncStatus = false
 
     private var nextTraining: TrainingSession? {
-        store.snapshot.trainingSessions
+        store.scopedSnapshot.trainingSessions
             .filter { !$0.isActive && $0.actualFinish == nil && $0.expectedEndDate >= Date() }
             .min { $0.date < $1.date }
     }
 
     var body: some View {
         List {
+            if let player = store.selectedPlayer {
+                NavigationLink { WatchCourtWorkspaceView() } label: {
+                    CourtCaptureIdentity(athlete: player.displayName, sport: store.courtSport, coached: store.capturingCoachID != nil)
+                }.accessibilityHint("Change sport, role or the player you are recording for.")
+            }
             if let training = store.activeTraining {
                 WatchTrainingRow(training: training)
             }
@@ -29,11 +34,11 @@ struct WatchTodayView: View {
             }
             if store.activeTraining == nil && store.activeMatch == nil && nextTraining == nil {
                 Button { store.page = .track } label: {
-                    Label("Track Tennis Activity", systemImage: "plus")
+                    Label("Track \(store.courtSport.name) Activity", systemImage: "plus")
                 }
                 .accessibilityIdentifier("overviewTrackActivity")
             }
-            if let match = TennisMatchListGroups(matches: store.snapshot.matches).nextUpcomingMatch() {
+            if let match = TennisMatchListGroups(matches: store.scopedSnapshot.matches).nextUpcomingMatch() {
                 Section("Next match") { WatchMatchRow(match: match) }
             }
             if store.snapshot.settings.showUpcomingTournaments, let tournament = store.upcomingTournament {
@@ -45,8 +50,8 @@ struct WatchTodayView: View {
             }
             if let player = store.selectedPlayer {
                 WatchDashboardProgress(player: player)
-                NavigationLink { TennisAchievementsView(achievements: store.snapshot.achievements) } label: {
-                    TennisAchievementsSummary(achievements: store.snapshot.achievements)
+                NavigationLink { TennisAchievementsView(achievements: store.scopedSnapshot.achievements) } label: {
+                    TennisAchievementsSummary(achievements: store.scopedSnapshot.achievements)
                 }
             }
             Section {
@@ -73,13 +78,13 @@ private struct WatchDashboardProgress: View {
     @State private var configured = false
 
     private var progress: TennisPlayerProgress {
-        TennisPlayerProgress.build(player: player, matches: store.snapshot.matches,
-            training: store.snapshot.trainingSessions, coaches: store.snapshot.setup.coaches)
+        TennisPlayerProgress.build(player: player, matches: store.scopedSnapshot.matches,
+            training: store.scopedSnapshot.trainingSessions, coaches: store.snapshot.setup.coaches)
     }
 
     var body: some View {
         let progress = self.progress
-        let totals = TennisMatchResultTotals.build(records: store.snapshot.achievementRecords, playerID: player.id)
+        let totals = TennisMatchResultTotals.build(records: store.scopedSnapshot.achievementRecords, playerID: player.id)
         Section {
             Button { expanded.toggle() } label: {
                 Label("Results & focus", systemImage: expanded ? "chevron.down" : "chevron.right")
