@@ -56,6 +56,14 @@ final class WatchCourtCoachingUITests: XCTestCase {
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = name; screenshot.lifetime = .keepAlways; add(screenshot)
         let tree = XCTAttachment(string: app.debugDescription); tree.name = name + " accessibility"; tree.lifetime = .keepAlways; add(tree)
     }
+    private func relaunchSavedLibrary() {
+        app.terminate()
+        // Load actual persisted records without reseeding the fixture or letting
+        // the unrelated paired test phone replace this local test library.
+        app.launchArguments = ["-ui-testing-watch-local-relaunch"]
+        app.launch()
+        XCTAssertTrue(app.buttons["Your Players"].waitForExistence(timeout: 20), app.debugDescription)
+    }
     func testPlayerJournalProvidesObservationAndMeasurementJourneys() {
         launch(); tap("Your Players"); tap("Demo Player Morgan")
         XCTAssertTrue(app.navigationBars["Demo Player Morgan"].waitForExistence(timeout: 10))
@@ -86,10 +94,7 @@ final class WatchCourtCoachingUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Plan Practice"].waitForExistence(timeout: 10))
         tap("saveWatchTraining")
         XCTAssertTrue(app.navigationBars["Observation"].waitForExistence(timeout: 10))
-        app.terminate()
-        app.launchArguments = []
-        app.launch()
-        XCTAssertTrue(app.buttons["Your Players"].waitForExistence(timeout: 20))
+        relaunchSavedLibrary()
         tap("Your Players"); tap("Demo Player Morgan")
         let planned = app.buttons.matching(NSPredicate(format: "identifier == %@ AND label CONTAINS[c] %@", "watchPlannedTraining", "Returning")).firstMatch
         reveal(planned, label: "Saved planned returning practice")
@@ -145,10 +150,7 @@ final class WatchCourtCoachingUITests: XCTestCase {
         toggle(archived, label: "Show archived players")
         XCTAssertTrue(app.buttons["Demo Player Morgan"].waitForExistence(timeout: 10))
         evidence("Watch roster refreshed after archive and restore")
-        app.terminate()
-        app.launchArguments = []
-        app.launch()
-        XCTAssertTrue(app.buttons["Your Players"].waitForExistence(timeout: 20))
+        relaunchSavedLibrary()
         tap("Your Players")
         XCTAssertTrue(app.buttons["Demo Player Morgan"].waitForExistence(timeout: 10))
     }

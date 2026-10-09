@@ -94,6 +94,9 @@ final class WatchTennisStore: NSObject, ObservableObject, WCSessionDelegate {
         }
         #if DEBUG && targetEnvironment(simulator)
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-watch") {
+            // Each fixture owns a separate library. Do not retain another test's
+            // phone-library fence when explicitly starting a fresh fixture.
+            UserDefaults.standard.removeObject(forKey: "watchLibraryFence")
             var data = AppData()
             var player = PlayerProfile(); player.name = "Alex"
             data.players = [player]
@@ -206,7 +209,8 @@ final class WatchTennisStore: NSObject, ObservableObject, WCSessionDelegate {
 
     func activate() {
         #if DEBUG && targetEnvironment(simulator)
-        if ProcessInfo.processInfo.arguments.contains("-ui-testing-watch") { return }
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-watch") ||
+            ProcessInfo.processInfo.arguments.contains("-ui-testing-watch-local-relaunch") { return }
         #endif
         persistSnapshot()
         restoreWorkoutIfNeeded()
