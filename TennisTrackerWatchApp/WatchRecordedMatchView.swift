@@ -1,7 +1,5 @@
 import SwiftUI
 
-private enum WatchRecordedMatchRoute: Hashable { case rules }
-
 struct WatchRecordedMatchView: View {
     @EnvironmentObject private var store: WatchTennisStore
     var linkedTraining: TrainingSession?
@@ -23,7 +21,9 @@ struct WatchRecordedMatchView: View {
             TennisTrainingSessionPicker(sessions: store.snapshot.trainingSessions.filter { $0.playerID == match.playerID && $0.court.sport == match.court.sport }, coaches: store.snapshot.setup.coaches, selection: $match.trainingSessionID)
             if configured {
                 if match.court.sport.sport != .custom {
-                    NavigationLink("Scoring rules", value: WatchRecordedMatchRoute.rules)
+                    NavigationLink("Scoring rules") { [match = $match] in
+                        WatchRecordedMatchRulesView(match: match)
+                    }
                 }
                 CourtRecordedScoreFields(match: $match, validationMessage: $scoreError)
             }
@@ -40,9 +40,6 @@ struct WatchRecordedMatchView: View {
         }
         .pickerStyle(.navigationLink)
         .navigationTitle("Record Match Result")
-        .navigationDestination(for: WatchRecordedMatchRoute.self) { [match = $match] _ in
-            WatchRecordedMatchRulesView(match: match)
-        }
         .onChange(of: match.matchType) { _, _ in if configured { match.configureNewCourtMatch() } }
         .onAppear {
             guard !configured, let draft = store.makeCourtMatch() else { return }

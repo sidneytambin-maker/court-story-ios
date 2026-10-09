@@ -25,28 +25,6 @@ struct WatchCourtWorkspaceView: View {
     }
 }
 
-enum WatchCourtRosterRoute: Hashable {
-    case player(UUID)
-    case edit(UUID)
-    case journal(UUID)
-}
-
-struct WatchCourtRosterDestination: View {
-    @EnvironmentObject private var store: WatchTennisStore
-    let route: WatchCourtRosterRoute
-
-    var body: some View {
-        switch route {
-        case .player(let id): WatchCourtPlayerView(playerID: id)
-        case .edit(let id):
-            if let player = store.snapshot.players.first(where: { $0.id == id }) {
-                WatchCourtProfileEditor(player: player)
-            } else { Text("This player is no longer available.") }
-        case .journal(let id): WatchCourtJournalView(athleteID: id)
-        }
-    }
-}
-
 struct WatchCourtRosterView: View {
     @EnvironmentObject private var store: WatchTennisStore
     @State private var showArchived = false
@@ -71,7 +49,7 @@ struct WatchCourtRosterView: View {
             }
             Toggle("Show archived players", isOn: $showArchived)
             ForEach(players) { player in
-                NavigationLink(player.displayName, value: WatchCourtRosterRoute.player(player.id))
+                NavigationLink(player.displayName) { WatchCourtPlayerView(playerID: player.id) }
             }
             if players.isEmpty { Text(showArchived ? "No archived players for this sport." : "No players added for this sport.") }
         }.navigationTitle("Players")
@@ -91,9 +69,9 @@ private struct WatchCourtPlayerView: View {
                 if !player.isArchived {
                     Button("Record for This Player") { store.selectCourtAthlete(player.id); store.page = .track }
                 }
-                NavigationLink("Edit Player", value: WatchCourtRosterRoute.edit(player.id))
+                NavigationLink("Edit Player") { WatchCourtProfileEditor(player: player) }
                 if CourtFeature.observations.isAvailable(in: store.snapshot.settings.trackingMode) {
-                    NavigationLink("Journal and Progress", value: WatchCourtRosterRoute.journal(player.id))
+                    NavigationLink("Journal and Progress") { WatchCourtJournalView(athleteID: player.id) }
                 }
                 if let preference = player.court.sports.first(where: { $0.sport == store.courtSport }) {
                     if !preference.primaryGoal.isBlank { Text("Goal: " + preference.primaryGoal) }
