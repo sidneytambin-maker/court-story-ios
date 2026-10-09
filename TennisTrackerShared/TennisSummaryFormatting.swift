@@ -19,6 +19,10 @@ enum TennisSummaryFormatter {
         case .long: return summary.longText
         case .accessibility: return summary.accessibilityText
         case .detailed:
+            if match.usesCourtScoring {
+                let rules = match.court.score?.rules ?? match.court.rules ?? .standard(for: match.court.sport.sport)
+                return "\(match.court.sport.name). \(summary.longText) \(rules.formatSummary)" + (match.conditionsSummary.isBlank ? "" : " " + match.conditionsSummary)
+            }
             return "\(summary.longText) \(match.matchFormat.label), \(match.suddenDeathDeuce ? "sudden-death deuce" : "advantage deuce"). Player classification: \(match.sightLevel.label). \(match.allowedBounces) bounces allowed." + (match.conditionsSummary.isBlank ? "" : " " + match.conditionsSummary)
         }
     }
@@ -42,7 +46,7 @@ enum TennisSummaryFormatter {
             switch match.result {
             case .win: verb = "beat"
             case .loss: verb = "lost to"
-            case .draw: verb = "drew with"
+            case .draw: verb = match.stoppedWithoutWinner ? "stopped play without a winner against" : "drew with"
             case .retired: verb = "retired against"
             }
         }
@@ -54,7 +58,7 @@ enum TennisSummaryFormatter {
         let duration = match.actualStart.flatMap { start in match.actualFinish.map { TennisDurationFormatter.text(seconds: $0.timeIntervalSince(start)) } }
         if let duration { standard += ", duration \(duration)" }
         standard += "."
-        let status = match.status == .completed ? match.result.rawValue : match.status.rawValue
+        let status = match.status == .completed ? match.resultDescription : match.status.rawValue
         // Doubles names remain complete even on compact surfaces.
         var compact = match.matchType == .doubles ? "\(team) \(verb) \(opponents)" : "\(status) against \(opponents)"
         if !score.isBlank { compact += ", \(score)" }
@@ -129,10 +133,12 @@ enum TennisSummaryFormatter {
                 if !completed.isEmpty {
                     let outcomes: [(MatchResult, String, String)] = [(.win, "win", "wins"), (.loss, "loss", "losses"),
                         (.draw, "draw", "draws"), (.retired, "retirement", "retirements")]
-                    let results = outcomes.compactMap { outcome, singular, plural -> String? in
-                        let count = completed.filter { $0.result == outcome }.count
+                    var results = outcomes.compactMap { outcome, singular, plural -> String? in
+                        let count = completed.filter { !$0.stoppedWithoutWinner && $0.result == outcome }.count
                         return count > 0 ? "\(count) \(count == 1 ? singular : plural)" : nil
                     }
+                    let stopped = completed.filter(\.stoppedWithoutWinner).count
+                    if stopped > 0 { results.append("\(stopped) stopped without a winner") }
                     parts.append("\(completed.count) completed \(completed.count == 1 ? "match" : "matches"): " + results.joined(separator: " and "))
                 }
             } else {

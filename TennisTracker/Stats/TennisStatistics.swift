@@ -13,10 +13,11 @@ struct TennisStatistics: Equatable {
     let tiebreakSetsLast30Days: Int
     let upcomingTournamentCount: Int
     let needsAttention: [String]
+    var stoppedCount = 0
 
     var spokenSummary: String {
         let percent = Int((winRate * 100).rounded())
-        return "\(matchCount) completed matches, \(winCount) wins, \(lossCount) losses, \(drawCount) draws, \(percent) percent win rate. \(trainingCount) training sessions saved."
+        return "\(matchCount) completed matches, \(winCount) wins, \(lossCount) losses, \(drawCount) draws, \(percent) percent win rate." + (stoppedCount > 0 ? " \(stoppedCount) stopped without a winner." : "") + " \(trainingCount) training sessions saved."
     }
 
     static func build(matches: [MatchRecord], training: [TrainingSession], tournaments: [TournamentRecord], today: Date = Date()) -> TennisStatistics {
@@ -47,7 +48,7 @@ struct TennisStatistics: Equatable {
             matchCount: completedMatches.count,
             winCount: wins,
             lossCount: losses,
-            drawCount: completedMatches.filter { $0.result == .draw }.count,
+            drawCount: completedMatches.filter { $0.result == .draw && !$0.stoppedWithoutWinner }.count,
             winRate: completedMatches.isEmpty ? 0 : Double(wins) / Double(completedMatches.count),
             trainingCount: training.count,
             trainingMinutesLast30Days: Int(min(trainingSeconds / 60, 5_256_000)),
@@ -55,7 +56,8 @@ struct TennisStatistics: Equatable {
             trainingCountLast30Days: last30Training.count,
             tiebreakSetsLast30Days: last30Matches.reduce(0) { $0 + $1.tiebreakSetCount },
             upcomingTournamentCount: upcoming.count,
-            needsAttention: attention
+            needsAttention: attention,
+            stoppedCount: completedMatches.filter(\.stoppedWithoutWinner).count
         )
     }
 }

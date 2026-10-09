@@ -50,6 +50,7 @@ struct TennisResultDashboardRow: View {
                 }
             }
             if totals.retired > 0 { Text("\(totals.retired) retired").font(.callout) }
+            if totals.stopped > 0 { Text("\(totals.stopped) stopped without a winner").font(.callout) }
             if trainingMatchCount > 0 { Text(trainingContext).font(.callout) }
         }
         .padding(.vertical, 6)
@@ -66,7 +67,7 @@ struct TennisResultDashboardRow: View {
         [(totals.wins, colorScheme == .dark ? .mint : TennisSportStyle.court),
          (totals.losses, colorScheme == .dark ? .pink : Color(red: 0.60, green: 0.09, blue: 0.23)),
          (totals.draws, colorScheme == .dark ? .cyan : Color(red: 0.08, green: 0.25, blue: 0.62)),
-         (totals.retired, .secondary)]
+         (totals.retired, .secondary), (totals.stopped, .gray)]
     }
 
     private func metric(_ name: String, value: Int, symbol: String, color: Color) -> some View {

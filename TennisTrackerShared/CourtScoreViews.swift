@@ -43,6 +43,7 @@ struct CourtScoreControls: View {
     var changed: () -> Void
     @State private var confirmReset = false
     @State private var correcting = false
+    @State private var confirmStop = false
     var body: some View {
         Text(score.summary).font(.headline).fixedSize(horizontal: false, vertical: true)
             .accessibilityIdentifier("courtLiveScoreSummary")
@@ -74,6 +75,14 @@ struct CourtScoreControls: View {
             if score.rules.system != .aggregate {
                 Button("Correct current points", systemImage: "pencil") { correcting = true }
             }
+        }
+        if !score.frame.complete {
+            Button("Stop match without a winner", systemImage: "stop.circle") { confirmStop = true }
+                .confirmationDialog("Save this match as stopped, without awarding a win or draw?", isPresented: $confirmStop, titleVisibility: .visible) {
+                    Button("Stop and keep score") { if score.stopWithoutWinner() { changed() } }
+                    Button("Cancel", role: .cancel) {}
+                }
+                .accessibilityHint("Keeps the points played. This is not a retirement or an official match result.")
         }
         Button("Reset score", systemImage: "arrow.counterclockwise", role: .destructive) { confirmReset = true }
             .confirmationDialog("Reset all points and rounds?", isPresented: $confirmReset, titleVisibility: .visible) {
@@ -145,9 +154,11 @@ struct CourtRecordedScoreFields: View {
                         .accessibilityHint("Use only for the final round when play stopped early. A score lead alone does not award the match.")
                     if score.rules.system == .tennisGames {
                         Toggle("Tie-break played", isOn: Binding(get: { rounds[index].tieBreak != nil }, set: { rounds[index].tieBreak = $0 ? [0, 0] : nil }))
+                            .accessibilityIdentifier("courtRound\(index)TieBreakPlayed")
                         if let points = rounds[index].tieBreak {
                             ForEach(score.sides.indices, id: \.self) { side in
                                 NumberChoicePicker(title: "\(score.sides[side].name), tie-break points", value: Binding(get: { rounds[index].tieBreak?[side] ?? points[side] }, set: { rounds[index].tieBreak?[side] = $0 }), range: 0...199)
+                                    .accessibilityIdentifier("courtRound\(index)TieSide\(side)")
                             }
                         }
                     }

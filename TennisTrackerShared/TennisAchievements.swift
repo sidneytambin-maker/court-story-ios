@@ -38,8 +38,11 @@ struct TennisAchievementRecord: Codable, Equatable, Identifiable {
             var metrics = [String]()
             if match.status == .completed {
                 // Dashboard results follow completion status; achievement eligibility remains date-gated.
-                metrics.append(TennisMatchResultTotals.metric(kind: match.matchType, result: match.result))
-                if match.date <= now { metrics += matchMetrics(kind: match.matchType, result: match.result) }
+                metrics.append(TennisMatchResultTotals.metric(kind: match.matchType, result: match.result, stoppedWithoutWinner: match.stoppedWithoutWinner))
+                if match.date <= now {
+                    metrics += match.stoppedWithoutWinner ? ["match", match.matchType == .singles ? "singles" : "doubles"]
+                        : matchMetrics(kind: match.matchType, result: match.result)
+                }
             }
             records.append(Self(id: match.id, playerID: match.playerID, date: match.date,
                 metrics: metrics,

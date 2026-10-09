@@ -201,6 +201,25 @@ struct CourtScoreSession: Codable, Equatable {
     static let disciplines = ["Table tennis", "Badminton", "Squash", "Tennis"]
 
     @discardableResult
+    mutating func stopWithoutWinner() -> Bool {
+        guard validationMessage == nil, !frame.complete else { return false }
+        checkpoint()
+        if rules.system == .tennisGames {
+            let deciding = rules.decidingMatchTieBreak && frame.roundsWon.allSatisfy { $0 == rules.roundsToWin - 1 }
+            let tie = deciding || frame.tennis.isTiebreak
+            frame.rounds.append(CourtScoreRound(points: deciding ? frame.points : [frame.tennis.playerGames, frame.tennis.opponentGames],
+                tieBreak: tie ? frame.points : nil, unfinished: true))
+        } else if !frame.gummiarm {
+            frame.rounds.append(CourtScoreRound(points: frame.points,
+                discipline: rules.system == .aggregate ? Self.disciplines[frame.disciplineIndex] : nil, unfinished: true))
+        }
+        frame.complete = true
+        frame.winningSide = nil
+        frame.serviceChoicePrompt = nil
+        return true
+    }
+
+    @discardableResult
     mutating func undo() -> Bool {
         guard let previous = history.popLast() else { return false }
         frame = previous

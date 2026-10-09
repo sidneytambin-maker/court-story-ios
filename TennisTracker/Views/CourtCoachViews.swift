@@ -302,7 +302,7 @@ struct CourtAthleteProgressContent: View {
         Section("Progress") {
             Picker("Period", selection: $days) { Text("Last 7 days").tag(7); Text("Last 30 days").tag(30); Text("Last 90 days").tag(90); Text("Last year").tag(365) }
             SummaryRow(title: "Completed matches", value: "\(matches.count)")
-            SummaryRow(title: "Results", value: "\(matches.filter { $0.result == .win }.count) wins, \(matches.filter { $0.result == .loss }.count) losses, \(matches.filter { $0.result == .draw }.count) draws")
+            SummaryRow(title: "Results", value: resultTotals.summary)
             SummaryRow(title: "Training", value: "\(training.count) sessions, " + TennisDurationFormatter.text(seconds: training.reduce(0) { $0 + TennisDurationFormatter.trainingSeconds($1) }))
             if let person = store.data.players.first(where: { $0.id == athleteID }),
                let sport = person.court.sports.first(where: { $0.sport == store.selectedSport }) {
@@ -335,5 +335,9 @@ struct CourtAthleteProgressContent: View {
                 }
             }
         }
+    }
+
+    private var resultTotals: TennisResultTotals {
+        matches.reduce(into: TennisResultTotals()) { $0.record($1.result, stoppedWithoutWinner: $1.stoppedWithoutWinner) }
     }
 }

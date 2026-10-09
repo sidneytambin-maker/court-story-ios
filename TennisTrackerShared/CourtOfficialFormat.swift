@@ -15,7 +15,11 @@ struct CourtOfficialFormat: Identifiable, Equatable {
         }
         switch sport {
         case .tennis:
-            return [format("best3", "Best of 3 sets"), format("best5", "Best of 5 sets") { $0.roundsToWin = 3 },
+            return [format("best3", "Best of 3 sets"), format("one-set", "One set, tie-break at 6-all") {
+                    $0.roundsToWin = 1
+                    $0.reference = "ITF set scoring; LTA Youth Schools 2026, Rule 3.8 single-set rubber"
+                    $0.sourceURL = "https://www.lta.org.uk/globalassets/fage-lys-810-rules-2026.pdf"
+                }, format("best5", "Best of 5 sets") { $0.roundsToWin = 3 },
                 format("noad-match-tiebreak", "No-ad, deciding 10-point match tie-break") {
                     $0.deuce = .noAd; $0.decidingMatchTieBreak = true
                 }]

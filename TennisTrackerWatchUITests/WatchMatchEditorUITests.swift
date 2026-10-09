@@ -88,9 +88,7 @@ final class WatchMatchEditorUITests: XCTestCase {
     @discardableResult
     private func reveal(_ element: XCUIElement, in app: XCUIApplication) -> XCUIElement {
         var upward = true
-        var previousFirstRow: CGRect?
-        var stationarySteps = 0
-        for _ in 0..<32 {
+        for step in 0..<64 {
             let navigation = app.navigationBars.allElementsBoundByIndex.last(where: { $0.isHittable })
             let top = navigation?.frame.maxY ?? app.frame.minY + 28
             let bottom = app.frame.maxY
@@ -98,12 +96,9 @@ final class WatchMatchEditorUITests: XCTestCase {
                 if element.isHittable && element.frame.minY >= top && element.frame.maxY <= bottom { return element }
                 upward = element.frame.minY >= top
             } else {
-                let list = app.collectionViews.allElementsBoundByIndex.last(where: { $0.isHittable })
-                let row = list?.cells.firstMatch
-                let frame = row?.exists == true ? row?.frame : nil
-                stationarySteps = frame != nil && frame == previousFirstRow ? stationarySteps + 1 : 0
-                if stationarySteps == 2 { upward.toggle(); stationarySteps = 0 }
-                previousFirstRow = frame
+                // Watch lists virtualise offscreen rows. Search both directions;
+                // the underlying Recent list is also present behind the sheet.
+                upward = step < 16 || step >= 48
             }
             let origin = app.coordinate(withNormalizedOffset: .zero)
             let middle = (top + bottom) / 2 - app.frame.minY

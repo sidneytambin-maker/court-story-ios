@@ -42,6 +42,7 @@ struct WatchRecordedMatchView: View {
         }
         .pickerStyle(.navigationLink)
         .navigationTitle("Record Match Result")
+        .onChange(of: match.matchType) { _, _ in if configured { match.configureNewCourtMatch() } }
         .onAppear {
             guard !configured, let draft = store.makeCourtMatch() else { return }
             match = draft

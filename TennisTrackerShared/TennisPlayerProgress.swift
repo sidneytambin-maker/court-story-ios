@@ -5,12 +5,14 @@ struct TennisResultTotals: Equatable {
     var losses = 0
     var draws = 0
     var retired = 0
-    var count: Int { wins + losses + draws + retired }
+    var stopped = 0
+    var count: Int { wins + losses + draws + retired + stopped }
     var summary: String {
-        "\(count) \(count == 1 ? "match" : "matches"). \(wins) \(wins == 1 ? "win" : "wins"), \(losses) \(losses == 1 ? "loss" : "losses"), \(draws) \(draws == 1 ? "draw" : "draws")." + (retired > 0 ? " \(retired) retired." : "")
+        "\(count) \(count == 1 ? "match" : "matches"). \(wins) \(wins == 1 ? "win" : "wins"), \(losses) \(losses == 1 ? "loss" : "losses"), \(draws) \(draws == 1 ? "draw" : "draws")." + (retired > 0 ? " \(retired) retired." : "") + (stopped > 0 ? " \(stopped) stopped without a winner." : "")
     }
 
-    mutating func record(_ result: MatchResult) {
+    mutating func record(_ result: MatchResult, stoppedWithoutWinner: Bool = false) {
+        if stoppedWithoutWinner { stopped += 1; return }
         switch result {
         case .win: wins += 1
         case .loss: losses += 1
@@ -52,11 +54,11 @@ struct TennisPlayerProgress: Equatable {
         let training = training.filter { $0.playerID == player.id }
         let recorded = training.filter { $0.isRecordedTraining(at: now) }
         for match in TennisCompletedMatch.collect(matches: playerMatches, training: training, now: now) {
-            if match.kind == .singles { progress.singles.record(match.result) }
-            else { progress.doubles.record(match.result) }
+            if match.kind == .singles { progress.singles.record(match.result, stoppedWithoutWinner: match.stoppedWithoutWinner) }
+            else { progress.doubles.record(match.result, stoppedWithoutWinner: match.stoppedWithoutWinner) }
             if match.trainingSessionID != nil {
-                if match.kind == .singles { progress.singlesPractice.record(match.result) }
-                else { progress.doublesPractice.record(match.result) }
+                if match.kind == .singles { progress.singlesPractice.record(match.result, stoppedWithoutWinner: match.stoppedWithoutWinner) }
+                else { progress.doublesPractice.record(match.result, stoppedWithoutWinner: match.stoppedWithoutWinner) }
             }
         }
         let start = Calendar.current.date(byAdding: .day, value: -30, to: Calendar.current.startOfDay(for: now)) ?? now

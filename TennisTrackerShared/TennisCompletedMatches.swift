@@ -6,11 +6,12 @@ struct TennisCompletedMatch: Equatable {
     let result: MatchResult
     let date: Date
     let trainingSessionID: UUID?
+    var stoppedWithoutWinner = false
 
     static func collect(matches: [MatchRecord], training: [TrainingSession], now: Date = Date()) -> [Self] {
         var seen = Set<UUID>()
         let completed = matches.filter { $0.status == .completed && seen.insert($0.id).inserted }
-        var results = completed.map { Self(id: $0.id, kind: $0.matchType, result: $0.result, date: $0.date, trainingSessionID: $0.trainingSessionID) }
+        var results = completed.map { Self(id: $0.id, kind: $0.matchType, result: $0.result, date: $0.date, trainingSessionID: $0.trainingSessionID, stoppedWithoutWinner: $0.stoppedWithoutWinner) }
         let linkedSessions = Set(matches.compactMap(\.trainingSessionID))
         // A session-level legacy score is a match only when no linked match already represents it.
         for session in training where session.isRecordedTraining(at: now) && !linkedSessions.contains(session.id) {

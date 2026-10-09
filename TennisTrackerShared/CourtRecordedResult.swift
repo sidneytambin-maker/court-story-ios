@@ -70,6 +70,14 @@ enum CourtRecordedResult {
                   (0..<sides).contains(decidingWinner), Set(totals).count == 1 else { return "A Gummiarm winner applies only after four tied-aggregate Racketlon games." }
         }
         if rules.system == .aggregate {
+            if let winner = aggregateWinner(rounds), let last = rounds.last, last.points[winner] > 0 {
+                var beforeLastPoint = rounds
+                beforeLastPoint[beforeLastPoint.count - 1].points[winner] -= 1
+                beforeLastPoint[beforeLastPoint.count - 1].unfinished = true
+                if aggregateWinner(beforeLastPoint) != nil {
+                    return "The aggregate match was already decided before this score. Record the score at the deciding point."
+                }
+            }
             if rounds.count == 4 && !(rounds.last?.unfinished ?? true), aggregateWinner(rounds) == nil && decidingWinner == nil {
                 return "The aggregate is tied. Enter the Gummiarm winner."
             }
@@ -113,6 +121,8 @@ enum CourtRecordedResult {
 
 extension MatchRecord {
     var usesCourtScoring: Bool { court.sport.sport != .tennis || court.rules != nil || court.score != nil }
+    var stoppedWithoutWinner: Bool { status == .completed && court.score.map { $0.frame.complete && $0.frame.winningSide == nil } == true }
+    var resultDescription: String { stoppedWithoutWinner ? "Stopped without a winner" : result.rawValue }
 
     mutating func configureNewCourtMatch() {
         if court.sport.sport == .padel { matchType = .doubles }

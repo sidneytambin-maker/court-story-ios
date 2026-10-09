@@ -395,6 +395,9 @@ final class TennisTrackerWatchUITests: XCTestCase {
         reveal(app.buttons["Record Match Result"], in: app); app.buttons["Record Match Result"].tap()
         reveal(app.buttons["activityPersonPicker.Opponent"], in: app); app.buttons["activityPersonPicker.Opponent"].tap()
         app.buttons["Sam"].tap()
+        chooseOneSetFormat(in: app)
+        chooseRecordedScore("courtRound0Side0", value: "6", in: app)
+        chooseRecordedScore("courtRound0Side1", value: "0", in: app)
         reveal(app.buttons["matchCourtSetting"], in: app); app.buttons["matchCourtSetting"].tap()
         app.buttons["Outdoors"].tap()
         reveal(app.buttons["matchWeather"], in: app); app.buttons["matchWeather"].tap()
@@ -430,14 +433,13 @@ final class TennisTrackerWatchUITests: XCTestCase {
         app.buttons["matchTrainingPicker"].tap()
         let session = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Coaches: Chris")).firstMatch
         reveal(session, in: app); session.tap()
-        let format = app.descendants(matching: .any).matching(identifier: "matchFormatPicker").firstMatch
-        reveal(format, in: app); format.tap()
-        app.buttons["One set"].tap()
-        closeNativePicker(in: app)
-        chooseRecordedScore("set1YourGames", value: "6 games", in: app)
-        chooseRecordedScore("set1OpponentGames", value: "6 games", in: app)
-        chooseRecordedScore("set1YourTiebreak", value: "7 points", in: app)
-        chooseRecordedScore("set1OpponentTiebreak", value: "5 points", in: app)
+        chooseOneSetFormat(in: app)
+        chooseRecordedScore("courtRound0Side0", value: "7", in: app)
+        chooseRecordedScore("courtRound0Side1", value: "6", in: app)
+        let tie = app.switches["courtRound0TieBreakPlayed"]
+        reveal(tie, in: app); tie.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5)).tap()
+        chooseRecordedScore("courtRound0TieSide0", value: "7", in: app)
+        chooseRecordedScore("courtRound0TieSide1", value: "5", in: app)
         reveal(app.buttons["saveRecordedMatch"], in: app); app.buttons["saveRecordedMatch"].tap()
         let menu = app.buttons.matching(identifier: "watchScreenMenu")
             .matching(NSPredicate(format: "value BEGINSWITH %@", "Current screen:")).firstMatch
@@ -445,7 +447,8 @@ final class TennisTrackerWatchUITests: XCTestCase {
         reveal(app.buttons["Recent"], in: app); app.buttons["Recent"].tap()
         let summary = app.buttons["Match summary"]
         reveal(summary, in: app)
-        XCTAssertTrue(summary.label.contains("tie-break: your 7 points, opponent 5 points"))
+        XCTAssertTrue(summary.label.contains("7-6 (tie-break 7-5)"), summary.label)
+        XCTAssertTrue(summary.label.contains("beat Sam"), summary.label)
         capture(app, name: "Watch recorded tie-break result")
     }
 
@@ -503,6 +506,17 @@ final class TennisTrackerWatchUITests: XCTestCase {
         reveal(control, in: app); control.tap()
         reveal(app.buttons[value], in: app); app.buttons[value].tap()
         closeNativePicker(in: app)
+    }
+
+    private func chooseOneSetFormat(in app: XCUIApplication) {
+        let rules = app.buttons["Scoring rules"]
+        reveal(rules, in: app); rules.tap()
+        let format = app.descendants(matching: .any).matching(identifier: "courtOfficialFormat").firstMatch
+        reveal(format, in: app); format.tap()
+        let single = app.buttons["One set, tie-break at 6-all"]
+        reveal(single, in: app); single.tap()
+        closeNativePicker(in: app)
+        app.navigationBars["Match rules"].buttons.firstMatch.tap()
     }
 
     private func closeNativePicker(in app: XCUIApplication) {

@@ -2,6 +2,23 @@ import XCTest
 @testable import TennisTracker
 
 final class CourtScoreTests: XCTestCase {
+    func testOfficialOneSetFormatAndNoScoreOverplayInRacketlon() throws {
+        let format = try XCTUnwrap(CourtOfficialFormat.choices(for: .tennis).first { $0.id == "Tennis.one-set" })
+        var one = match(.tennis); one.rules = format.rules
+        for _ in 0..<24 { one.awardRally(to: 0) }
+        XCTAssertTrue(one.frame.complete)
+        XCTAssertEqual(one.frame.roundsWon, [1, 0])
+        XCTAssertFalse(one.awardRally(to: 1))
+        XCTAssertTrue(one.undo()); XCTAssertFalse(one.frame.complete)
+        var aggregate = match(.racketlon)
+        let start = [CourtScoreRound(points: [21, 0]), CourtScoreRound(points: [21, 0])]
+        XCTAssertNil(aggregate.recordResult(start + [CourtScoreRound(points: [1, 0], unfinished: true)]))
+        XCTAssertEqual(aggregate.frame.winningSide, 0)
+        let saved = aggregate
+        XCTAssertNotNil(aggregate.recordResult(start + [CourtScoreRound(points: [2, 0], unfinished: true)]))
+        XCTAssertEqual(aggregate, saved)
+        XCTAssertNotNil(aggregate.recordResult(start + [CourtScoreRound(points: [21, 0])]))
+    }
     private func match(_ sport: CourtSport, doubles: Bool = false, sides: Int = 2) -> CourtScoreSession {
         CourtScoreSession(sport: CourtSportSelection(sport: sport, customName: sport == .custom ? "Goalball" : ""),
             rules: .standard(for: sport, doubles: doubles), sides: (0..<sides).map { CourtScoreSide(name: "Side \($0 + 1)") })

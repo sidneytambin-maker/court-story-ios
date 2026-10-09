@@ -47,7 +47,7 @@ private struct MatchListRow: View {
             Text(summary.scheduleText)
                 .font(.subheadline)
             if match.status != .scheduled {
-                Text((match.status == .completed ? match.result.rawValue + ". " : "") + summary.scoreText)
+                Text((match.status == .completed ? match.resultDescription + ". " : "") + summary.scoreText)
                     .font(.body).monospacedDigit()
             }
         }

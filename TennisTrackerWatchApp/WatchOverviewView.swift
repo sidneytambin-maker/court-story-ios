@@ -128,6 +128,7 @@ private struct WatchDashboardProgress: View {
             Text(title).font(.headline)
             Text("\(totals.wins) W  \(totals.losses) L  \(totals.draws) D").font(.body).monospacedDigit()
             if totals.retired > 0 { Text("\(totals.retired) retired").font(.footnote) }
+            if totals.stopped > 0 { Text("\(totals.stopped) stopped without a winner").font(.footnote) }
             if store.snapshot.settings.trackingMode == .power && totals.count > 0 {
                 Text("Win rate: " + winRate(totals)).font(.footnote)
             }

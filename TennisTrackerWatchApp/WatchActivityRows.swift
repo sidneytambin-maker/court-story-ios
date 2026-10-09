@@ -205,7 +205,7 @@ struct WatchMatchRow: View {
         if !tournament.isBlank { lines.append(tournament) }
         lines.append(summary.scheduleText)
         if match.status != .scheduled {
-            lines.append((match.status == .completed ? match.result.rawValue + ". " : "") + summary.scoreText)
+            lines.append((match.status == .completed ? match.resultDescription + ". " : "") + summary.scoreText)
         }
         return lines.joined(separator: "\n")
     }
