@@ -7,8 +7,12 @@ struct WatchRootView: View {
     @State private var notificationRoute: TennisActivityRoute?
     var body: some View {
         NavigationStack {
-            selectedPage.toolbar {
-                ToolbarItem(placement: .topBarLeading) { WatchPageSelector() }
+            if store.snapshot.players.isEmpty {
+                WatchCourtOnboardingView()
+            } else {
+                selectedPage.toolbar {
+                    ToolbarItem(placement: .topBarLeading) { WatchPageSelector() }
+                }
             }
         }
         .id(store.page)

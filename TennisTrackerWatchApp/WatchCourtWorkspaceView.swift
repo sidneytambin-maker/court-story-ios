@@ -70,6 +70,9 @@ private struct WatchCourtPlayerView: View {
                     Button("Record for This Player") { store.selectCourtAthlete(player.id); store.page = .track }
                 }
                 NavigationLink("Edit Player") { WatchCourtProfileEditor(player: player) }
+                if CourtFeature.observations.isAvailable(in: store.snapshot.settings.trackingMode) {
+                    NavigationLink("Journal and Progress") { WatchCourtJournalView(athleteID: player.id) }
+                }
                 if let preference = player.court.sports.first(where: { $0.sport == store.courtSport }) {
                     if !preference.primaryGoal.isBlank { Text("Goal: " + preference.primaryGoal) }
                     if !preference.developmentNotes.isBlank { Text(preference.developmentNotes) }

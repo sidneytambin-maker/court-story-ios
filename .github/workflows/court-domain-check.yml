@@ -36,8 +36,19 @@ jobs:
         run: |
           set -euo pipefail
           ID=$(xcrun simctl list devices available --json | jq -r '[.devices | to_entries[] | select(.key | contains("watchOS")) | .value[] | select(.isAvailable and (.name | contains("Ultra")))][0].udid')
+          PHONE=$(xcrun simctl list devices available --json | jq -r '[.devices | to_entries[] | select(.key | contains("iOS")) | .value[] | select(.isAvailable and (.name | startswith("iPhone")))][0].udid')
+          PAIR=$(xcrun simctl list pairs --json | jq -r --arg watch "$ID" '.pairs | to_entries[] | select(.value.watch.udid == $watch) | .key' | head -1)
+          if [ -z "$PAIR" ]; then
+            PAIR=$(xcrun simctl pair "$ID" "$PHONE")
+          else
+            PHONE=$(xcrun simctl list pairs --json | jq -r --arg pair "$PAIR" '.pairs[$pair].phone.udid')
+          fi
+          xcrun simctl pair_activate "$PAIR"
+          xcrun simctl bootstatus "$PHONE" -b
           xcrun simctl bootstatus "$ID" -b
           echo "WATCH_SIMULATOR_ID=$ID" >> "$GITHUB_ENV"
+          xcodebuild build -project TennisTrackeriOS.xcodeproj -scheme TennisTracker -destination "id=$PHONE" -derivedDataPath CourtPaired CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=YES CODE_SIGN_IDENTITY="-" > CourtPaired.log 2>&1
+          xcrun simctl install "$PHONE" CourtPaired/Build/Products/Debug-iphonesimulator/TennisTracker.app
           xcodebuild test -project TennisTrackeriOS.xcodeproj -scheme TennisTrackerWatchTests -destination "id=$ID" -only-testing:TennisTrackerWatchUITests/WatchWorkoutStartupUITests -parallel-testing-enabled NO -resultBundlePath CourtWatch.xcresult CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=YES CODE_SIGN_IDENTITY="-" 2>&1 | tee CourtWatch.log
       - name: Export Watch workout evidence
         if: always()
@@ -57,6 +68,7 @@ jobs:
           name: court-watch-workouts
           path: |
             CourtWatch.log
+            CourtPaired.log
             CourtWatch.xcresult
             CourtWatchReview
           retention-days: 7

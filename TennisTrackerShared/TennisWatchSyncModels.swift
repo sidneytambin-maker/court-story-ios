@@ -33,7 +33,7 @@ struct TennisWatchSnapshot: Codable, Equatable {
         players = data.players
         settings = data.settings
         setup = data.setup
-        achievementHistory = TennisAchievementRecord.collect(matches: data.matches, training: data.trainingSessions, tournaments: data.tournaments, now: now)
+        achievementHistory = TennisAchievementRecord.collect(matches: data.matches, training: data.trainingSessions, tournaments: data.tournaments, now: now, players: data.players)
         knownVenues = TennisVenueChoice.build(setup: data.setup, matches: data.matches, training: data.trainingSessions, tournaments: data.tournaments)
 
         let recentLimit = Calendar.current.date(byAdding: .day, value: -60, to: now) ?? now

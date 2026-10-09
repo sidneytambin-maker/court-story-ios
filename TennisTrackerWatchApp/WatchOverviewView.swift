@@ -17,6 +17,13 @@ struct WatchTodayView: View {
                     CourtCaptureIdentity(athlete: player.displayName, sport: store.courtSport, coached: store.capturingCoachID != nil)
                 }.accessibilityHint("Change sport, role or the player you are recording for.")
             }
+            if store.courtRole == .coach {
+                NavigationLink("Your Players") { WatchCourtRosterView() }
+                if let athlete = store.snapshot.court.activeAthleteID,
+                   CourtFeature.observations.isAvailable(in: store.snapshot.settings.trackingMode) {
+                    NavigationLink("Player Journal") { WatchCourtJournalView(athleteID: athlete) }
+                }
+            }
             if let training = store.activeTraining {
                 WatchTrainingRow(training: training)
             }

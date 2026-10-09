@@ -81,9 +81,8 @@ final class WatchWorkoutStartupUITests: XCTestCase {
         for _ in 0..<24 {
             if app.buttons["endTrainingWorkout"].waitForExistence(timeout: 2) { break }
             if app.staticTexts["healthStartFailure"].exists {
-                let diagnostic = app.staticTexts["healthDiagnostic"]
-                reveal(diagnostic, in: app)
-                XCTFail(diagnostic.label + "\n" + app.debugDescription)
+                capture(app, "Native Health failure")
+                XCTFail(app.staticTexts["healthStartFailure"].label + "\n" + app.debugDescription + "\n" + system.debugDescription)
                 return
             }
             if advanceHealthAuthorization(in: system) { continue }

@@ -85,7 +85,7 @@ extension TennisWatchSnapshot {
         result.matches = matches.filter { $0.playerID == playerID && $0.court.sport == sport }
         result.trainingSessions = trainingSessions.filter { $0.playerID == playerID && $0.court.sport == sport }
         result.tournaments = tournaments.filter { $0.playerID == playerID && $0.court.sport == sport }
-        result.achievementHistory = achievementHistory.filter { $0.playerID == playerID && ($0.courtSport ?? .tennis) == sport }
+        result.achievementHistory = achievementRecords.filter { ($0.playerID == playerID || $0.coachID == playerID) && ($0.courtSport ?? .tennis) == sport }
         return result
     }
 

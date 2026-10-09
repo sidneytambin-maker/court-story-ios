@@ -11,8 +11,10 @@ struct TennisAchievementRecord: Codable, Equatable, Identifiable {
     var legacyPractice = false
     var courtSport: CourtSportSelection?
     var usesCourtScoring: Bool?
+    var coachID: UUID?
+    var coachedPlayerIDs: [UUID]?
 
-    static func collect(matches: [MatchRecord], training: [TrainingSession], tournaments: [TournamentRecord], now: Date = Date()) -> [Self] {
+    static func collect(matches: [MatchRecord], training: [TrainingSession], tournaments: [TournamentRecord], now: Date = Date(), players: [PlayerProfile] = []) -> [Self] {
         var records = [Self]()
         for session in training {
             var metrics = [String]()
@@ -26,9 +28,11 @@ struct TennisAchievementRecord: Codable, Equatable, Identifiable {
                     metrics.append(TennisMatchResultTotals.metric(kind: practice.kind, result: practice.result))
                 }
             }
+            let participants = coachedPlayers(in: session, players: players, now: now)
             records.append(Self(id: session.id, playerID: session.playerID, date: session.actualStart ?? session.date,
                 metrics: metrics, seconds: TennisDurationFormatter.trainingSeconds(session), legacyPractice: session.practiceResult != nil,
-                courtSport: session.court.sport))
+                courtSport: session.court.sport, coachID: participants.isEmpty ? nil : session.court.enteredByCoachID,
+                coachedPlayerIDs: participants.isEmpty ? nil : participants))
         }
         for match in matches {
             var metrics = [String]()
@@ -48,6 +52,18 @@ struct TennisAchievementRecord: Codable, Equatable, Identifiable {
         }
         var seen = Set<UUID>()
         return records.filter { seen.insert($0.id).inserted }
+    }
+
+    private static func coachedPlayers(in session: TrainingSession, players: [PlayerProfile], now: Date) -> [UUID] {
+        guard let coach = session.court.enteredByCoachID, coach != session.playerID,
+              players.contains(where: { $0.id == coach && $0.court.coachOwnerID == nil }),
+              session.date <= now, session.isRecordedTraining(at: now),
+              session.actualFinish.map({ $0 <= now }) ?? true,
+              TennisDurationFormatter.trainingSeconds(session) > 0 else { return [] }
+        let participants = Set([session.playerID] + session.context.participantIDs)
+        return players.filter { participants.contains($0.id) && $0.id != coach && $0.court.coachOwnerID == coach &&
+            $0.court.sports.contains { $0.sport == session.court.sport } }
+            .map(\.id).sorted { $0.uuidString < $1.uuidString }
     }
 
     private static func matchMetrics(kind: MatchKind, result: MatchResult) -> [String] {
@@ -110,14 +126,20 @@ struct TennisAchievement: Identifiable, Equatable {
         .init(id: "focus.1", title: "Practice with Purpose", requirement: "Record a specific focus in a completed training session.", celebration: "You have given your practice a focus. A useful step forward!", symbol: "scope", metric: "focus", target: 1),
         .init(id: "focus.10", title: "Purposeful Practice", requirement: "Complete 10 sessions with a specific training focus.", celebration: "Ten focused sessions. Keep making your practice count!", symbol: "scope", metric: "focus", target: 10),
         .init(id: "reflection.1", title: "Pause and Reflect", requirement: "Save notes or progress for a completed training session.", celebration: "Your first training reflection is saved. Learning continues off court too!", symbol: "square.and.pencil", metric: "reflection", target: 1),
-        .init(id: "reflection.10", title: "Learning the Game", requirement: "Save notes or progress for 10 completed training sessions.", celebration: "Ten sessions reflected on. You are building a useful record of your game!", symbol: "book.fill", metric: "reflection", target: 10)
+        .init(id: "reflection.10", title: "Learning the Game", requirement: "Save notes or progress for 10 completed training sessions.", celebration: "Ten sessions reflected on. You are building a useful record of your game!", symbol: "book.fill", metric: "reflection", target: 10),
+        .init(id: "coach.1", title: "A Coaching Beginning", requirement: "Complete your first recorded coaching session with another player.", celebration: "Your first coached session is recorded. A new court story begins.", symbol: "person.badge.key.fill", metric: "coachedSessions", target: 1),
+        .init(id: "coach.10", title: "Building Momentum", requirement: "Complete 10 recorded coaching sessions. Each group session counts once.", celebration: "Ten coached sessions. Consistent support, session by session.", symbol: "figure.and.child.holdinghands", metric: "coachedSessions", target: 10),
+        .init(id: "coach.players3", title: "Growing Together", requirement: "Complete coaching sessions with three different players.", celebration: "Three players supported through recorded coaching sessions.", symbol: "person.3.fill", metric: "coachedPlayers", target: 3)
     ]
 
     static func build(records: [TennisAchievementRecord], playerID: UUID?) -> [Self] {
         let selected = records.filter { $0.playerID == playerID }
         return collection.map { badge in
             var result = badge
-            result.progress = Set(selected.filter { $0.metrics.contains(badge.metric) }.map(\.id)).count
+            let coached = records.filter { $0.coachID == playerID && !($0.coachedPlayerIDs ?? []).isEmpty }
+            if badge.metric == "coachedSessions" { result.progress = Set(coached.map(\.id)).count }
+            else if badge.metric == "coachedPlayers" { result.progress = Set(coached.flatMap { $0.coachedPlayerIDs ?? [] }).count }
+            else { result.progress = Set(selected.filter { $0.metrics.contains(badge.metric) }.map(\.id)).count }
             return result
         }
     }
@@ -137,14 +159,18 @@ extension TennisWatchSnapshot {
     }
     func achievementRecords(at now: Date) -> [TennisAchievementRecord] {
         TennisAchievementRecord.merge(history: achievementHistory,
-            current: TennisAchievementRecord.collect(matches: matches, training: trainingSessions, tournaments: tournaments, now: now), deleted: deletedRecordIDs)
+            current: TennisAchievementRecord.collect(matches: matches, training: trainingSessions, tournaments: tournaments, now: now, players: players), deleted: deletedRecordIDs)
     }
     var achievements: [TennisAchievement] { TennisAchievement.build(records: achievementRecords, playerID: selectedPlayerID) }
 }
 
 extension AppData {
     var achievementRecords: [TennisAchievementRecord] {
-        TennisAchievementRecord.merge(history: [], current: TennisAchievementRecord.collect(matches: matches, training: trainingSessions, tournaments: tournaments), deleted: deletedRecordIDs)
+        TennisAchievementRecord.merge(history: [], current: TennisAchievementRecord.collect(matches: matches, training: trainingSessions, tournaments: tournaments, players: players), deleted: deletedRecordIDs)
     }
-    var achievements: [TennisAchievement] { TennisAchievement.build(records: achievementRecords, playerID: selectedPlayerID) }
+    var achievements: [TennisAchievement] {
+        let owner = players.first { $0.id == court.ownerPlayerID } ?? players.first { $0.id == selectedPlayerID }
+        let sport = owner?.selectedSport ?? .tennis
+        return TennisAchievement.build(records: achievementRecords.filter { ($0.courtSport ?? .tennis) == sport }, playerID: selectedPlayerID)
+    }
 }

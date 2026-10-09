@@ -3,6 +3,38 @@ import XCTest
 
 @MainActor
 final class TennisStoreTests: XCTestCase {
+    func testInvalidWatchScoreCannotReplaceSavedRecordOrPersistOnRelaunch() throws {
+        let url = temporaryStoreURL()
+        let store = TennisStore(storeURL: url)
+        var player = PlayerProfile(); player.name = "Demo Player"
+        XCTAssertTrue(store.completeOnboarding(player: player, settings: AppSettings()))
+        var match = store.makeDefaultMatch()!
+        match.opponentName = "Demo Opponent"
+        XCTAssertTrue(store.upsertMatch(match))
+        let original = store.data.matches[0]
+        var invalid = original
+        invalid.court.rules?.target = 0
+        invalid.revision += 1; invalid.modifiedAt = Date().addingTimeInterval(10)
+        store.applyWatchCommand(.upsertMatch(invalid))
+        XCTAssertEqual(store.data.matches, [original])
+        XCTAssertEqual(try JSONEncoder.tennisTracker.encode(TennisStore(storeURL: url).data.matches),
+                       try JSONEncoder.tennisTracker.encode([original]))
+    }
+
+    func testWatchCannotAttachPersonalHealthToCoachedAthlete() {
+        let store = TennisStore(storeURL: temporaryStoreURL())
+        var owner = PlayerProfile(); owner.name = "Demo Coach"; owner.court.sports[0].role = .coach
+        XCTAssertTrue(store.completeOnboarding(player: owner, settings: AppSettings()))
+        var athlete = PlayerProfile(); athlete.name = "Demo Athlete"; athlete.court.coachOwnerID = owner.id
+        XCTAssertTrue(store.saveCourtProfile(athlete))
+        var training = TrainingSession(playerID: athlete.id)
+        training.court = CourtActivity(player: athlete, coachID: owner.id)
+        training.workout = TennisWorkoutResult(workoutID: UUID(), durationSeconds: 600, averageHeartRate: 120)
+        store.applyWatchCommand(.upsertTraining(training))
+        XCTAssertFalse(store.data.trainingSessions.contains { $0.id == training.id })
+        XCTAssertTrue(store.lastAnnouncement.contains("Personal Health"))
+    }
+
     func testMarkingTrainingCompleteDoesNotInventBodyRatings() {
         let store = TennisStore(storeURL: temporaryStoreURL())
         var session = TrainingSession(playerID: UUID())

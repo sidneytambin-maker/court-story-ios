@@ -19,8 +19,8 @@ final class TennisTrackerAccessibilityUITests: XCTestCase {
         nameField.tap()
         nameField.typeText("Sidney")
 
-        continueOnboarding(to: "Choose Tennis Details")
-        continueOnboarding(to: "Choose Preferences")
+        continueOnboarding(to: "Make it yours")
+        continueOnboarding(to: "Ready for your court story")
         finishOnboarding()
 
         XCTAssertTrue(app.tabBars.buttons["Dashboard"].waitForExistence(timeout: 5))
@@ -59,16 +59,14 @@ final class TennisTrackerAccessibilityUITests: XCTestCase {
         completeOnboarding()
         openDestination("Matches")
         app.buttons["Track Match Scoring"].tap()
-        XCTAssertTrue(app.buttons["startConfiguredLiveScoringButton"].waitForExistence(timeout: 5))
-        XCTAssertEqual(app.buttons.matching(identifier: "startConfiguredLiveScoringButton").count, 1)
-        app.buttons["startConfiguredLiveScoringButton"].tap()
-        XCTAssertTrue(app.buttons["playerWinsPointButton"].waitForExistence(timeout: 5))
-        app.buttons["playerWinsPointButton"].tap()
-        app.buttons["opponentWinsPointButton"].tap()
-        tapPossiblyScrolledButton("undoScoreButton")
-        tapPossiblyScrolledButton("saveLiveProgressButton")
-        tapPossiblyScrolledButton("hearFullScoreButton")
-        tapPossiblyScrolledButton("resetScoreButton")
+        tapPossiblyScrolledButton("startCourtLiveScore")
+        XCTAssertTrue(app.buttons["courtAwardRally0"].waitForExistence(timeout: 5))
+        app.buttons["courtAwardRally0"].tap()
+        app.buttons["courtAwardRally1"].tap()
+        tapPossiblyScrolledButton("courtUndoScore")
+        XCTAssertTrue(app.staticTexts["courtLiveScoreSummary"].label.contains("15"))
+        tapPossiblyScrolledButton("Close")
+        XCTAssertTrue(app.navigationBars["Matches"].waitForExistence(timeout: 5))
     }
 
     func testFreshSetupShowsPersonalEmptyDashboardWithoutSeedData() throws {
@@ -470,8 +468,8 @@ final class TennisTrackerAccessibilityUITests: XCTestCase {
         XCTAssertTrue(nameField.waitForExistence(timeout: 5))
         nameField.tap()
         nameField.typeText("Sidney")
-        continueOnboarding(to: "Choose Tennis Details")
-        continueOnboarding(to: "Choose Preferences")
+        continueOnboarding(to: "Make it yours")
+        continueOnboarding(to: "Ready for your court story")
         finishOnboarding()
         XCTAssertTrue(app.tabBars.buttons["Dashboard"].waitForExistence(timeout: 15))
     }
@@ -513,9 +511,6 @@ final class TennisTrackerAccessibilityUITests: XCTestCase {
     }
 
     private func finishOnboarding() {
-        for heading in ["People and Places", "Your Apple Watch", "Activity Reminders", "Optional Health Workouts", "Ready for Tennis"] {
-            continueOnboarding(to: heading)
-        }
         tapPossiblyScrolledButton("onboardingFinishButton")
     }
 }

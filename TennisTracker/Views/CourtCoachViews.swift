@@ -40,6 +40,10 @@ struct CourtCoachDashboard: View {
                     NavigationLink("Your players", destination: CourtRosterView())
                     NavigationLink("Record or plan activity", destination: CourtRecordHub())
                     NavigationLink("Your own progress") { DashboardView().onAppear { _ = store.selectCourtAthlete(nil) } }
+                    if let owner = store.workspaceOwner {
+                        let badges = TennisAchievement.build(records: store.data.achievementRecords.filter { ($0.courtSport ?? .tennis) == store.selectedSport }, playerID: owner.id)
+                        NavigationLink { TennisAchievementsView(achievements: badges) } label: { TennisAchievementsSummary(achievements: badges) }
+                    }
                 }
                 if !planned.isEmpty {
                     Section("Planned and active sessions") {

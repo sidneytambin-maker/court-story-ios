@@ -127,7 +127,7 @@ final class TennisNotificationAchievementTests: XCTestCase {
 
     func testTwentyTwoUniqueAchievementsIncludeFirstsAndClearLockedTargets() {
         let badges = TennisAchievement.build(records: [], playerID: UUID())
-        XCTAssertEqual(badges.count, 22); XCTAssertEqual(Set(badges.map(\.id)).count, 22)
+        XCTAssertEqual(badges.count, 25); XCTAssertEqual(Set(badges.map(\.id)).count, 25)
         XCTAssertTrue(badges.allSatisfy { !$0.earned && $0.progress == 0 && $0.target > 0 && !$0.requirement.isEmpty && !$0.celebration.isEmpty })
         for id in ["training.1", "training.10", "match.1", "match.10", "tournament.1", "watchTraining.1"] {
             XCTAssertTrue(badges.contains { $0.id == id })

@@ -298,8 +298,9 @@ final class TennisStore: ObservableObject {
             var candidate = data
             if mutation.apply(to: &candidate) { _ = saveCourtCandidate(candidate, announcement: "Coaching changes synced from Apple Watch.") }
         case .deleteRecord(let deletion):
-            data.delete(deletion)
-            saveAndAnnounce("Deleted activity from Apple Watch.")
+            var candidate = data
+            candidate.delete(deletion)
+            _ = saveCourtCandidate(candidate, announcement: "Deleted activity from Apple Watch.")
         case .snapshotReceived:
             break
         case .requestSnapshot:
@@ -308,14 +309,17 @@ final class TennisStore: ObservableObject {
         case .requestActivity(let id):
             IPhoneWatchSyncService.shared.sendSnapshot(data, including: id)
         case .upsertMatch(let match):
-            mergeWatchMatch(match)
-            saveAndAnnounce("Synced match from Apple Watch.")
+            var candidate = data
+            mergeWatchMatch(match, into: &candidate)
+            _ = saveCourtCandidate(candidate, announcement: "Synced match from Apple Watch.")
         case .upsertTraining(let session):
-            mergeWatchTraining(session)
-            saveAndAnnounce("Synced training from Apple Watch.")
+            var candidate = data
+            mergeWatchTraining(session, into: &candidate)
+            _ = saveCourtCandidate(candidate, announcement: "Synced training from Apple Watch.")
         case .upsertTournament(let tournament):
-            mergeWatchTournament(tournament)
-            saveAndAnnounce("Synced tournament from Apple Watch.")
+            var candidate = data
+            mergeWatchTournament(tournament, into: &candidate)
+            _ = saveCourtCandidate(candidate, announcement: "Synced tournament from Apple Watch.")
         case .markMatchDetailsComplete(let id):
             completeMatchDetails(id)
         case .markTrainingDetailsComplete(let id):
@@ -439,7 +443,7 @@ final class TennisStore: ObservableObject {
         data.removeDeletedRecords()
     }
 
-    private func mergeWatchMatch(_ incoming: MatchRecord) {
+    private func mergeWatchMatch(_ incoming: MatchRecord, into data: inout AppData) {
         guard let index = data.matches.firstIndex(where: { $0.id == incoming.id }) else {
             data.matches.append(incoming)
             return
@@ -455,7 +459,7 @@ final class TennisStore: ObservableObject {
         }
     }
 
-    private func mergeWatchTraining(_ incoming: TrainingSession) {
+    private func mergeWatchTraining(_ incoming: TrainingSession, into data: inout AppData) {
         var incoming = incoming
         if incoming.trackedOnWatch == nil { incoming.trackedOnWatch = data.trainingSessions.first { $0.id == incoming.id }?.trackedOnWatch }
         guard let index = data.trainingSessions.firstIndex(where: { $0.id == incoming.id }) else {
@@ -466,7 +470,7 @@ final class TennisStore: ObservableObject {
         data.trainingSessions[index] = TennisRecordConflictResolver.mergeTraining(incoming: incoming, existing: existing)
     }
 
-    private func mergeWatchTournament(_ incoming: TournamentRecord) {
+    private func mergeWatchTournament(_ incoming: TournamentRecord, into data: inout AppData) {
         guard let index = data.tournaments.firstIndex(where: { $0.id == incoming.id }) else {
             data.tournaments.append(incoming)
             return

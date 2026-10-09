@@ -57,6 +57,11 @@ enum CourtLibraryValidation {
             if let score = context.score, score.sport != context.sport || score.rules != context.rules { return "The score must use this activity's saved sport and rules." }
             if let coach = context.enteredByCoachID, !attribution(athlete, coach, context.sport) { return "An activity's coaching attribution is invalid." }
         }
+        for training in data.trainingSessions where training.workout != nil {
+            if data.players.first(where: { $0.id == training.playerID })?.court.coachOwnerID != nil {
+                return "Personal Health measurements cannot be attached to a coached player's training."
+            }
+        }
         return nil
     }
 }
