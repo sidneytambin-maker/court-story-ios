@@ -25,6 +25,12 @@ struct WatchCourtWorkspaceView: View {
     }
 }
 
+private enum WatchCourtRosterRoute: Hashable {
+    case player(UUID)
+    case edit(UUID)
+    case journal(UUID)
+}
+
 struct WatchCourtRosterView: View {
     @EnvironmentObject private var store: WatchTennisStore
     @State private var showArchived = false
@@ -49,10 +55,20 @@ struct WatchCourtRosterView: View {
             }
             Toggle("Show archived players", isOn: $showArchived)
             ForEach(players) { player in
-                NavigationLink(player.displayName) { WatchCourtPlayerView(playerID: player.id) }
+                NavigationLink(player.displayName, value: WatchCourtRosterRoute.player(player.id))
             }
             if players.isEmpty { Text(showArchived ? "No archived players for this sport." : "No players added for this sport.") }
         }.navigationTitle("Players")
+            .navigationDestination(for: WatchCourtRosterRoute.self) { route in
+                switch route {
+                case .player(let id): WatchCourtPlayerView(playerID: id)
+                case .edit(let id):
+                    if let player = store.snapshot.players.first(where: { $0.id == id }) {
+                        WatchCourtProfileEditor(player: player)
+                    } else { Text("This player is no longer available.") }
+                case .journal(let id): WatchCourtJournalView(athleteID: id)
+                }
+            }
             .sheet(item: $newPlayer) { player in NavigationStack { WatchCourtProfileEditor(player: player, isNew: true) } }
     }
 }
@@ -69,9 +85,9 @@ private struct WatchCourtPlayerView: View {
                 if !player.isArchived {
                     Button("Record for This Player") { store.selectCourtAthlete(player.id); store.page = .track }
                 }
-                NavigationLink("Edit Player") { WatchCourtProfileEditor(player: player) }
+                NavigationLink("Edit Player", value: WatchCourtRosterRoute.edit(player.id))
                 if CourtFeature.observations.isAvailable(in: store.snapshot.settings.trackingMode) {
-                    NavigationLink("Journal and Progress") { WatchCourtJournalView(athleteID: player.id) }
+                    NavigationLink("Journal and Progress", value: WatchCourtRosterRoute.journal(player.id))
                 }
                 if let preference = player.court.sports.first(where: { $0.sport == store.courtSport }) {
                     if !preference.primaryGoal.isBlank { Text("Goal: " + preference.primaryGoal) }
@@ -116,8 +132,11 @@ struct WatchCourtProfileEditor: View {
     @State private var error = ""
     @AccessibilityFocusState private var errorFocused: Bool
     private var selected: Binding<CourtSportPreferences> {
-        Binding(get: { player.court.selected }, set: { value in
-            if let index = player.court.sports.firstIndex(where: { $0.id == value.id }) { player.court.sports[index] = value }
+        let draft = $player
+        return Binding(get: { draft.wrappedValue.court.selected }, set: { value in
+            if let index = draft.wrappedValue.court.sports.firstIndex(where: { $0.id == value.id }) {
+                draft.wrappedValue.court.sports[index] = value
+            }
         })
     }
     var body: some View {
@@ -131,10 +150,16 @@ struct WatchCourtProfileEditor: View {
             if selected.wrappedValue.reviewDate != nil {
                 WatchDateField(title: "Review date", date: Binding(get: { selected.wrappedValue.reviewDate ?? Date() }, set: { selected.wrappedValue.reviewDate = $0 }))
             }
-            NavigationLink("Access Preferences") { Form { CourtAccessFields(sport: player.selectedSport.sport, access: selected.access) } }
-            NavigationLink("Default Match Format") { Form { CourtRuleFields(sport: player.selectedSport.sport, rules: selected.rules) } }
+            NavigationLink("Access Preferences") { [sport = player.selectedSport.sport, access = selected.access] in
+                Form { CourtAccessFields(sport: sport, access: access) }.navigationTitle("Access Preferences")
+            }
+            NavigationLink("Default Match Format") { [sport = player.selectedSport.sport, rules = selected.rules] in
+                Form { CourtRuleFields(sport: sport, rules: rules) }.navigationTitle("Match Format")
+            }
             if player.court.selected.role == .coach && player.court.coachOwnerID == nil {
-                NavigationLink("Coaching Profile") { Form { CourtCoachCredentialsFields(credentials: $player.court.coaching) } }
+                NavigationLink("Coaching Profile") { [credentials = $player.court.coaching] in
+                    Form { CourtCoachCredentialsFields(credentials: credentials) }.navigationTitle("Coaching Profile")
+                }
             }
             if !error.isEmpty { Text(error).accessibilityFocused($errorFocused) }
             Button("Save Player") { save() }.disabled(player.name.isBlank)

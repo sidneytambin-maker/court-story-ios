@@ -91,6 +91,23 @@ final class WatchCourtCoachingUITests: XCTestCase {
         XCTAssertTrue((training.value as? String ?? "").contains("recorded sessions"))
         evidence("Watch scoped seven-day athlete progress")
     }
+    func testPlayerEditorRoutesKeepAthleteIdentityAndReturnAfterSave() {
+        launch(); tap("Your Players"); tap("Demo Player Morgan"); tap("Edit Player")
+        XCTAssertEqual(app.textFields["watchCourtPlayerName"].value as? String, "Demo Player Morgan")
+        tap("Access Preferences")
+        XCTAssertTrue(app.navigationBars["Access Preferences"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["accessPreferenceSummary"].exists)
+        evidence("Watch athlete access preferences")
+        app.navigationBars["Access Preferences"].buttons.firstMatch.tap()
+        tap("Default Match Format")
+        XCTAssertTrue(app.navigationBars["Match Format"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["courtOfficialFormat"].exists)
+        app.navigationBars["Match Format"].buttons.firstMatch.tap()
+        tap("watchSaveCourtPlayer")
+        XCTAssertTrue(app.navigationBars["Demo Player Morgan"].waitForExistence(timeout: 10))
+        tap("Edit Player")
+        XCTAssertEqual(app.textFields["watchCourtPlayerName"].value as? String, "Demo Player Morgan")
+    }
     func testWelcomeValidatesNameAndCancelRetainsRoleChoice() {
         app.launchArguments = ["-ui-testing-watch", "-ui-testing-court-welcome", "-ui-testing-reset-setup"]
         app.launch()

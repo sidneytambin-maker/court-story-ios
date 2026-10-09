@@ -1,5 +1,7 @@
 import SwiftUI
 
+private enum WatchRecordedMatchRoute: Hashable { case rules }
+
 struct WatchRecordedMatchView: View {
     @EnvironmentObject private var store: WatchTennisStore
     @Environment(\.dismiss) private var dismiss
@@ -22,13 +24,7 @@ struct WatchRecordedMatchView: View {
             TennisTrainingSessionPicker(sessions: store.snapshot.trainingSessions.filter { $0.playerID == match.playerID && $0.court.sport == match.court.sport }, coaches: store.snapshot.setup.coaches, selection: $match.trainingSessionID)
             if configured {
                 if match.court.sport.sport != .custom {
-                    NavigationLink("Scoring rules") {
-                        Form {
-                            CourtRuleFields(sport: match.court.sport.sport,
-                                rules: Binding(get: { match.court.rules ?? match.makeCourtScore().rules }, set: { match.court.rules = $0 }),
-                                doubles: match.matchType == .doubles)
-                        }.navigationTitle("Match rules")
-                    }
+                    NavigationLink("Scoring rules", value: WatchRecordedMatchRoute.rules)
                 }
                 CourtRecordedScoreFields(match: $match, validationMessage: $scoreError)
             }
@@ -45,6 +41,9 @@ struct WatchRecordedMatchView: View {
         }
         .pickerStyle(.navigationLink)
         .navigationTitle("Record Match Result")
+        .navigationDestination(for: WatchRecordedMatchRoute.self) { [match = $match] _ in
+            WatchRecordedMatchRulesView(match: match)
+        }
         .onChange(of: match.matchType) { _, _ in if configured { match.configureNewCourtMatch() } }
         .onAppear {
             guard !configured, let draft = store.makeCourtMatch() else { return }
@@ -63,6 +62,17 @@ struct WatchRecordedMatchView: View {
             match.date = linkedTraining?.date ?? Calendar.current.startOfDay(for: Date())
             configured = true
         }
+    }
+}
+
+private struct WatchRecordedMatchRulesView: View {
+    @Binding var match: MatchRecord
+    var body: some View {
+        Form {
+            CourtRuleFields(sport: match.court.sport.sport,
+                rules: Binding(get: { match.court.rules ?? match.makeCourtScore().rules }, set: { match.court.rules = $0 }),
+                doubles: match.matchType == .doubles)
+        }.navigationTitle("Match rules").pickerStyle(.navigationLink)
     }
 }
 
