@@ -1,0 +1,33 @@
+name: Court Story retained Health diagnostic
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  inspect-retained-simulator:
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - name: Read the exact failed fictional simulator artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api repos/sidneytambin-maker/court-story-ios/actions/artifacts/11640366960/zip > WatchEvidence.zip
+          echo 'c37b4a8e23a079d4bf142edc4658608bebd0febaf3b8ee5ac187bc84a37408b6  WatchEvidence.zip' | shasum -a 256 -c -
+          unzip -q WatchEvidence.zip -d Evidence
+          xcrun xcresulttool export diagnostics --path Evidence/WatchBetaTests.xcresult --output-path Diagnostics
+          mkdir HealthReview
+          index=0
+          while IFS= read -r -d '' archive; do
+            index=$((index + 1))
+            /usr/bin/log show --archive "$archive" --start '2026-10-09 19:15:00' --end '2026-10-09 19:20:00' --style compact --info --debug --predicate 'process == "healthd" OR subsystem BEGINSWITH "com.apple.HealthKit"' > "HealthReview/health-$index.log"
+          done < <(find Diagnostics -type d -name '*.logarchive' -print0)
+          test "$index" -gt 0
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: retained-health-diagnostic
+          path: HealthReview
+          retention-days: 7
