@@ -43,7 +43,15 @@ jobs:
           else
             PHONE=$(xcrun simctl list pairs --json | jq -r --arg pair "$PAIR" '.pairs[$pair].phone.udid')
           fi
-          xcrun simctl pair_activate "$PAIR"
+          if ACTIVATE_OUTPUT=$(xcrun simctl pair_activate "$PAIR" 2>&1); then
+            printf '%s\n' "$ACTIVATE_OUTPUT"
+          else
+            ACTIVATE_STATUS=$?
+            if [ "$ACTIVATE_STATUS" -ne 37 ] || [[ "$ACTIVATE_OUTPUT" != *"This pair is already active."* ]]; then
+              printf '%s\n' "$ACTIVATE_OUTPUT" >&2
+              exit "$ACTIVATE_STATUS"
+            fi
+          fi
           xcrun simctl bootstatus "$PHONE" -b
           xcrun simctl bootstatus "$ID" -b
           echo "WATCH_SIMULATOR_ID=$ID" >> "$GITHUB_ENV"
