@@ -65,7 +65,7 @@ final class TennisTrackerAccessibilityUITests: XCTestCase {
         app.buttons["courtAwardRally1"].tap()
         tapPossiblyScrolledButton("courtUndoScore")
         XCTAssertTrue(app.staticTexts["courtLiveScoreSummary"].label.contains("15"))
-        tapPossiblyScrolledButton("Close")
+        app.navigationBars["Live score"].buttons["Close"].tap()
         XCTAssertTrue(app.navigationBars["Matches"].waitForExistence(timeout: 5))
     }
 
@@ -186,13 +186,10 @@ final class TennisTrackerAccessibilityUITests: XCTestCase {
         completeOnboarding()
         openDestination("Matches")
         app.buttons["addMatchButton"].tap()
-        let setOne = app.staticTexts["Set 1"]
-        for _ in 0..<8 {
-            if setOne.isHittable { break }
-            app.swipeUp()
-        }
-        XCTAssertTrue(setOne.exists)
-        XCTAssertFalse(app.staticTexts["Set 2"].exists)
+        choosePhoneOneSetFormat(in: app)
+        XCTAssertTrue(revealPhoneElement(app.buttons["courtRound0Side0"], in: app).exists)
+        XCTAssertFalse(app.buttons["courtRound1Side0"].exists)
+        XCTAssertFalse(app.buttons["Add round"].exists)
         XCTAssertFalse(app.buttons["Sets played"].exists)
         app.buttons["Cancel"].tap()
         XCTAssertTrue(app.buttons["addMatchButton"].waitForExistence(timeout: 5))
@@ -202,11 +199,10 @@ final class TennisTrackerAccessibilityUITests: XCTestCase {
         completeOnboarding()
         openDestination("Settings")
         let theme = app.buttons["settingsThemePicker"]
-        for _ in 0..<5 { if theme.isHittable { break }; app.swipeUp() }
+        revealPhoneElement(theme, in: app)
         XCTAssertEqual(app.buttons.matching(identifier: "settingsThemePicker").count, 1)
         XCTAssertLessThanOrEqual(app.staticTexts.matching(identifier: "Theme").count, 1)
-        for _ in 0..<5 { if app.buttons["tennisSetupLink"].isHittable { break }; app.swipeDown() }
-        app.buttons["tennisSetupLink"].tap()
+        revealPhoneElement(app.buttons["tennisSetupLink"], in: app, searchingUp: true).tap()
         for destination in ["Players", "Coaches", "Training Venues", "Match Venues"] {
             app.buttons[destination].tap()
             let bar = app.navigationBars[destination]
@@ -311,10 +307,7 @@ final class TennisTrackerAccessibilityUITests: XCTestCase {
         expandPhoneSection("dashboardInsights", in: app)
         let coaching = app.descendants(matching: .any)
             .matching(NSPredicate(format: "label == %@ AND value != nil", "One-to-one coaching, coaches: Chris")).firstMatch
-        for _ in 0..<6 {
-            if coaching.exists && coaching.isHittable { break }
-            app.swipeUp()
-        }
+        revealPhoneElement(coaching, in: app)
         XCTAssertTrue(coaching.exists)
         XCTAssertEqual(coaching.value as? String, "1 session, 1 hour.")
         XCTAssertFalse(app.staticTexts["Training types, last 30 days"].exists)
@@ -401,19 +394,22 @@ final class TennisTrackerAccessibilityUITests: XCTestCase {
         app.buttons["addMatchButton"].tap()
         app.buttons["activityPersonPicker.Opponent name"].tap()
         app.buttons["Sam"].tap()
-        tapPossiblyScrolledButton("matchFormatPicker"); app.buttons["One set"].tap()
+        choosePhoneOneSetFormat(in: app)
         expandPhoneSection("matchEntryDetails", in: app)
         tapPossiblyScrolledButton("matchTrainingPicker")
         let session = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Coaches: Chris")).firstMatch
         XCTAssertTrue(session.waitForExistence(timeout: 5)); session.tap()
         XCTAssertNotEqual(app.buttons["matchTrainingPicker"].value as? String, "No training session")
-        tapPossiblyScrolledButton("set1YourGames"); app.buttons["6 games"].tap()
-        tapPossiblyScrolledButton("set1OpponentGames"); app.buttons["6 games"].tap()
-        tapPossiblyScrolledButton("set1YourTiebreak"); app.buttons["7 points"].tap()
-        tapPossiblyScrolledButton("set1OpponentTiebreak"); app.buttons["5 points"].tap()
-        XCTAssertTrue(app.staticTexts["recordedScoreSummary"].label.contains("Win"))
+        tapPossiblyScrolledButton("courtRound0Side0"); app.buttons["7"].tap()
+        tapPossiblyScrolledButton("courtRound0Side1"); app.buttons["6"].tap()
+        setPhoneSwitch(app.switches["courtRound0TieBreakPlayed"], enabled: true, in: app)
+        tapPossiblyScrolledButton("courtRound0TieSide0"); app.buttons["7"].tap()
+        tapPossiblyScrolledButton("courtRound0TieSide1"); app.buttons["5"].tap()
+        let summary = revealPhoneElement(app.staticTexts["courtRecordedScoreSummary"], in: app, showing: .top)
+        XCTAssertTrue(summary.label.contains("wins"))
+        XCTAssertTrue(summary.label.contains("tie-break 7-5"))
         app.buttons["saveMatchButton"].tap()
-        let score = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", "tie-break: your 7 points", "tie-break: your 7 points")).firstMatch
+        let score = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", "tie-break 7-5", "tie-break 7-5")).firstMatch
         XCTAssertTrue(score.waitForExistence(timeout: 5))
     }
 

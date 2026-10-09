@@ -33,7 +33,7 @@ struct WatchCourtOnboardingView: View {
             } else if draft.step == 2 {
                 Picker("Tracking mode", selection: $draft.settings.trackingMode) {
                     ForEach(TrackingMode.allCases) { Text($0.rawValue).tag($0) }
-                }
+                }.accessibilityIdentifier("watchSetupMode")
                 Text(draft.settings.trackingMode.description)
                 Picker("Theme", selection: $draft.settings.theme) {
                     ForEach(AppTheme.allCases) { Text($0.rawValue).tag($0) }

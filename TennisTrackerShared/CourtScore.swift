@@ -345,6 +345,10 @@ struct CourtScoreSession: Codable, Equatable {
             frame.server = 1 - preceding.server
             if var service = preceding.doublesService {
                 service.rotateTable(previousServer: preceding.server, nextServer: frame.server)
+                if frame.doublesService?.midpointChanged == true && !service.midpointChanged {
+                    service.receiverMember = 1 - (service.receiverMember ?? 0)
+                    service.midpointChanged = true
+                }
                 service.rememberTablePair(server: frame.server)
                 frame.doublesService = service
             }
@@ -357,23 +361,35 @@ struct CourtScoreSession: Codable, Equatable {
     mutating func correctPoints(_ points: [Int]) -> Bool {
         guard !frame.complete, points.count == sides.count, points.allSatisfy({ (0...9999).contains($0) }),
               rules.system != .aggregate else { return false }
+        let deciding = rules.system == .tennisGames && rules.decidingMatchTieBreak && rules.roundsToWin > 1 && frame.roundsWon.allSatisfy { $0 == rules.roundsToWin - 1 }
+        let tie = deciding || frame.tennis.isTiebreak || (rules.system == .tennisGames && rules.tieBreakAt.map { frame.tennis.playerGames == $0 && frame.tennis.opponentGames == $0 } == true)
         if rules.system == .tennisGames {
-            let deciding = rules.decidingMatchTieBreak && frame.tennis.playerSets == rules.roundsToWin - 1 && frame.tennis.opponentSets == rules.roundsToWin - 1
-            let target = deciding ? rules.decidingTieBreakTarget : frame.tennis.isTiebreak ? rules.tieBreakTarget : 4
-            let margin = frame.tennis.isTiebreak || deciding || rules.deuce != .noAd ? 2 : 1
+            let target = deciding ? rules.decidingTieBreakTarget : tie ? rules.tieBreakTarget : 4
+            let margin = tie || rules.deuce != .noAd ? 2 : 1
             let high = points.max() ?? 0, low = points.min() ?? 0
             if high >= target && high - low >= margin { return false }
-            if rules.deuce == .starPoint && !frame.tennis.isTiebreak && !deciding && high > 5 { return false }
+            if rules.deuce == .starPoint && !tie && high > 5 { return false }
         } else if points.indices.contains(where: { isWinningScore(points, side: $0) }) || rules.cap.map({ (points.max() ?? 0) >= $0 }) == true { return false }
         checkpoint()
+        let old = frame
         frame.points = points
         if rules.service == .alternateTwo {
             let total = points.reduce(0, +)
-            let turns = points.allSatisfy { $0 >= rules.target - 1 } ? total - (rules.target - 1) : total / 2
+            let turns = frame.expedite == true ? max(0, old.serviceTurn + total - old.points.reduce(0, +))
+                : points.allSatisfy { $0 >= rules.target - 1 } ? total - (rules.target - 1) : total / 2
             frame.serviceTurn = turns
-            frame.server = (frame.firstServer + turns) % sides.count
+            frame.server = frame.expedite == true ? ((old.server + turns - old.serviceTurn) % sides.count + sides.count) % sides.count
+                : (frame.firstServer + turns) % sides.count
         }
-        if rules.system == .tennisGames { frame.tennis.playerPoints = points[0]; frame.tennis.opponentPoints = points[1] }
+        if rules.system == .tennisGames {
+            frame.tennis.playerPoints = points[0]; frame.tennis.opponentPoints = points[1]
+            frame.tennis.isTiebreak = tie
+            if tie { frame.server = (frame.firstServer + frame.serviceTurn + (points.reduce(0, +) + 1) / 2) % 2 }
+        }
+        if var service = frame.doublesService {
+            service.correctPoints(sport: sport.sport, rules: rules, from: old, to: frame)
+            frame.doublesService = service
+        }
         return true
     }
 

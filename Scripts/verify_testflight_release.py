@@ -8,7 +8,7 @@ from pathlib import Path
 PHONE_ID = "com.inclusophy.tennistracker"
 GROUP_ID = "group.com.inclusophy.tennistracker"
 APP_NAME = "Court Story"
-BUILD = "33"
+BUILD = "34"
 FORBIDDEN_SUFFIXES = {".json", ".db", ".sqlite", ".sqlite3", ".p8", ".p12", ".pem", ".swift", ".csv", ".log"}
 TEST_MARKERS = (b"-ui-testing-", b"-watch-manual-match", b"-test-notification-", b"TennisRegressionFixtures", b"TennisNotificationTestSupport")
 

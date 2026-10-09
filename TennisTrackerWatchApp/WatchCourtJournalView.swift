@@ -19,6 +19,9 @@ struct WatchCourtJournalView: View {
         List {
             if let athlete, let coach = store.workspaceOwner {
                 CourtCaptureIdentity(athlete: athlete.displayName, sport: store.courtSport, coached: true)
+                NavigationLink("Progress by Period") {
+                    WatchCourtProgressView(athleteID: athleteID, sport: store.courtSport)
+                }.accessibilityHint("Review this player's results, training, focus and goals for the selected period.")
                 if CourtFeature.observations.isAvailable(in: store.snapshot.settings.trackingMode) {
                     if !athlete.isArchived {
                         Button("Add Observation", systemImage: "square.and.pencil") {
@@ -93,6 +96,59 @@ struct WatchCourtJournalView: View {
                 Button("Delete", role: .destructive) { if let deleting { _ = store.saveCourtMutation(.deleteCoaching(deleting)) }; deleting = nil }
                 Button("Cancel", role: .cancel) { deleting = nil }
             }
+    }
+}
+
+private struct WatchCourtProgressView: View {
+    @EnvironmentObject private var store: WatchTennisStore
+    let athleteID: UUID
+    let sport: CourtSportSelection
+    @State private var days = 30
+    private var through: Date { Date() }
+    private var from: Date { Calendar.current.date(byAdding: .day, value: -days, to: through) ?? through }
+    private var report: CourtProgressReport? {
+        CourtProgressReport.make(athleteID: athleteID, sport: sport, data: store.snapshot.courtLibrary,
+                                 from: from, through: through, includeGoal: true)
+    }
+    var body: some View {
+        List {
+            if let report {
+                CourtCaptureIdentity(athlete: report.athlete, sport: sport, coached: true)
+                Picker("Period", selection: $days) {
+                    Text("Last 7 days").tag(7)
+                    Text("Last 30 days").tag(30)
+                    Text("Last 90 days").tag(90)
+                    Text("Last year").tag(365)
+                }.accessibilityIdentifier("watchProgressPeriod")
+                Text("\(report.from.fullTennisDate) to \(report.through.fullTennisDate)")
+                ForEach(report.rows) { row in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(row.title).font(.headline)
+                        Text(row.value)
+                    }.accessibilityElement(children: .ignore)
+                        .accessibilityLabel(row.title).accessibilityValue(row.value)
+                        .accessibilityIdentifier("watchProgress." + row.title)
+                }
+                if CourtFeature.measuredDrills.isAvailable(in: store.snapshot.settings.trackingMode) {
+                    let drills = store.snapshot.court.drills.filter {
+                        $0.athleteID == athleteID && $0.sport == sport && $0.date >= from && $0.date <= through
+                            && !store.snapshot.court.deletedIDs.contains($0.id)
+                    }.sorted { $0.date > $1.date }
+                    ForEach(drills) { drill in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(drill.date, style: .date).font(.caption)
+                            Text(drill.summary)
+                            Text(drill.setup).font(.footnote)
+                            Text(drill.conditions).font(.footnote)
+                        }.accessibilityElement(children: .combine)
+                    }
+                    if !drills.isEmpty {
+                        Text("Compare matching setups, focuses, conditions and units. Recorded attempts are not an ability rating.").font(.footnote)
+                    }
+                }
+                Text("Recorded activity only. Missing records do not mean no activity took place.").font(.footnote)
+            } else { Text("This player or sport is no longer available.") }
+        }.navigationTitle("Player Progress").pickerStyle(.navigationLink)
     }
 }
 

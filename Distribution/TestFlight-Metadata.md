@@ -1,8 +1,8 @@
 # TestFlight Metadata
 
-The App Store Connect record is registered as **Court Story**, using `com.inclusophy.tennistracker`. Build 33 addresses corrected training duration, Watch workout start, streamlined entry, dashboard hierarchy and separate tournament outcomes. Bundle identifiers and library storage remain unchanged.
+The App Store Connect record is registered as **Court Story**, using its existing permanent bundle identifier. Build 34 adds multiple racket sports, official scoring, integrated coaching and media, native Watch setup and scoped player progress. Bundle identifiers and library storage remain unchanged.
 
-Build 32 is the previous approved external beta. Build 33 must pass new native tests, visual review, archive and signed-IPA checks, independent clean-install privacy checks and Apple's processing/review before its availability is reported. The existing Owner Verification and Community Beta groups are retained. This is not an App Store release submission.
+Build 33 is the previous approved external beta. Build 34 must pass new native tests, visual review, archive and signed-IPA checks, independent clean-install privacy checks and Apple's processing/review before its availability is reported. The existing Owner Verification and Community Beta groups are retained. This is not an App Store release submission.
 
 ## Beta Description
 

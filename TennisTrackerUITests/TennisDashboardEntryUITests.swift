@@ -177,7 +177,7 @@ final class TennisDashboardEntryUITests: XCTestCase {
                 app.buttons["Record Match"].tap()
                 XCTAssertTrue(app.buttons["saveMatchButton"].waitForExistence(timeout: 5))
                 capture("iPhone \(mode) match entry \(large ? "accessibility XXXL" : "normal")")
-                reveal(app.buttons["set1YourGames"])
+                reveal(app.buttons["courtRound0Side0"])
                 capture("iPhone \(mode) recorded score \(large ? "accessibility XXXL" : "normal")")
                 app.buttons["Cancel"].tap()
             }

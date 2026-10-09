@@ -10,7 +10,7 @@ final class TennisNotificationsAndAchievementsUITests: XCTestCase {
     }
 
     func testColdReflectionNotificationOpensFieldsForExactSessionAndPersists() {
-        let app = launch(["-test-notification=reflection"])
+        let app = launch(["-test-notification=reflection", "-ui-court-standard"])
         XCTAssertTrue(app.navigationBars["Training Reflection"].waitForExistence(timeout: 8))
         XCTAssertTrue(app.staticTexts["reflectionSessionSummary"].label.contains("Chris"))
         let progress = app.textFields["reflectionProgressField"]
@@ -27,7 +27,7 @@ final class TennisNotificationsAndAchievementsUITests: XCTestCase {
     }
 
     func testWarmReminderMovesFromDashboardDirectlyToReflection() {
-        let app = launch(["-test-notification=reflection", "-test-notification-warm"])
+        let app = launch(["-test-notification=reflection", "-test-notification-warm", "-ui-court-standard"])
         XCTAssertTrue(app.tabBars.buttons["Dashboard"].waitForExistence(timeout: 8))
         app.buttons["openTestReminder"].tap()
         XCTAssertTrue(app.navigationBars["Training Reflection"].waitForExistence(timeout: 8))
@@ -88,7 +88,7 @@ final class TennisNotificationsAndAchievementsUITests: XCTestCase {
             let link = app.descendants(matching: .any).matching(identifier: "achievementsLink").firstMatch
             reveal(link, in: app); link.tap()
             XCTAssertTrue(app.staticTexts["achievementCollectionSummary"].waitForExistence(timeout: 5))
-            XCTAssertTrue(app.staticTexts["achievementCollectionSummary"].label.contains("of 22"))
+            XCTAssertTrue(app.staticTexts["achievementCollectionSummary"].label.contains("of 25"))
             let target = app.staticTexts["achievement.training.10"]
             reveal(target, in: app)
             XCTAssertTrue((target.value as? String ?? "").contains("2 of 10"))
@@ -116,11 +116,7 @@ final class TennisNotificationsAndAchievementsUITests: XCTestCase {
     }
 
     private func reveal(_ element: XCUIElement, in app: XCUIApplication) {
-        for _ in 0..<25 {
-            if element.exists && element.isHittable && element.frame.midY < app.frame.maxY - 75 { return }
-            app.swipeUp()
-        }
-        XCTFail("Could not reach \(element)")
+        revealPhoneElement(element, in: app)
     }
     private func capture(_ app: XCUIApplication, _ name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot()); attachment.name = name

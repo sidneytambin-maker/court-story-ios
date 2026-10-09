@@ -30,6 +30,51 @@ final class CourtDoublesServiceTests: XCTestCase {
         XCTAssertEqual(pair(score), ["Blair", "Drew"])
     }
 
+    func testCorrectedTennisPointsRefreshCourtAndTieBreakServerAndUndo() {
+        var score = match(.tennis)
+        XCTAssertTrue(score.correctPoints([1, 0]))
+        XCTAssertEqual(pair(score), ["Alex", "Drew"])
+        XCTAssertTrue(score.undo())
+        XCTAssertEqual(pair(score), ["Alex", "Casey"])
+        for _ in 0..<6 {
+            for _ in 0..<4 { score.awardRally(to: 0) }
+            for _ in 0..<4 { score.awardRally(to: 1) }
+        }
+        let before = score.frame
+        XCTAssertTrue(score.correctPoints([4, 3]))
+        XCTAssertTrue(score.frame.tennis.isTiebreak)
+        XCTAssertEqual(score.frame.server, 0)
+        XCTAssertEqual(pair(score), ["Alex", "Drew"])
+        XCTAssertFalse(score.correctPoints([7, 5]))
+        XCTAssertTrue(score.undo()); XCTAssertEqual(score.frame, before)
+    }
+
+    func testPointCorrectionUpdatesTablePairAndBadmintonCourtWithoutPhantomHandover() {
+        var table = match(.tableTennis)
+        XCTAssertTrue(table.correctPoints([2, 0]))
+        XCTAssertEqual(pair(table), ["Casey", "Blair"])
+        XCTAssertTrue(table.correctPoints([0, 0]))
+        XCTAssertEqual(pair(table), ["Alex", "Casey"])
+        var badminton = match(.badminton)
+        XCTAssertTrue(badminton.correctPoints([3, 1]))
+        XCTAssertEqual(pair(badminton), ["Alex", "Drew"])
+        XCTAssertEqual(badminton.frame.doublesService?.box, .left)
+        var pickleball = match(.pickleball)
+        XCTAssertTrue(pickleball.correctPoints([1, 0]))
+        XCTAssertEqual(pair(pickleball), ["Alex", "Drew"])
+        XCTAssertEqual(pickleball.frame.serverNumber, 2)
+    }
+
+    func testExpediteAtDecidingFivePreservesChangedEndsAndUndo() {
+        var score = match(.tableTennis)
+        for winner in [0, 1, 0, 1] { for _ in 0..<11 { score.awardRally(to: winner) } }
+        for _ in 0..<5 { score.awardRally(to: 0) }
+        let before = score.frame
+        XCTAssertTrue(score.startExpedite(interruptedRally: false))
+        XCTAssertTrue(score.frame.doublesService?.midpointChanged == true)
+        XCTAssertTrue(score.undo()); XCTAssertEqual(score.frame, before)
+    }
+
     func testTableTennisReceiverBecomesServerAndFormerServersPartnerReceives() {
         var score = match(.tableTennis)
         let expected = [["Alex", "Casey"], ["Casey", "Blair"], ["Blair", "Drew"], ["Drew", "Alex"], ["Alex", "Casey"]]

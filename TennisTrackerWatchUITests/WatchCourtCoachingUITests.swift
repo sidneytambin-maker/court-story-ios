@@ -47,4 +47,56 @@ final class WatchCourtCoachingUITests: XCTestCase {
         XCTAssertFalse(app.buttons["Journal and Progress"].exists)
         evidence("Large text Basic player details")
     }
+    func testAthleteProgressHasPeriodAndScopedResults() {
+        launch(); tap("Your Players"); tap("Demo Player Morgan")
+        tap("Journal and Progress"); tap("Progress by Period")
+        XCTAssertTrue(app.navigationBars["Player Progress"].waitForExistence(timeout: 10))
+        tap("watchProgressPeriod"); tap("Last 7 days")
+        let close = app.buttons["close-sheet"]
+        if close.waitForExistence(timeout: 1) { close.tap() }
+        let training = app.descendants(matching: .any).matching(identifier: "watchProgress.Training").firstMatch
+        for _ in 0..<16 {
+            if training.exists && training.isHittable { break }
+            app.swipeUp()
+        }
+        XCTAssertTrue(training.exists)
+        XCTAssertTrue((training.value as? String ?? "").contains("recorded sessions"))
+        evidence("Watch scoped seven-day athlete progress")
+    }
+    func testWelcomeValidatesNameAndCancelRetainsRoleChoice() {
+        app.launchArguments = ["-ui-testing-watch", "-ui-testing-court-welcome", "-ui-testing-reset-setup"]
+        app.launch()
+        XCTAssertTrue(app.buttons["watchSetupCoach"].waitForExistence(timeout: 20))
+        tap("watchSetupCoach")
+        tap("watchSetupContinue")
+        XCTAssertTrue(app.staticTexts["watchSetupError"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["watchSetupError"].label.contains("Enter your name"))
+        tap("Cancel Setup")
+        tap("watchSetupPlayer")
+        XCTAssertTrue(app.textFields["watchSetupName"].waitForExistence(timeout: 5))
+        evidence("Native Watch player welcome and essential fields")
+    }
+    func testRestoredWelcomeDraftCanChooseSportModeAndFinishCoachSetup() {
+        // A saved fictional name exercises resume without relying on simulator dictation.
+        app.launchArguments = ["-ui-testing-watch", "-ui-testing-court-welcome", "-ui-testing-reset-setup", "-ui-testing-named-setup"]
+        app.launch()
+        XCTAssertTrue(app.buttons["watchSetupCoach"].waitForExistence(timeout: 20))
+        tap("watchSetupCoach")
+        XCTAssertEqual(app.textFields["watchSetupName"].value as? String, "Demo Wrist Player")
+        tap("courtSportPicker"); tap("Badminton")
+        if app.buttons["close-sheet"].waitForExistence(timeout: 1) { app.buttons["close-sheet"].tap() }
+        tap("watchSetupContinue")
+        tap("watchSetupMode"); tap("Standard")
+        if app.buttons["close-sheet"].waitForExistence(timeout: 1) { app.buttons["close-sheet"].tap() }
+        tap("watchSetupContinue")
+        evidence("Watch setup summary before finishing")
+        app.terminate()
+        app.launchArguments = ["-ui-testing-watch", "-ui-testing-court-welcome"]
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Ready for your court story"].waitForExistence(timeout: 20))
+        tap("watchSetupContinue")
+        XCTAssertTrue(app.buttons["Your Players"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["watchSetupCoach"].exists)
+        evidence("Completed native Watch coach setup")
+    }
 }

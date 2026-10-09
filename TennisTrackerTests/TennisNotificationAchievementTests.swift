@@ -56,6 +56,7 @@ final class TennisNotificationAchievementTests: XCTestCase {
     func testFollowUpsAreScheduledAheadWithoutNeedingAnEndTimeSave() throws {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         var data = AppData(); let playerID = UUID()
+        data.settings.trackingMode = .standard
         data.settings.postSessionRemindersEnabled = true; data.settings.matchResultRemindersEnabled = true
         var session = TrainingSession(playerID: playerID); session.date = now.addingTimeInterval(86400)
         var match = MatchRecord(playerID: playerID); match.status = .scheduled
@@ -73,6 +74,7 @@ final class TennisNotificationAchievementTests: XCTestCase {
     func testReflectionUsesActualFinishAndDoesNotNagAfterNotesOrDuringTracking() throws {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         var data = AppData(); data.settings.postSessionRemindersEnabled = true
+        data.settings.trackingMode = .standard
         var session = TrainingSession(playerID: UUID())
         session.date = now.addingTimeInterval(-7200); session.actualStart = session.date
         session.actualFinish = now.addingTimeInterval(-60)

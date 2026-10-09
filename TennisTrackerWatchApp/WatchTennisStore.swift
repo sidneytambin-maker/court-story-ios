@@ -145,7 +145,17 @@ final class WatchTennisStore: NSObject, ObservableObject, WCSessionDelegate {
                 data = TennisMatchListUITestFixture.make()
             }
             if ProcessInfo.processInfo.arguments.contains("-ui-testing-court-coach") { data = CourtDemoLibrary.make() }
-            if ProcessInfo.processInfo.arguments.contains("-ui-testing-court-welcome") { data = AppData() }
+            if ProcessInfo.processInfo.arguments.contains("-ui-testing-court-welcome") {
+                data = AppData()
+                if ProcessInfo.processInfo.arguments.contains("-ui-testing-reset-setup") {
+                    CourtSetupDraft.clear("Watch")
+                    if ProcessInfo.processInfo.arguments.contains("-ui-testing-named-setup") {
+                        var draft = CourtSetupDraft()
+                        draft.player.name = "Demo Wrist Player"
+                        draft.persist("Watch")
+                    }
+                }
+            }
             if let argument = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-watch-mode=") }),
                let mode = TrackingMode(rawValue: String(argument.dropFirst("-watch-mode=".count))) {
                 data.settings.trackingMode = mode

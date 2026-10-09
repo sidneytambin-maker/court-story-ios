@@ -5,6 +5,14 @@ enum PhoneUIVisibleRegion {
 }
 
 extension XCTestCase {
+    func choosePhoneOneSetFormat(in app: XCUIApplication) {
+        revealPhoneElement(app.buttons["Scoring rules"], in: app).tap()
+        revealPhoneElement(app.buttons["courtOfficialFormat"], in: app).tap()
+        revealPhoneElement(app.buttons["One set, tie-break at 6-all"], in: app).tap()
+        XCTAssertTrue(app.navigationBars["Match rules"].waitForExistence(timeout: 5))
+        app.navigationBars["Match rules"].buttons.firstMatch.tap()
+    }
+
     @discardableResult
     func revealPhoneElement(_ element: XCUIElement, in app: XCUIApplication,
                             showing region: PhoneUIVisibleRegion = .full,

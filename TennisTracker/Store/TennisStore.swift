@@ -33,8 +33,6 @@ final class TennisStore: ObservableObject {
         #if DEBUG && targetEnvironment(simulator)
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-court-coach") {
             data = CourtDemoLibrary.make()
-            if ProcessInfo.processInfo.arguments.contains("-ui-court-basic") { data.settings.trackingMode = .basic }
-            if ProcessInfo.processInfo.arguments.contains("-ui-court-standard") { data.settings.trackingMode = .standard }
         }
         if ProcessInfo.processInfo.arguments.contains("-ui-testing-match-list") {
             data = TennisMatchListUITestFixture.make()
@@ -66,6 +64,8 @@ final class TennisStore: ObservableObject {
             if ProcessInfo.processInfo.arguments.contains("-ui-theme-classic") { data.settings.theme = .classic }
             if ProcessInfo.processInfo.arguments.contains("-ui-theme-contrast") { data.settings.theme = .highContrast }
         }
+        if ProcessInfo.processInfo.arguments.contains("-ui-court-basic") { data.settings.trackingMode = .basic }
+        if ProcessInfo.processInfo.arguments.contains("-ui-court-standard") { data.settings.trackingMode = .standard }
         if !ProcessInfo.processInfo.arguments.contains("-test-notification-warm"),
            let route = TennisNotificationTestSupport.route(training: data.trainingSessions, matches: data.matches, tournaments: data.tournaments) {
             TennisNotificationInbox.enqueue(route.url)

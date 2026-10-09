@@ -112,6 +112,42 @@ struct CourtDoublesService: Codable, Equatable {
         receiverMember = sport == .beachTennis ? nil : member(on: 1 - frame.server, in: box)
     }
 
+    mutating func correctPoints(sport: CourtSport, rules: CourtScoringRules, from old: CourtScoreFrame, to new: CourtScoreFrame) {
+        switch sport {
+        case .tennis, .padel, .beachTennis, .platformTennis:
+            if !isDecidingPoint(rules: rules, frame: new) { selectedDecidingBox = nil }
+            refreshTennis(sport: sport, rules: rules, frame: new)
+        case .tableTennis:
+            let difference = new.serviceTurn - old.serviceTurn
+            for _ in 0..<(abs(difference) % 4) {
+                if difference > 0 { rotateTable(previousServer: old.server, nextServer: new.server) }
+                else {
+                    let receiver = serverMember
+                    serverMember = 1 - (receiverMember ?? 0)
+                    receiverMember = receiver
+                }
+            }
+            let changedEnds = new.roundsWon.allSatisfy { $0 == rules.roundsToWin - 1 } && (new.points.max() ?? 0) >= 5
+            if changedEnds != midpointChanged {
+                receiverMember = 1 - (receiverMember ?? 0)
+                midpointChanged = changedEnds
+            }
+            rememberTablePair(server: new.server)
+        case .badminton:
+            // A point correction is not another rally or service handover.
+            box = new.points[new.server].isMultiple(of: 2) ? .right : .left
+            rightMembers[new.server] = box == .right ? serverMember : 1 - serverMember
+            receiverMember = member(on: 1 - new.server, in: box)
+        case .pickleball:
+            for side in 0..<2 where (new.points[side] - old.points[side]) % 2 != 0 {
+                rightMembers[side] = 1 - rightMembers[side]
+            }
+            box = serverMember == rightMembers[new.server] ? .right : .left
+            receiverMember = member(on: 1 - new.server, in: box)
+        case .squash, .racquetball, .racketlon, .custom: break
+        }
+    }
+
     func isDecidingPoint(rules: CourtScoringRules, frame: CourtScoreFrame) -> Bool {
         guard rules.system == .tennisGames, !frame.tennis.isTiebreak,
               !(rules.decidingMatchTieBreak && rules.roundsToWin > 1 && frame.roundsWon.allSatisfy { $0 == rules.roundsToWin - 1 }),

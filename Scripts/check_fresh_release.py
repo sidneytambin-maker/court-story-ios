@@ -64,7 +64,7 @@ def main(app, platform):
             run("bootstatus", device, "-b")
             run("install", device, app)
             # Release must ignore all fixture/reset arguments.
-            run("launch", device, identifier, "-ui-testing-reset-store", "-ui-testing-venue-dashboard", "-ui-testing-watch", "-ui-testing-court-coach", "-ui-court-power")
+            run("launch", device, identifier, "-ui-testing-reset-store", "-ui-testing-venue-dashboard", "-ui-testing-watch", "-ui-testing-court-coach", "-ui-court-power", "-ui-testing-court-welcome", "-ui-testing-reset-setup", "-ui-testing-named-setup")
             container = Path(run("get_app_container", device, identifier, "data"))
             path = container / ("Library/Preferences/" + identifier + ".plist" if platform == "watchOS" else "Library/Application Support/TennisTracker/tennis-tracker-data.json")
             data = None
