@@ -47,11 +47,15 @@ final class WatchCourtCoachingUITests: XCTestCase {
         confirmation.tap()
         let roster = app.navigationBars["Players"]
         let changedAction = app.buttons[title == "Archive Player" ? "Restore Player" : "Archive Player"]
-        let changed = NSPredicate { _, _ in roster.exists || changedAction.exists }
+        let changed = NSPredicate { _, _ in roster.isHittable || changedAction.exists }
         expectation(for: changed, evaluatedWith: app)
         waitForExpectations(timeout: 10)
-        if !roster.exists { app.navigationBars["Demo Player Morgan"].buttons.firstMatch.tap() }
-        XCTAssertTrue(roster.waitForExistence(timeout: 5))
+        // A presented detail keeps the underlying roster in XCTest's tree.
+        // Return through its real Back control before asserting roster contents.
+        let back = app.navigationBars["Demo Player Morgan"].buttons.matching(NSPredicate(format: "label == %@", "Back to players")).firstMatch
+        if back.exists && back.isHittable { back.tap() }
+        expectation(for: NSPredicate { _, _ in roster.isHittable }, evaluatedWith: app)
+        waitForExpectations(timeout: 5)
     }
     private func evidence(_ name: String) {
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = name; screenshot.lifetime = .keepAlways; add(screenshot)
