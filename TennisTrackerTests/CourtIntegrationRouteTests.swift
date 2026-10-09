@@ -2,6 +2,35 @@ import XCTest
 @testable import TennisTracker
 
 final class CourtIntegrationRouteTests: XCTestCase {
+    func testCorrectedCourtScoreTakesPrecedenceOverLegacyTennisSummary() throws {
+        var match = MatchRecord(playerID: UUID())
+        match.setScores = "0-6"
+        match.yourSetsWon = 0; match.opponentSetsWon = 1
+        var rules = CourtScoringRules.standard(for: .tennis)
+        rules.roundsToWin = 1
+        match.court.rules = rules
+        var score = match.makeCourtScore()
+        XCTAssertNil(score.recordResult([CourtScoreRound(points: [7, 6], tieBreak: [7, 5])]))
+        match.applyCourtScore(score)
+        // A migrated record can retain legacy fields; the current structured score owns its summary.
+        match.setScores = "0-6"
+        let restored = try JSONDecoder().decode(MatchRecord.self, from: JSONEncoder().encode(match))
+        XCTAssertEqual(TennisSummaryFormatter.matchSummary(restored).scoreText, "7-6 (tie-break 7-5)")
+        XCTAssertTrue(TennisSummaryFormatter.match(restored, style: .accessibility).contains("tie-break 7-5"))
+        XCTAssertFalse(TennisSummaryFormatter.match(restored, style: .accessibility).contains("0-6"))
+    }
+
+    func testLiveRallySummaryUsesCurrentSportPoints() {
+        var match = MatchRecord(playerID: UUID())
+        match.status = .inProgress; match.court.sport = CourtSportSelection(sport: .badminton)
+        match.configureNewCourtMatch()
+        var score = match.makeCourtScore()
+        score.awardRally(to: 0); score.awardRally(to: 1); score.awardRally(to: 0)
+        match.applyCourtScore(score)
+        XCTAssertEqual(TennisSummaryFormatter.matchSummary(match).scoreText, score.summary)
+        XCTAssertTrue(TennisSummaryFormatter.matchSummary(match).scoreText.contains(score.sides[0].name + " 2"))
+    }
+
     func testResultReminderPreservesOfficialNonTennisScoreAndCurrentMetadata() throws {
         var current = MatchRecord(playerID: UUID())
         current.status = .scheduled; current.court.sport = CourtSportSelection(sport: .badminton)

@@ -187,6 +187,9 @@ enum TennisSummaryFormatter {
     }
 
     private static func scoreText(for match: MatchRecord) -> String {
+        if let score = match.court.score, match.status != .scheduled {
+            return match.status == .inProgress ? score.summary : score.resultSummary
+        }
         if match.status == .inProgress, let live = match.liveScore {
             let state = TennisScoreState(snapshot: live)
             return [live.completedSetScores.joined(separator: ", "), "\(live.playerGames)-\(live.opponentGames)", state.pointScore(suddenDeathDeuce: match.suddenDeathDeuce)].filter { !$0.isBlank }.joined(separator: ", ")

@@ -10,8 +10,8 @@ final class CourtCoachingUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.tabBars.buttons["Players"].waitForExistence(timeout: 30))
     }
-    private func reveal(_ element: XCUIElement) {
-        revealPhoneElement(element, in: app, showing: element.elementType == .staticText ? .top : .full)
+    private func reveal(_ element: XCUIElement, showing region: PhoneUIVisibleRegion = .full) {
+        revealPhoneElement(element, in: app, showing: region)
     }
     private func openAthlete() {
         app.tabBars.buttons["Players"].tap()
@@ -41,7 +41,7 @@ final class CourtCoachingUITests: XCTestCase {
         include.coordinate(withNormalizedOffset: CGVector(dx: 0.90, dy: 0.5)).tap()
         XCTAssertEqual(include.value as? String, "1")
         let edited = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", "UI edit retained", "UI edit retained")).firstMatch
-        reveal(edited); XCTAssertTrue(edited.exists)
+        reveal(edited, showing: .top); XCTAssertTrue(edited.exists)
     }
     func testBasicHidesJournalMediaAndReportsWhileKeepingCoreProgress() {
         launch("basic"); openAthlete()

@@ -201,6 +201,18 @@ struct CourtRecordedScoreFields: View {
     @State private var score: CourtScoreSession?
     @State private var rounds: [CourtScoreRound] = []
     @State private var decidingWinner: Int?
+    @State private var initialValidationApplied = false
+
+    init(match: Binding<MatchRecord>, validationMessage: Binding<String>, showsRules: Bool = false) {
+        _match = match
+        _validationMessage = validationMessage
+        self.showsRules = showsRules
+        let value = match.wrappedValue.makeCourtScore()
+        _score = State(initialValue: value)
+        _decidingWinner = State(initialValue: value.frame.gummiarmPlayed ? value.frame.winningSide : nil)
+        _rounds = State(initialValue: value.frame.rounds.isEmpty
+            ? [CourtScoreRound(points: Array(repeating: 0, count: value.sides.count))] : value.frame.rounds)
+    }
     var body: some View {
         Group {
             if let score {
@@ -248,17 +260,11 @@ struct CourtRecordedScoreFields: View {
                 }
                 if !validationMessage.isEmpty { Text(validationMessage).accessibilityIdentifier("courtRecordedScoreError") }
                 else { Text(match.court.score?.summary ?? "Enter the recorded scores.").accessibilityIdentifier("courtRecordedScoreSummary") }
-            } else {
-                // A lazy Form cannot call onAppear for an entirely empty Group.
-                ProgressView().accessibilityLabel("Loading score")
             }
         }
         .onAppear {
-            guard score == nil else { return }
-            let value = match.makeCourtScore()
-            score = value
-            decidingWinner = value.frame.gummiarmPlayed ? value.frame.winningSide : nil
-            rounds = value.frame.rounds.isEmpty ? [CourtScoreRound(points: Array(repeating: 0, count: value.sides.count))] : value.frame.rounds
+            guard !initialValidationApplied else { return }
+            initialValidationApplied = true
             apply()
         }
         .onChange(of: rounds) { _, _ in apply() }

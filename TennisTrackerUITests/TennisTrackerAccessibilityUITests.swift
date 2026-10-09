@@ -409,8 +409,15 @@ final class TennisTrackerAccessibilityUITests: XCTestCase {
         XCTAssertTrue(summary.label.contains("wins"))
         XCTAssertTrue(summary.label.contains("tie-break 7-5"))
         app.buttons["saveMatchButton"].tap()
+        XCTAssertTrue(app.navigationBars["Matches"].waitForExistence(timeout: 5))
         let score = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", "tie-break 7-5", "tie-break 7-5")).firstMatch
-        XCTAssertTrue(score.waitForExistence(timeout: 5))
+        revealPhoneElement(score, in: app, showing: .top)
+        XCTAssertTrue(score.exists)
+        app.terminate(); app.launchArguments = []; app.launch()
+        openDestination("Matches")
+        revealPhoneElement(score, in: app, showing: .top)
+        XCTAssertTrue(score.exists)
+        capturePhoneEvidence(app, name: "Recorded tie-break survives relaunch")
     }
 
     func testDashboardFocusRepairOpensChoicesAndGoalsCanBeSaved() {

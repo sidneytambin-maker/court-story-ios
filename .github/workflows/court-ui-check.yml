@@ -10,6 +10,10 @@ on:
         description: Diagnose Watch scoring and coaching navigation
         type: boolean
         default: false
+      phone_regression_only:
+        description: Check large-text navigation and saved tie-break persistence
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -24,12 +28,14 @@ jobs:
       - name: Run iPhone interface journeys
         env:
           EXPANSION_ONLY: ${{ inputs.expansion_only }}
+          PHONE_REGRESSION_ONLY: ${{ inputs.phone_regression_only }}
         run: |
           set -euo pipefail
           ID=$(python3 Scripts/create_apple_test_simulator.py small-phone)
           xcrun simctl bootstatus "$ID" -b
           TEST_SELECTION=(-only-testing:TennisTrackerUITests)
           if [ "$EXPANSION_ONLY" = true ]; then TEST_SELECTION=(-only-testing:TennisTrackerUITests/CourtCoachingUITests); fi
+          if [ "$PHONE_REGRESSION_ONLY" = true ]; then TEST_SELECTION=(-only-testing:TennisTrackerUITests/CourtCoachingUITests -only-testing:TennisTrackerUITests/TennisNotificationsAndAchievementsUITests/testLargeTextAchievementBadgesRemainAccessible -only-testing:TennisTrackerUITests/TennisTrackerAccessibilityUITests/testRecordedTiebreakAndTrainingLinkCanBeEnteredWithPickers); fi
           xcodebuild test -project TennisTrackeriOS.xcodeproj -scheme TennisTracker -destination "id=$ID" "${TEST_SELECTION[@]}" -parallel-testing-enabled NO -resultBundlePath CourtPhoneUI.xcresult CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" 2>&1 | tee CourtPhoneUI.log
       - name: Export interface evidence
         if: always()
@@ -49,6 +55,7 @@ jobs:
             CourtPhoneReview
           retention-days: 7
   watch-interface:
+    if: ${{ !inputs.phone_regression_only }}
     runs-on: macos-latest
     timeout-minutes: 100
     steps:

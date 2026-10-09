@@ -90,7 +90,7 @@ final class TennisNotificationsAndAchievementsUITests: XCTestCase {
             XCTAssertTrue(app.staticTexts["achievementCollectionSummary"].waitForExistence(timeout: 5))
             XCTAssertTrue(app.staticTexts["achievementCollectionSummary"].label.contains("of 25"))
             let target = app.staticTexts["achievement.training.10"]
-            reveal(target, in: app)
+            revealPhoneElement(target, in: app, showing: .top)
             XCTAssertTrue((target.value as? String ?? "").contains("2 of 10"))
             capture(app, "Achievement badges " + theme)
             app.terminate()
@@ -102,7 +102,7 @@ final class TennisNotificationsAndAchievementsUITests: XCTestCase {
         let link = app.descendants(matching: .any).matching(identifier: "achievementsLink").firstMatch
         reveal(link, in: app); link.tap()
         let target = app.staticTexts["achievement.training.10"]
-        reveal(target, in: app); XCTAssertTrue(target.isHittable)
+        revealPhoneElement(target, in: app, showing: .top); XCTAssertTrue(target.isHittable)
         capture(app, "Achievements accessibility text size")
     }
 
@@ -116,7 +116,7 @@ final class TennisNotificationsAndAchievementsUITests: XCTestCase {
     }
 
     private func reveal(_ element: XCUIElement, in app: XCUIApplication) {
-        revealPhoneElement(element, in: app, showing: element.elementType == .staticText ? .top : .full)
+        revealPhoneElement(element, in: app)
     }
     private func capture(_ app: XCUIApplication, _ name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot()); attachment.name = name
