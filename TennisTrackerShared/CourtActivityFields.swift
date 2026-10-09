@@ -6,8 +6,11 @@ struct CourtCaptureIdentity: View {
     var coached = false
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Label(athlete, systemImage: coached ? "person.2" : "person")
-                .font(.subheadline.weight(.semibold))
+            Label {
+                Text(athlete).lineLimit(nil).fixedSize(horizontal: false, vertical: true)
+            } icon: {
+                Image(systemName: coached ? "person.2" : "person")
+            }.font(.subheadline.weight(.semibold))
             Text(sport.name + (coached ? ", coached activity" : "")).font(.caption)
         }
             .accessibilityElement(children: .ignore)

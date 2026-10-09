@@ -10,6 +10,11 @@ final class WatchCourtCoachingUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Your Players"].waitForExistence(timeout: 30))
     }
     private func tap(_ label: String) {
+        if ["Cancel", "Save", "saveWatchTraining"].contains(label) {
+            // Native watchOS toolbar buttons have nested accessibility wrappers.
+            let toolbarButton = app.navigationBars.buttons.matching(identifier: label).firstMatch
+            if toolbarButton.exists && toolbarButton.isHittable { toolbarButton.tap(); return }
+        }
         let button = app.buttons[label]
         reveal(button, label: label)
         button.tap()
@@ -79,11 +84,9 @@ final class WatchCourtCoachingUITests: XCTestCase {
         tap("watchProgressPeriod"); tap("Last 7 days")
         let close = app.buttons["close-sheet"]
         if close.waitForExistence(timeout: 1) { close.tap() }
-        let training = app.descendants(matching: .any).matching(identifier: "watchProgress.Training").firstMatch
-        for _ in 0..<16 {
-            if training.exists && training.isHittable { break }
-            app.swipeUp()
-        }
+        let training = app.descendants(matching: .any).matching(identifier: "watchProgress.Training")
+            .matching(NSPredicate(format: "value != nil")).firstMatch
+        reveal(training, label: "Training progress")
         XCTAssertTrue(training.exists)
         XCTAssertTrue((training.value as? String ?? "").contains("recorded sessions"))
         evidence("Watch scoped seven-day athlete progress")
