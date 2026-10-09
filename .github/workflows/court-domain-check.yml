@@ -55,7 +55,9 @@ jobs:
           xcrun simctl bootstatus "$PHONE" -b
           xcrun simctl bootstatus "$ID" -b
           echo "WATCH_SIMULATOR_ID=$ID" >> "$GITHUB_ENV"
-          xcodebuild build -project TennisTrackeriOS.xcodeproj -scheme TennisTracker -destination "id=$PHONE" -derivedDataPath CourtPaired CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=YES CODE_SIGN_IDENTITY="-" > CourtPaired.log 2>&1
+          xcrun simctl list devices available --json > CourtSimulatorDevices.json
+          xcrun simctl list pairs --json > CourtSimulatorPairs.json
+          xcodebuild build -project TennisTrackeriOS.xcodeproj -scheme TennisTracker -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath CourtPaired CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=YES CODE_SIGN_IDENTITY="-" > CourtPaired.log 2>&1
           xcrun simctl install "$PHONE" CourtPaired/Build/Products/Debug-iphonesimulator/TennisTracker.app
           xcodebuild test -project TennisTrackeriOS.xcodeproj -scheme TennisTrackerWatchTests -destination "id=$ID" -only-testing:TennisTrackerWatchUITests/WatchWorkoutStartupUITests -parallel-testing-enabled NO -resultBundlePath CourtWatch.xcresult CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=YES CODE_SIGN_IDENTITY="-" 2>&1 | tee CourtWatch.log
       - name: Export Watch workout evidence
@@ -77,6 +79,8 @@ jobs:
           path: |
             CourtWatch.log
             CourtPaired.log
+            CourtSimulatorDevices.json
+            CourtSimulatorPairs.json
             CourtWatch.xcresult
             CourtWatchReview
           retention-days: 7

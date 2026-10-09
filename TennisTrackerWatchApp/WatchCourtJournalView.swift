@@ -87,8 +87,8 @@ struct WatchCourtJournalView: View {
                 }
             } else { Text("This player is no longer available.") }
         }.navigationTitle("Player Journal")
-            .sheet(item: $observation) { NavigationStack { WatchCourtObservationEditor(draft: $0) } }
-            .sheet(item: $drill) { NavigationStack { WatchCourtDrillEditor(draft: $0) } }
+            .sheet(item: $observation) { value in NavigationStack { WatchCourtObservationEditor(draft: value) } }
+            .sheet(item: $drill) { value in NavigationStack { WatchCourtDrillEditor(draft: value) } }
             .confirmationDialog("Delete this coaching record?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible) {
                 Button("Delete", role: .destructive) { if let deleting { _ = store.saveCourtMutation(.deleteCoaching(deleting)) }; deleting = nil }
                 Button("Cancel", role: .cancel) { deleting = nil }
@@ -133,7 +133,7 @@ private struct WatchCourtObservationEditor: View {
             Button("Cancel", role: .cancel) { dismiss() }
         }.navigationTitle("Observation").pickerStyle(.navigationLink)
             .onAppear { if original == nil { original = draft } }
-            .sheet(item: $plan) { NavigationStack { WatchTrainingEditor(draft: $0) } }
+            .sheet(item: $plan) { value in NavigationStack { WatchTrainingEditor(draft: value) } }
     }
     private func save() -> Bool {
         if let current = store.snapshot.court.observations.first(where: { $0.id == draft.id }), current != original {

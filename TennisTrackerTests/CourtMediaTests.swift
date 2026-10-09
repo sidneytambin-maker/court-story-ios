@@ -42,7 +42,9 @@ final class CourtMediaTests: XCTestCase {
         let destination = TennisStore(storeURL: folder.appendingPathComponent("restored.json"))
         try destination.restoreFullBackup(decoded)
         XCTAssertNotEqual(destination.data.libraryID, store.data.libraryID)
-        XCTAssertEqual(destination.data.court.media, store.data.court.media)
+        // Compare the persisted representation: the library's existing ISO-8601 format stores whole seconds.
+        XCTAssertEqual(try JSONEncoder.tennisTracker.encode(destination.data.court.media),
+                       try JSONEncoder.tennisTracker.encode(store.data.court.media))
         XCTAssertEqual(try Data(contentsOf: destination.mediaURL(for: saved)), prepared.bytes)
         XCTAssertThrowsError(try destination.restoreFullBackup(decoded))
         XCTAssertTrue(store.removeCoachingRecord(saved.id))

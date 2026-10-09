@@ -146,6 +146,9 @@ struct CourtMediaEditor: View {
                         DatePicker("Recorded date", selection: $record.createdAt, displayedComponents: [.date, .hourAndMinute])
                         Picker("Linked activity", selection: $record.activityID) {
                             Text("No linked activity").tag(Optional<UUID>.none)
+                            if let activityID = record.activityID, store.data.deletedRecordIDs.contains(activityID) {
+                                Text("Previously linked activity, deleted").tag(Optional(activityID))
+                            }
                             ForEach(store.data.trainingSessions.filter { $0.playerID == record.athleteID && $0.court.sport == record.sport }.sorted { $0.date > $1.date }) {
                                 Text("Training, \($0.date.fullTennisDate)").tag(Optional($0.id))
                             }

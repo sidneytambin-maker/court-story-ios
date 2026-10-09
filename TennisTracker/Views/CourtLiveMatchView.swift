@@ -24,8 +24,8 @@ struct CourtLiveMatchView: View {
                             }
                             CourtScoreSetupFields(score: scoreBinding, showsSideNames: match.court.sport.sport == .custom, doubles: match.matchType == .doubles)
                             StoredVenuePicker(id: matchBinding(\.venueID), venue: matchBinding(\.venue), location: matchBinding(\.location))
-                            TennisTrainingSessionPicker(sessions: store.selectedTraining, coaches: store.data.setup.coaches, selection: matchBinding(\.trainingSessionID))
-                            TennisTournamentPicker(tournaments: store.selectedTournaments, tournamentID: matchBinding(\.tournamentID), customName: matchBinding(\.customTournamentName))
+                            TennisTrainingSessionPicker(sessions: store.data.trainingSessions.filter { $0.playerID == match.playerID && $0.court.sport == match.court.sport }, coaches: store.data.setup.coaches, selection: matchBinding(\.trainingSessionID))
+                            TennisTournamentPicker(tournaments: store.data.tournaments.filter { $0.playerID == match.playerID && $0.court.sport == match.court.sport }, tournamentID: matchBinding(\.tournamentID), customName: matchBinding(\.customTournamentName))
                             Button("Start live scoring") { start() }.accessibilityIdentifier("startCourtLiveScore")
                         }
                     }

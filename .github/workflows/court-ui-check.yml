@@ -1,0 +1,68 @@
+name: Court Story interface regression check
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  phone-interface:
+    runs-on: macos-latest
+    timeout-minutes: 100
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - run: xcodegen generate --spec project-tests.yml
+      - name: Run iPhone interface journeys
+        run: |
+          set -euo pipefail
+          RUNTIME=$(xcrun simctl list runtimes --json | jq -r '[.runtimes[] | select(.isAvailable and (.identifier | contains("iOS")))][-1].identifier')
+          ID=$(xcrun simctl create CourtSmallPhone com.apple.CoreSimulator.SimDeviceType.iPhone-SE-3rd-generation "$RUNTIME")
+          xcrun simctl bootstatus "$ID" -b
+          xcodebuild test -project TennisTrackeriOS.xcodeproj -scheme TennisTracker -destination "id=$ID" -only-testing:TennisTrackerUITests -parallel-testing-enabled NO -resultBundlePath CourtPhoneUI.xcresult CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" 2>&1 | tee CourtPhoneUI.log
+      - name: Export interface evidence
+        if: always()
+        run: |
+          if [ -d CourtPhoneUI.xcresult ]; then
+            mkdir -p CourtPhoneReview
+            xcrun xcresulttool get test-results summary --path CourtPhoneUI.xcresult > CourtPhoneReview/summary.json
+            xcrun xcresulttool export attachments --path CourtPhoneUI.xcresult --output-path CourtPhoneReview/screenshots
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: court-phone-interface
+          path: |
+            CourtPhoneUI.log
+            CourtPhoneUI.xcresult
+            CourtPhoneReview
+          retention-days: 7
+  watch-interface:
+    runs-on: macos-latest
+    timeout-minutes: 100
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - run: xcodegen generate --spec project-watch-tests.yml
+      - name: Run small Watch interface journeys
+        run: |
+          set -euo pipefail
+          ID=$(xcrun simctl list devices available --json | jq -r '[.devices | to_entries[] | select(.key | contains("watchOS")) | .value[] | select(.isAvailable and (.name | test("40mm|41mm|42mm")))][0].udid')
+          test "$ID" != null
+          xcrun simctl bootstatus "$ID" -b
+          xcodebuild test -project TennisTrackeriOS.xcodeproj -scheme TennisTrackerWatchTests -destination "id=$ID" -skip-testing:TennisTrackerWatchUITests/WatchWorkoutStartupUITests -parallel-testing-enabled NO -resultBundlePath CourtWatchUI.xcresult CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=YES CODE_SIGN_IDENTITY="-" 2>&1 | tee CourtWatchUI.log
+      - name: Export interface evidence
+        if: always()
+        run: |
+          if [ -d CourtWatchUI.xcresult ]; then
+            mkdir -p CourtWatchReview
+            xcrun xcresulttool get test-results summary --path CourtWatchUI.xcresult > CourtWatchReview/summary.json
+            xcrun xcresulttool export attachments --path CourtWatchUI.xcresult --output-path CourtWatchReview/screenshots
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: court-watch-interface
+          path: |
+            CourtWatchUI.log
+            CourtWatchUI.xcresult
+            CourtWatchReview
+          retention-days: 7

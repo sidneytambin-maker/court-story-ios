@@ -295,6 +295,7 @@ final class TennisStore: ObservableObject {
         if case .deleteRecord = command {} else if let id = command.recordID, data.deletedRecordIDs.contains(id) { save(); return }
         switch command {
         case .court(let mutation):
+            if case .deleteCoaching(let id) = mutation { _ = removeCoachingRecord(id); return }
             var candidate = data
             if mutation.apply(to: &candidate) { _ = saveCourtCandidate(candidate, announcement: "Coaching changes synced from Apple Watch.") }
         case .deleteRecord(let deletion):
