@@ -74,7 +74,8 @@ extension XCTestCase {
             XCTAssertLessThanOrEqual(controls.count, 1, file: file, line: line)
             let control = controls.firstMatch.exists ? controls.firstMatch : element
             XCTAssertTrue(control.isHittable, file: file, line: line)
-            control.tap()
+            // Keep contact across several frames on a loaded simulator.
+            control.press(forDuration: 0.15)
         }
         let state = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", expected), object: element)
         let result = XCTWaiter.wait(for: [state], timeout: 5)
