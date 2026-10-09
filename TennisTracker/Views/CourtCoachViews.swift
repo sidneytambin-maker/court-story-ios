@@ -226,15 +226,15 @@ struct CourtAthleteDetail: View {
                         NavigationLink("Record or plan activity") { CourtRecordHub().onAppear { _ = store.selectCourtAthlete(athleteID) } }
                     }
                     Button("Edit player", systemImage: "pencil") { editing = true }
+                    if CourtFeature.media.isAvailable(in: store.data.settings.trackingMode) {
+                        NavigationLink("Photos, clips and moments") { CourtMediaLibraryView(athleteID: athleteID, sport: store.selectedSport) }
+                    }
+                    if CourtFeature.coachExport.isAvailable(in: store.data.settings.trackingMode) {
+                        NavigationLink("Preview progress report") { CourtProgressReportView(athleteID: athleteID, sport: store.selectedSport) }
+                    }
                 }
                 CourtAthleteProgressContent(athleteID: athleteID)
                 CourtJournalContent(athleteID: athleteID)
-                if CourtFeature.media.isAvailable(in: store.data.settings.trackingMode) {
-                    Section { NavigationLink("Photos, clips and moments") { CourtMediaLibraryView(athleteID: athleteID, sport: store.selectedSport) } }
-                }
-                if CourtFeature.coachExport.isAvailable(in: store.data.settings.trackingMode) {
-                    Section { NavigationLink("Preview progress report") { CourtProgressReportView(athleteID: athleteID, sport: store.selectedSport) } }
-                }
             } else { Text("This player is unavailable. No activity will be recorded against another player.") }
         }
         .navigationTitle(athlete?.displayName ?? "Player unavailable").tennisThemedList()

@@ -116,7 +116,7 @@ final class TennisNotificationsAndAchievementsUITests: XCTestCase {
     }
 
     private func reveal(_ element: XCUIElement, in app: XCUIApplication) {
-        revealPhoneElement(element, in: app)
+        revealPhoneElement(element, in: app, showing: element.elementType == .staticText ? .top : .full)
     }
     private func capture(_ app: XCUIApplication, _ name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot()); attachment.name = name
