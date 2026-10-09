@@ -75,6 +75,26 @@ final class CourtDoublesServiceTests: XCTestCase {
         XCTAssertTrue(score.undo()); XCTAssertEqual(score.frame, before)
     }
 
+    func testServingSideCorrectionKeepsNamedPairAndNextTennisGameConsistent() {
+        var tennis = match(.tennis)
+        tennis.awardRally(to: 0)
+        let before = tennis.frame
+        XCTAssertTrue(tennis.setServer(1))
+        XCTAssertEqual(pair(tennis), ["Casey", "Blair"])
+        for _ in 0..<3 { tennis.awardRally(to: 0) }
+        XCTAssertEqual(tennis.frame.server, 0)
+        XCTAssertEqual(pair(tennis), ["Alex", "Casey"])
+        for _ in 0..<4 { tennis.undo() }
+        XCTAssertEqual(tennis.frame, before)
+
+        var pickleball = match(.pickleball)
+        pickleball.awardRally(to: 0)
+        XCTAssertTrue(pickleball.setServer(1, serverNumber: 1))
+        XCTAssertEqual(pair(pickleball), ["Casey", "Blair"])
+        XCTAssertTrue(pickleball.setServer(1, serverNumber: 2))
+        XCTAssertEqual(pair(pickleball), ["Drew", "Alex"])
+    }
+
     func testTableTennisReceiverBecomesServerAndFormerServersPartnerReceives() {
         var score = match(.tableTennis)
         let expected = [["Alex", "Casey"], ["Casey", "Blair"], ["Blair", "Drew"], ["Drew", "Alex"], ["Alex", "Casey"]]

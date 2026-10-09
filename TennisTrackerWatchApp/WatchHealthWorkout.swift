@@ -224,13 +224,15 @@ final class WatchHealthWorkout: NSObject, ObservableObject, TennisWorkoutClient,
 
     func finish(at date: Date) async throws -> TennisWorkoutResult {
         guard let session, builder != nil, starting == nil, ending == nil,
-              session.state == .running || session.state == .paused || session.state == .stopped else {
+              session.state == .running || session.state == .paused || session.state == .stopped || session.state == .ended else {
+            diagnosticCode = "finish-precondition: state \(session?.state.rawValue ?? -1), builder \(builder != nil), starting \(starting != nil), ending \(ending != nil)"
+            logger.error("Workout failure: \(self.diagnosticCode, privacy: .public)")
             throw TennisWorkoutFailure.notRunning
         }
         return try await withCheckedThrowingContinuation { continuation in
             ending = continuation
             statusMessage = "Saving workout to Apple Health."
-            if session.state == .stopped {
+            if session.state == .stopped || session.state == .ended {
                 Task { await self.saveEndedWorkout(at: session.endDate ?? date) }
             } else { session.stopActivity(with: date) }
             finishTimeout = Task { @MainActor [weak self] in
@@ -245,6 +247,7 @@ final class WatchHealthWorkout: NSObject, ObservableObject, TennisWorkoutClient,
     nonisolated func workoutSession(_ workoutSession: HKWorkoutSession, didChangeTo toState: HKWorkoutSessionState, from fromState: HKWorkoutSessionState, date: Date) {
         Task { @MainActor in
             guard self.session === workoutSession else { return }
+            self.logger.notice("Workout state: \(fromState.rawValue) to \(toState.rawValue), save requested \(self.ending != nil), builder finishing \(self.finishing)")
             self.startConfirmation.sessionIsRunning = toState == .running
             switch toState {
             case .running:
@@ -261,7 +264,10 @@ final class WatchHealthWorkout: NSObject, ObservableObject, TennisWorkoutClient,
                 if self.ending != nil { await self.saveEndedWorkout(at: date) }
                 else { self.failWorkout(self.starting == nil ? TennisWorkoutFailure.interrupted : TennisWorkoutFailure.startFailed) }
             case .ended:
-                self.failWorkout(self.starting == nil ? TennisWorkoutFailure.interrupted : TennisWorkoutFailure.startFailed)
+                // Ending the session does not mean an in-flight builder save failed.
+                // HealthKit also supports ending the session before finishing its builder.
+                if self.ending != nil { await self.saveEndedWorkout(at: date) }
+                else { self.failWorkout(self.starting == nil ? TennisWorkoutFailure.interrupted : TennisWorkoutFailure.startFailed) }
             default: break
             }
         }
@@ -330,6 +336,7 @@ final class WatchHealthWorkout: NSObject, ObservableObject, TennisWorkoutClient,
     private func failWorkout(_ error: Error) {
         let wasStarting = starting != nil
         let wasSaving = ending != nil
+        if diagnosticCode.isEmpty { recordFailure(error, stage: wasStarting ? "startup-state" : wasSaving ? "saving-state" : "session-state") }
         let activityID = activeTrainingID
         startTimeout?.cancel()
         startTimeout = nil

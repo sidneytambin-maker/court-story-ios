@@ -221,6 +221,9 @@ private struct WatchLiveView: View {
                         .accessibilityFocused($outcomeFocused)
                 }
                 #if DEBUG && targetEnvironment(simulator)
+                if !store.healthClient.diagnosticCode.isEmpty {
+                    Text(store.healthClient.diagnosticCode).accessibilityIdentifier("nativeHealthDiagnostic")
+                }
                 if !store.nativeHealthReadback.isEmpty {
                     Text(store.nativeHealthReadback).accessibilityIdentifier("nativeHealthReadback")
                 }

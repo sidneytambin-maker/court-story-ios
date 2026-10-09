@@ -94,7 +94,7 @@ final class WatchWorkoutStartupUITests: XCTestCase {
         systemTree.lifetime = .keepAlways; add(systemTree)
         assertRecording(app)
         finish(app)
-        XCTAssertTrue(app.staticTexts["Workout saved to Apple Health."].waitForExistence(timeout: 35))
+        XCTAssertTrue(app.staticTexts["Workout saved to Apple Health."].waitForExistence(timeout: 35), app.debugDescription)
         let readback = app.staticTexts["nativeHealthReadback"]
         reveal(readback, in: app)
         XCTAssertEqual(readback.label, "Saved workout independently found in HealthKit.")

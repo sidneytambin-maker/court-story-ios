@@ -248,14 +248,31 @@ struct CourtScoreSession: Codable, Equatable {
     @discardableResult
     mutating func setServer(_ side: Int, serverNumber: Int = 1) -> Bool {
         guard sides.indices.contains(side), (1...(rules.doublesTwoServers ? 2 : 1)).contains(serverNumber), !frame.complete else { return false }
+        let old = frame
         checkpoint(); frame.server = side; frame.serverNumber = serverNumber; frame.serviceChoicePrompt = nil
-        if frame.points.allSatisfy({ $0 == 0 }) { frame.firstServer = side }
-        if var service = frame.doublesService, frame.points.allSatisfy({ $0 == 0 }), !frame.gummiarm {
-            service.begin(sport: sport.sport, frame: frame)
-            frame.doublesService = service
+        let start = frame.points.allSatisfy({ $0 == 0 }) && frame.serviceTurn == 0
+        if start { frame.firstServer = side }
+        if rules.system == .tennisGames {
+            let deciding = rules.decidingMatchTieBreak && rules.roundsToWin > 1 && frame.roundsWon.allSatisfy { $0 == rules.roundsToWin - 1 }
+            let tie = deciding || frame.tennis.isTiebreak || rules.tieBreakAt.map { frame.tennis.playerGames == $0 && frame.tennis.opponentGames == $0 } == true
+            let turn = frame.serviceTurn + (tie ? (frame.points.reduce(0, +) + 1) / 2 : 0)
+            frame.firstServer = (side + 2 - turn % 2) % 2
+        } else if rules.service == .alternateTwo {
+            frame.firstServer = (side + sides.count - frame.serviceTurn % sides.count) % sides.count
         }
-        if frame.gummiarm, var service = frame.doublesService {
-            service.receiverMember = service.box == .right ? service.rightMembers[1 - side] : 1 - service.rightMembers[1 - side]
+        if var service = frame.doublesService {
+            if frame.gummiarm {
+                service.receiverMember = service.box == .right ? service.rightMembers[1 - side] : 1 - service.rightMembers[1 - side]
+            } else if start {
+                service.begin(sport: sport.sport, frame: frame)
+            } else if rules.system == .tennisGames {
+                service.refreshTennis(sport: sport.sport, rules: rules, frame: frame)
+            } else if sport.sport == .tableTennis, side != old.server {
+                service.rotateTable(previousServer: old.server, nextServer: side)
+                service.rememberTablePair(server: side)
+            } else if side != old.server || serverNumber != old.serverNumber {
+                service.advance(sport: sport.sport, rules: rules, from: old, to: frame)
+            }
             frame.doublesService = service
         }
         return true

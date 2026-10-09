@@ -75,6 +75,7 @@ jobs:
           fi
           xcrun simctl bootstatus "$PHONE" -b
           xcrun simctl bootstatus "$ID" -b
+          echo "WATCH_SIMULATOR_ID=$ID" >> "$GITHUB_ENV"
           xcodebuild build -project TennisTrackeriOS.xcodeproj -scheme TennisTracker -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath CourtPaired CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=YES CODE_SIGN_IDENTITY="-" > CourtPaired.log 2>&1
           xcrun simctl install "$PHONE" CourtPaired/Build/Products/Debug-iphonesimulator/TennisTracker.app
           xcodebuild test -project TennisTrackeriOS.xcodeproj -scheme TennisTrackerWatchTests -destination "id=$ID" -parallel-testing-enabled NO -configuration Debug -resultBundlePath WatchBetaTests.xcresult CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=YES CODE_SIGN_IDENTITY="-" 2>&1 | tee WatchBetaTests.log
@@ -85,6 +86,10 @@ jobs:
             mkdir -p WatchReview
             xcrun xcresulttool get test-results summary --path WatchBetaTests.xcresult > WatchReview/summary.json
             xcrun xcresulttool export attachments --path WatchBetaTests.xcresult --output-path WatchReview/screenshots
+          fi
+          if [ -n "${WATCH_SIMULATOR_ID:-}" ]; then
+            mkdir -p WatchReview
+            xcrun simctl spawn "$WATCH_SIMULATOR_ID" log show --last 100m --style compact --predicate 'subsystem == "com.inclusophy.tennistracker.dev.watchkitapp" AND category == "Workout"' > WatchReview/workout-diagnostics.log
           fi
       - uses: actions/upload-artifact@v4
         if: always()
