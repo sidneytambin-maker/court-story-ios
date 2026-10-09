@@ -37,7 +37,12 @@ final class TennisWorkoutCoordinator: ObservableObject {
     init(client: TennisWorkoutClient) {
         self.client = client
         client.onHealthStateChange = { [weak self] state, message in
-            guard let self, self.state == .recording || self.state == .paused else { return }
+            guard let self else { return }
+            if self.state == .finishing {
+                if state == .finishing { self.message = message }
+                return
+            }
+            guard self.state == .recording || self.state == .paused else { return }
             self.state = state
             self.message = message
         }
@@ -128,6 +133,7 @@ final class TennisWorkoutCoordinator: ObservableObject {
         let token = generation
         let hasHealth = state == .recording || state == .paused
         state = .finishing
+        message = hasHealth ? "Saving workout to Apple Health." : "Saving training."
         defer { if token == generation { state = .finished } }
         if hasHealth {
             do {

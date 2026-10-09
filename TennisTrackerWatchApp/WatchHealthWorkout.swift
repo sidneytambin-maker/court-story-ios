@@ -242,7 +242,15 @@ final class WatchHealthWorkout: NSObject, ObservableObject, TennisWorkoutClient,
             finishTimeout = Task { @MainActor [weak self] in
                 do { try await Task.sleep(nanoseconds: 30_000_000_000) }
                 catch { return }
-                guard let self, self.ending != nil else { return }
+                guard let self, self.session === session, self.ending != nil else { return }
+                // Health may still be aggregating final sensor data after stopping.
+                // Keep the builder alive and the original end time while it finishes.
+                self.statusMessage = "Session timing saved. Apple Health is still finishing the workout."
+                self.onHealthStateChange?(.finishing, self.statusMessage)
+                self.logger.notice("Workout save still pending: state \(session.state.rawValue), builder finishing \(self.finishing)")
+                do { try await Task.sleep(nanoseconds: 150_000_000_000) }
+                catch { return }
+                guard self.session === session, self.ending != nil else { return }
                 self.logger.error("Workout finish deadline: state \(self.session?.state.rawValue ?? -1), builder finishing \(self.finishing)")
                 self.failWorkout(TennisWorkoutFailure.saveTimedOut)
             }

@@ -328,6 +328,44 @@ final class TennisWorkoutTests: XCTestCase {
     }
 
     @MainActor
+    func testPendingHealthSaveStaysFinishingUntilConfirmedWithoutRestarting() async {
+        let client = MockWorkoutClient()
+        let coordinator = TennisWorkoutCoordinator(client: client)
+        let start = Date(timeIntervalSince1970: 100)
+        await coordinator.start(useHealth: true, at: start)
+        let workoutID = UUID()
+        client.finishResponse = {
+            XCTAssertEqual(coordinator.state, .finishing)
+            XCTAssertEqual(coordinator.message, "Saving workout to Apple Health.")
+            let progress = "Session timing saved. Apple Health is still finishing the workout."
+            client.onHealthStateChange?(.finishing, progress)
+            XCTAssertEqual(coordinator.state, .finishing)
+            XCTAssertEqual(coordinator.message, progress)
+            for state in [TennisWorkoutState.recording, .paused, .recordingWithoutHealth] {
+                client.onHealthStateChange?(state, "Stale callback")
+                XCTAssertEqual(coordinator.state, .finishing)
+                XCTAssertEqual(coordinator.message, progress)
+            }
+            let duplicateStart = await coordinator.start(useHealth: true)
+            XCTAssertFalse(duplicateStart)
+            let duplicateFinish = await coordinator.finish()
+            XCTAssertNil(duplicateFinish)
+            return TennisWorkoutResult(workoutID: workoutID, durationSeconds: 60)
+        }
+        let result = await coordinator.finish(at: start.addingTimeInterval(60))
+        XCTAssertEqual(result?.workoutID, workoutID)
+        XCTAssertEqual(result?.durationSeconds, 60)
+        XCTAssertEqual(coordinator.state, .finished)
+        XCTAssertEqual(coordinator.message, "Workout saved to Apple Health.")
+        XCTAssertEqual(client.begins, 1)
+        XCTAssertEqual(client.finishes, 1)
+        XCTAssertEqual(client.discarded, 0)
+        client.onHealthStateChange?(.finishing, "Late progress")
+        XCTAssertEqual(coordinator.state, .finished)
+        XCTAssertEqual(coordinator.message, "Workout saved to Apple Health.")
+    }
+
+    @MainActor
     func testFinishFailureClearsRecordingStateAndLateCallbacksCannotReviveIt() async {
         let client = MockWorkoutClient()
         client.failFinish = true

@@ -14,6 +14,7 @@ final class WatchWorkoutTestClient: TennisWorkoutClient {
     var onHealthStateChange: ((TennisWorkoutState, String) -> Void)?
     private var attempts = 0
     private var generation = UUID()
+    private var pendingStart: CheckedContinuation<Void, Never>?
 
     init(mode: String) {
         self.mode = mode
@@ -39,7 +40,11 @@ final class WatchWorkoutTestClient: TennisWorkoutClient {
         attempts += 1
         if mode == "retry" && attempts == 1 { throw TennisWorkoutFailure.startTimedOut }
         let token = generation
-        if mode == "pending" { try await Task.sleep(nanoseconds: 3_000_000_000) }
+        if mode == "pending" {
+            // Release only after Cancel, so the test exercises a late callback
+            // without racing XCTest's accessibility queries on a busy simulator.
+            await withCheckedContinuation { pendingStart = $0 }
+        }
         guard generation == token else { throw CancellationError() }
         workoutStartedAt = date
         isWorkoutRunning = true
@@ -54,6 +59,8 @@ final class WatchWorkoutTestClient: TennisWorkoutClient {
 
     func discardForLibraryChange() {
         generation = UUID()
+        pendingStart?.resume()
+        pendingStart = nil
         isWorkoutRunning = false
         workoutStartedAt = nil
     }
