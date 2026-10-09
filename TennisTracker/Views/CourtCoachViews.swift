@@ -229,6 +229,9 @@ struct CourtAthleteDetail: View {
                 }
                 CourtAthleteProgressContent(athleteID: athleteID)
                 CourtJournalContent(athleteID: athleteID)
+                if CourtFeature.media.isAvailable(in: store.data.settings.trackingMode) {
+                    Section { NavigationLink("Photos, clips and moments") { CourtMediaLibraryView(athleteID: athleteID, sport: store.selectedSport) } }
+                }
             } else { Text("This player is unavailable. No activity will be recorded against another player.") }
         }
         .navigationTitle(athlete?.displayName ?? "Player unavailable").tennisThemedList()
@@ -262,6 +265,9 @@ struct CourtRecordHub: View {
                         Button("Record measured drill", systemImage: "scope") {
                             drill = CourtMeasuredDrill(athleteID: athlete.id, coachID: coach, sport: store.selectedSport)
                         }.accessibilityIdentifier("addMeasuredDrill")
+                    }
+                    if CourtFeature.media.isAvailable(in: store.data.settings.trackingMode) {
+                        NavigationLink("Photos, clips and moments") { CourtMediaLibraryView(athleteID: athlete.id, sport: store.selectedSport) }
                     }
                 }
             }

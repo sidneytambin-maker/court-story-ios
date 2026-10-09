@@ -412,6 +412,44 @@ final class TennisStore: ObservableObject {
         return try JSONEncoder.tennisTracker.encode(data)
     }
 
+    var mediaDirectory: URL { storeURL.deletingPathExtension().appendingPathExtension("media") }
+
+    func fullBackup() throws -> CourtBackupPayload {
+        guard storageError == nil else { throw TennisBackupError.unreadableStore }
+        try TennisBackup.validate(data)
+        var files: [String: Data] = [:]
+        var total = 0
+        for record in data.court.media {
+            let bytes = try CourtMediaVault.verifiedBytes(for: record, in: mediaDirectory)
+            total += bytes.count
+            guard total <= CourtMediaVault.maximumLibraryBytes else { throw CourtMediaError.capacity }
+            files[record.relativeFilename] = bytes
+        }
+        return CourtBackupPayload(library: data, media: files)
+    }
+
+    func restoreFullBackup(_ backup: CourtBackupPayload) throws {
+        guard storageError == nil, !data.onboardingCompleted, data.players.isEmpty,
+              data.matches.isEmpty, data.trainingSessions.isEmpty, data.tournaments.isEmpty else {
+            throw TennisBackupError.destinationNotEmpty
+        }
+        try backup.validate()
+        var copied: [URL] = []
+        do {
+            try FileManager.default.createDirectory(at: mediaDirectory, withIntermediateDirectories: true)
+            for (name, bytes) in backup.media {
+                let target = mediaDirectory.appendingPathComponent(name)
+                guard !FileManager.default.fileExists(atPath: target.path) else { throw CourtMediaError.cannotSave }
+                try bytes.write(to: target, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+                copied.append(target)
+            }
+            try restoreBackup(backup.library)
+        } catch {
+            for file in copied { try? FileManager.default.removeItem(at: file) }
+            throw error
+        }
+    }
+
     func restoreBackup(_ backup: AppData) throws {
         guard storageError == nil, !data.onboardingCompleted, data.players.isEmpty,
               data.matches.isEmpty, data.trainingSessions.isEmpty, data.tournaments.isEmpty else {
@@ -714,13 +752,69 @@ extension TennisStore {
         return saveCourtCandidate(candidate, announcement: "Measured drill saved.")
     }
 
+    func mediaURL(for record: CourtMediaRecord) throws -> URL {
+        _ = try CourtMediaVault.verifiedBytes(for: record, in: mediaDirectory)
+        return mediaDirectory.appendingPathComponent(record.relativeFilename)
+    }
+
+    @discardableResult
+    func saveMedia(_ record: CourtMediaRecord, importing bytes: Data? = nil) -> Bool {
+        guard CourtFeature.media.isAvailable(in: data.settings.trackingMode), !data.court.deletedIDs.contains(record.id) else { return false }
+        let existing = data.court.media.first { $0.id == record.id }
+        if let existing, existing.revision != record.revision || existing.relativeFilename != record.relativeFilename ||
+            existing.athleteID != record.athleteID || existing.coachID != record.coachID || existing.sport != record.sport ||
+            existing.contentSHA256 != record.contentSHA256 || existing.kind != record.kind || existing.durationSeconds != record.durationSeconds {
+            announce(CourtMediaError.changed.localizedDescription); return false
+        }
+        guard existing != nil || bytes != nil else { announce(CourtMediaError.unavailable.localizedDescription); return false }
+        if existing == nil, data.players.first(where: { $0.id == record.athleteID })?.isArchived != false { return false }
+        var candidate = data
+        var next = record
+        next.modifiedAt = Date(); next.revision = (existing?.revision ?? 0) + 1
+        candidate.court.media.removeAll { $0.id == next.id }; candidate.court.media.append(next)
+        if let message = CourtLibraryValidation.message(in: candidate) { announce(message); return false }
+        var newFile: URL?
+        do {
+            if let bytes {
+                guard existing == nil, bytes.count > 0, bytes.count <= CourtMediaVault.maximumFileBytes,
+                      record.contentSHA256 == CourtMediaVault.checksum(bytes) else { throw CourtMediaError.invalidFile }
+                var total = bytes.count
+                for item in data.court.media {
+                    total += (try? mediaDirectory.appendingPathComponent(item.relativeFilename).resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+                }
+                guard total <= CourtMediaVault.maximumLibraryBytes else { throw CourtMediaError.capacity }
+                try FileManager.default.createDirectory(at: mediaDirectory, withIntermediateDirectories: true)
+                let url = mediaDirectory.appendingPathComponent(record.relativeFilename)
+                guard !FileManager.default.fileExists(atPath: url.path) else { throw CourtMediaError.cannotSave }
+                try bytes.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+                newFile = url
+            }
+            guard saveCourtCandidate(candidate, announcement: "Media and notes saved privately for this athlete.") else {
+                if let newFile { try? FileManager.default.removeItem(at: newFile) }
+                return false
+            }
+            return true
+        } catch {
+            if let newFile { try? FileManager.default.removeItem(at: newFile) }
+            announce(error.localizedDescription)
+            return false
+        }
+    }
+
     @discardableResult
     func removeCoachingRecord(_ id: UUID) -> Bool {
+        let removedMedia = data.court.media.first { $0.id == id }
         var candidate = data
         candidate.court.observations.removeAll { $0.id == id }
         candidate.court.drills.removeAll { $0.id == id }
         candidate.court.media.removeAll { $0.id == id }
         candidate.court.deletedIDs.insert(id)
-        return saveCourtCandidate(candidate, announcement: "Coaching record deleted.")
+        guard saveCourtCandidate(candidate, announcement: "Coaching record deleted.") else { return false }
+        if let removedMedia, removedMedia.validationMessage == nil {
+            do { try FileManager.default.removeItem(at: mediaDirectory.appendingPathComponent(removedMedia.relativeFilename)) }
+            catch let error as CocoaError where error.code == .fileNoSuchFile || error.code == .fileReadNoSuchFile { }
+            catch { announce("The record was deleted, but its private file could not be removed. Free storage and try again before sharing this device.") }
+        }
+        return true
     }
 }

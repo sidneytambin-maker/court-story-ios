@@ -139,6 +139,7 @@ struct CourtMediaRecord: Identifiable, Codable, Equatable {
     var description = ""
     var relativeFilename: String
     var durationSeconds: Double?
+    var contentSHA256: String?
     var moments: [CourtMediaMoment] = []
     var modifiedAt = Date()
     var revision = 0
@@ -150,6 +151,9 @@ struct CourtMediaRecord: Identifiable, Codable, Equatable {
             return "The media file reference is invalid."
         }
         if let durationSeconds, !durationSeconds.isFinite || durationSeconds < 0 { return "The video duration is invalid." }
+        if let contentSHA256, contentSHA256.count != 64 || !contentSHA256.allSatisfy({ $0.isHexDigit && !$0.isUppercase }) {
+            return "The media checksum is invalid."
+        }
         if moments.contains(where: { !$0.seconds.isFinite || $0.seconds < 0 || $0.seconds > (durationSeconds ?? 0) }) {
             return "Each video moment must be within the clip."
         }

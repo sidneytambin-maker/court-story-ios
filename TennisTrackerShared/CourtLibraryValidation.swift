@@ -47,6 +47,9 @@ enum CourtLibraryValidation {
         for record in data.court.drills {
             if record.validationMessage != nil || !attribution(record.athleteID, record.coachID, record.sport) || !linkedActivity(record.linkedActivityID, athlete: record.athleteID, sport: record.sport) { return "A measured drill has an invalid athlete, activity or measurement." }
         }
+        if Set(data.court.media.map { $0.relativeFilename.lowercased() }).count != data.court.media.count {
+            return "Each media record must have its own private file."
+        }
         for record in data.court.media {
             if record.validationMessage != nil || !attribution(record.athleteID, record.coachID, record.sport) || !linkedActivity(record.activityID, athlete: record.athleteID, sport: record.sport) { return "A media record has an invalid athlete, activity or file reference." }
         }

@@ -36,6 +36,18 @@ targets:
           - CFBundleURLName: com.inclusophy.tennistracker.dev
             CFBundleURLSchemes:
               - tennistracker
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: app.courtstory.private-backup
+            UTTypeDescription: Court Story Private Backup
+            UTTypeConformsTo: [com.apple.package]
+            UTTypeTagSpecification:
+              public.filename-extension: [courtstorybackup]
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Court Story Private Backup
+            CFBundleTypeRole: Editor
+            LSHandlerRank: Owner
+            LSItemContentTypes: [app.courtstory.private-backup]
+            LSTypeIsPackage: true
         NSCalendarsFullAccessUsageDescription: Court Story can add your matches, training sessions, and tournaments to Apple Calendar when you ask it to.
         NSCalendarsWriteOnlyAccessUsageDescription: Court Story can add your tennis plans to Apple Calendar when you ask it to.
         NSCalendarsUsageDescription: Court Story can add your tennis plans to Apple Calendar when you ask it to.

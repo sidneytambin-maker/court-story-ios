@@ -17,21 +17,22 @@ struct PrivateBackupView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var importing = false
     @State private var exporting = false
-    @State private var document = TennisBackupDocument(data: Data())
-    @State private var preview: AppData?
+    @State private var document = CourtBackupDocument()
+    @State private var payload: CourtBackupPayload?
+    private var preview: AppData? { payload?.library }
     @State private var message = ""
 
     var body: some View {
         TennisForm {
             Section {
-                Text("A private backup contains your player details, tennis records, settings and saved workout summaries. It does not export Apple's Health database. Only restore a file that belongs to you.")
+                Text("A private backup contains your player details, sports records, coaching notes, photos, clips, settings and saved workout summaries. It does not export Apple's Health database. Only restore a file that belongs to you.")
                 if store.needsOnboarding {
                     Button("Choose My Private Backup") { importing = true }
                         .accessibilityIdentifier("choosePrivateBackup")
                 } else {
                     Button("Export Private Backup") {
                         do {
-                            document = TennisBackupDocument(data: try store.backupData())
+                            document = try CourtBackupDocument(payload: store.fullBackup())
                             exporting = true
                         } catch { report(error.localizedDescription) }
                     }.accessibilityIdentifier("exportPrivateBackup")
@@ -42,28 +43,30 @@ struct PrivateBackupView: View {
                 Section("Backup Contents") {
                     Text("\(preview.players.count) players, \(preview.matches.count) matches, \(preview.trainingSessions.count) training sessions, \(preview.tournaments.count) tournaments, \(preview.setup.coaches.count) coaches and \(preview.setup.venues.count) venues.")
                     Text("Restore creates your library in this installation and sends it only to your paired Apple Watch. The original installation and backup file are not changed.")
+                    Text("\(preview.court.media.count) media records. Original photos and clips stay on iPhone; linked descriptions and notes can appear on your Watch.")
+                    if payload?.legacyRecordsOnly == true, !preview.court.media.isEmpty {
+                        Text("This older records-only backup does not contain original media files. Media notes will be restored, but playback will remain unavailable.")
+                    }
                     Button("Restore My Backup") {
-                        do { try store.restoreBackup(preview); dismiss() }
+                        do { if let payload { try store.restoreFullBackup(payload); dismiss() } }
                         catch { report(error.localizedDescription) }
                     }.accessibilityIdentifier("confirmPrivateRestore")
-                    Button("Cancel", role: .cancel) { self.preview = nil }
+                    Button("Cancel", role: .cancel) { payload = nil }
                 }
             }
             if !message.isEmpty { Text(message).accessibilityIdentifier("backupStatus") }
         }
         .navigationTitle("Private Backup")
-        .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in
+        .fileImporter(isPresented: $importing, allowedContentTypes: [.json, .courtStoryBackup]) { result in
             do {
                 let url = try result.get()
                 let access = url.startAccessingSecurityScopedResource()
                 defer { if access { url.stopAccessingSecurityScopedResource() } }
-                let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
-                guard size <= 20_000_000 else { throw TennisBackupError.invalidFile }
-                preview = try TennisBackup.decode(Data(contentsOf: url))
+                payload = try CourtBackupPayload.read(url)
                 report("Backup checked. Review the contents, then choose Restore My Backup or Cancel.")
-            } catch { preview = nil; report(error.localizedDescription) }
+            } catch { payload = nil; report(error.localizedDescription) }
         }
-        .fileExporter(isPresented: $exporting, document: document, contentType: .json, defaultFilename: "Court-Story-Private-Backup") { result in
+        .fileExporter(isPresented: $exporting, document: document, contentType: .courtStoryBackup, defaultFilename: "Court-Story-Private-Backup") { result in
             switch result {
             case .success: report("Your private Court Story backup has been exported.")
             case .failure(let error): report(error.localizedDescription)
