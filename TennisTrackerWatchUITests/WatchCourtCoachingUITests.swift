@@ -40,6 +40,19 @@ final class WatchCourtCoachingUITests: XCTestCase {
         // A touch must land on the native switch, not its text label.
         control.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5)).tap()
     }
+    private func confirmArchiveChange(_ title: String) {
+        // System confirmation dialogs expose their labels, not SwiftUI IDs.
+        let confirmation = app.buttons[title]
+        XCTAssertTrue(confirmation.waitForExistence(timeout: 5))
+        confirmation.tap()
+        let roster = app.navigationBars["Players"]
+        let changedAction = app.buttons[title == "Archive Player" ? "Restore Player" : "Archive Player"]
+        let changed = NSPredicate { _, _ in roster.exists || changedAction.exists }
+        expectation(for: changed, evaluatedWith: app)
+        waitForExpectations(timeout: 10)
+        if !roster.exists { app.navigationBars["Demo Player Morgan"].buttons.firstMatch.tap() }
+        XCTAssertTrue(roster.waitForExistence(timeout: 5))
+    }
     private func evidence(_ name: String) {
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = name; screenshot.lifetime = .keepAlways; add(screenshot)
         let tree = XCTAttachment(string: app.debugDescription); tree.name = name + " accessibility"; tree.lifetime = .keepAlways; add(tree)
@@ -123,16 +136,12 @@ final class WatchCourtCoachingUITests: XCTestCase {
     func testRosterUpdatesAfterArchivingAndRestoringAthlete() {
         launch(); tap("Your Players"); tap("Demo Player Morgan")
         tap("Archive Player")
-        tap("watchConfirmPlayerArchiveChange")
-        XCTAssertTrue(app.buttons["Restore Player"].waitForExistence(timeout: 10))
-        app.navigationBars["Demo Player Morgan"].buttons.firstMatch.tap()
+        confirmArchiveChange("Archive Player")
         XCTAssertFalse(app.buttons["Demo Player Morgan"].exists)
         let archived = app.switches["Show archived players"]
         toggle(archived, label: "Show archived players")
         tap("Demo Player Morgan"); tap("Restore Player")
-        tap("watchConfirmPlayerArchiveChange")
-        XCTAssertTrue(app.buttons["Archive Player"].waitForExistence(timeout: 10))
-        app.navigationBars["Demo Player Morgan"].buttons.firstMatch.tap()
+        confirmArchiveChange("Restore Player")
         XCTAssertFalse(app.buttons["Demo Player Morgan"].exists)
         toggle(archived, label: "Show archived players")
         XCTAssertTrue(app.buttons["Demo Player Morgan"].waitForExistence(timeout: 10))
