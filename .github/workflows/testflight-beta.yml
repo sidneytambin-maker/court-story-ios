@@ -78,6 +78,9 @@ jobs:
           echo "WATCH_SIMULATOR_ID=$ID" >> "$GITHUB_ENV"
           xcodebuild build -project TennisTrackeriOS.xcodeproj -scheme TennisTracker -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath CourtPaired CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=YES CODE_SIGN_IDENTITY="-" > CourtPaired.log 2>&1
           xcrun simctl install "$PHONE" CourtPaired/Build/Products/Debug-iphonesimulator/TennisTracker.app
+          python3 Scripts/sample_watch_test_process.py --output WatchReview/thread-samples --seconds 5400 &
+          SAMPLER_PID=$!
+          trap 'kill "$SAMPLER_PID" 2>/dev/null || true' EXIT
           xcodebuild test -project TennisTrackeriOS.xcodeproj -scheme TennisTrackerWatchTests -destination "id=$ID" -parallel-testing-enabled NO -configuration Debug -resultBundlePath WatchBetaTests.xcresult CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=YES CODE_SIGN_IDENTITY="-" 2>&1 | tee WatchBetaTests.log
       - name: Export Watch test summary and screenshots
         if: always()
