@@ -42,7 +42,7 @@ final class WatchCourtCoachingUITests: XCTestCase {
     }
     private func confirmArchiveChange(_ title: String) {
         // System confirmation dialogs expose their labels, not SwiftUI IDs.
-        let confirmation = app.buttons[title]
+        let confirmation = app.tables.buttons[title]
         XCTAssertTrue(confirmation.waitForExistence(timeout: 5))
         confirmation.tap()
         let roster = app.navigationBars["Players"]
