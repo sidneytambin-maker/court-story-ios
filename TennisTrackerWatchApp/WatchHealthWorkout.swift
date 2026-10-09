@@ -13,6 +13,7 @@ final class WatchHealthWorkout: NSObject, ObservableObject, TennisWorkoutClient,
     private var startConfirmation = TennisWorkoutStartConfirmation()
     private var ending: CheckedContinuation<TennisWorkoutResult, Error>?
     private var finishTimeout: Task<Void, Never>?
+    private var requestedFinishDate: Date?
     private var finishing = false
     private var generation = UUID()
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "CourtStory", category: "Workout")
@@ -137,6 +138,7 @@ final class WatchHealthWorkout: NSObject, ObservableObject, TennisWorkoutClient,
         self.session = session
         self.builder = builder
         finishing = false
+        requestedFinishDate = nil
         startConfirmation = TennisWorkoutStartConfirmation()
         latestHeartRate = nil
         activeEnergy = nil
@@ -231,6 +233,7 @@ final class WatchHealthWorkout: NSObject, ObservableObject, TennisWorkoutClient,
         }
         return try await withCheckedThrowingContinuation { continuation in
             ending = continuation
+            requestedFinishDate = date
             statusMessage = "Saving workout to Apple Health."
             logger.notice("Workout finish requested: state \(session.state.rawValue), valid end \(date >= (session.startDate ?? date))")
             if session.state == .stopped || session.state == .ended {
@@ -248,6 +251,18 @@ final class WatchHealthWorkout: NSObject, ObservableObject, TennisWorkoutClient,
                 self.statusMessage = "Session timing saved. Apple Health is still finishing the workout."
                 self.onHealthStateChange?(.finishing, self.statusMessage)
                 self.logger.notice("Workout save still pending: state \(session.state.rawValue), builder finishing \(self.finishing)")
+                if !self.finishing {
+                    if session.state == .stopped || session.state == .ended {
+                        // Recover a delayed delegate handoff without restarting collection.
+                        Task { @MainActor in await self.saveEndedWorkout(at: date) }
+                    } else if session.state == .running || session.state == .paused {
+                        // The stop request may stall in Health's final-data aggregation.
+                        // Apple's end-session lifecycle also supports saving the existing
+                        // builder after .ended. Never discard it or fabricate a workout.
+                        self.logger.notice("Workout stop acknowledgement overdue; requesting session end while retaining builder")
+                        session.end()
+                    }
+                }
                 do { try await Task.sleep(nanoseconds: 150_000_000_000) }
                 catch { return }
                 guard self.session === session, self.ending != nil else { return }
@@ -317,7 +332,7 @@ final class WatchHealthWorkout: NSObject, ObservableObject, TennisWorkoutClient,
         finishing = true
         logger.notice("Workout builder ending collection")
         do {
-            try await builder.endCollection(at: date)
+            try await builder.endCollection(at: requestedFinishDate ?? date)
             guard self.builder === builder else { return }
             logger.notice("Workout builder collection ended")
             let heartType = HKQuantityType.quantityType(forIdentifier: .heartRate)!
@@ -343,6 +358,7 @@ final class WatchHealthWorkout: NSObject, ObservableObject, TennisWorkoutClient,
         finishTimeout?.cancel()
         finishTimeout = nil
         ending = nil
+        requestedFinishDate = nil
         UserDefaults.standard.removeObject(forKey: "activeHealthTrainingID")
         let previousSession = session
         self.session = nil; self.builder = nil
@@ -365,6 +381,7 @@ final class WatchHealthWorkout: NSObject, ObservableObject, TennisWorkoutClient,
         finishTimeout = nil
         ending?.resume(throwing: error)
         ending = nil
+        requestedFinishDate = nil
         let previousSession = session
         builder?.discardWorkout()
         builder = nil
