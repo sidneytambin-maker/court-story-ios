@@ -92,7 +92,13 @@ final class WatchHealthWorkout: NSObject, ObservableObject, TennisWorkoutClient,
             throw TennisWorkoutFailure.permissionRequestFailed
         }
         // Request completion is not a grant. Only workout write access gates startup.
-        let status = healthStore.authorizationStatus(for: workout)
+        var status = healthStore.authorizationStatus(for: workout)
+        // The permission sheet and Health database are separate processes. Allow
+        // a bounded handoff, but never treat an undecided result as permission.
+        for _ in 0..<20 where status == .notDetermined {
+            try await Task.sleep(nanoseconds: 100_000_000)
+            status = healthStore.authorizationStatus(for: workout)
+        }
         if status == .notDetermined {
             diagnosticCode = "authorization-completed: workout write not determined"
             logger.error("Workout failure: \(self.diagnosticCode, privacy: .public)")

@@ -1,5 +1,6 @@
 import XCTest
 import UIKit
+import AVFoundation
 @testable import TennisTracker
 
 @MainActor
@@ -140,5 +141,61 @@ final class CourtMediaTests: XCTestCase {
         XCTAssertEqual(restored.data.court.media.count, 1)
         XCTAssertThrowsError(try restored.mediaURL(for: prepared.record))
         XCTAssertThrowsError(try restored.fullBackup())
+    }
+
+    func testRealVideoImportMomentValidationAndPackageRoundTrip() async throws {
+        let (store, coach, athlete, _) = try fixture()
+        let url = folder.appendingPathComponent("fictional-clip.mov")
+        let writer = try AVAssetWriter(outputURL: url, fileType: .mov)
+        let input = AVAssetWriterInput(mediaType: .video, outputSettings: [AVVideoCodecKey: AVVideoCodecType.h264, AVVideoWidthKey: 32, AVVideoHeightKey: 32])
+        let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: input, sourcePixelBufferAttributes: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32ARGB, kCVPixelBufferWidthKey as String: 32, kCVPixelBufferHeightKey as String: 32])
+        writer.add(input)
+        XCTAssertTrue(writer.startWriting())
+        writer.startSession(atSourceTime: .zero)
+        for index in 0..<3 {
+            for _ in 0..<200 {
+                if input.isReadyForMoreMediaData { break }
+                try await Task.sleep(nanoseconds: 10_000_000)
+            }
+            XCTAssertTrue(input.isReadyForMoreMediaData)
+            var buffer: CVPixelBuffer?
+            XCTAssertEqual(CVPixelBufferCreate(kCFAllocatorDefault, 32, 32, kCVPixelFormatType_32ARGB, nil, &buffer), kCVReturnSuccess)
+            let pixel = try XCTUnwrap(buffer)
+            CVPixelBufferLockBaseAddress(pixel, [])
+            if let address = CVPixelBufferGetBaseAddress(pixel) { memset(address, Int32(index * 80), CVPixelBufferGetBytesPerRow(pixel) * 32) }
+            CVPixelBufferUnlockBaseAddress(pixel, [])
+            XCTAssertTrue(adaptor.append(pixel, withPresentationTime: CMTime(value: Int64(index), timescale: 1)))
+        }
+        input.markAsFinished()
+        await writer.finishWriting()
+        XCTAssertEqual(writer.status, .completed)
+        var prepared = try await CourtMediaVault.prepare(url, athleteID: athlete.id, coachID: coach.id, sport: .tennis)
+        XCTAssertEqual(prepared.record.kind, .video)
+        XCTAssertGreaterThan(try XCTUnwrap(prepared.record.durationSeconds), 1)
+        prepared.record.moments = [CourtMediaMoment(seconds: 1, description: "Fictional test frame", observation: "Changed colour", nextAction: "Review the next frame")]
+        XCTAssertTrue(store.saveMedia(prepared.record, importing: prepared.bytes))
+        let saved = try XCTUnwrap(store.data.court.media.first)
+        var invalid = saved; invalid.moments[0].seconds = 500
+        XCTAssertFalse(store.saveMedia(invalid))
+        XCTAssertEqual(store.data.court.media.first?.moments.first?.seconds, 1)
+        let payload = try store.fullBackup()
+        XCTAssertEqual(payload.media[saved.relativeFilename], prepared.bytes)
+        let clip = AVURLAsset(url: try store.mediaURL(for: saved))
+        let playable = try await clip.load(.isPlayable)
+        XCTAssertTrue(playable)
+    }
+
+    func testUnsupportedAndOversizeImportsDoNotCreateRecords() async throws {
+        let (store, coach, athlete, _) = try fixture()
+        let corrupt = folder.appendingPathComponent("not-a-video.mov")
+        try Data("Not a video".utf8).write(to: corrupt)
+        do {
+            _ = try await CourtMediaVault.prepare(corrupt, athleteID: athlete.id, coachID: coach.id, sport: .tennis)
+            XCTFail("Unsupported data was accepted")
+        } catch { }
+        let large = folder.appendingPathComponent("oversize.png")
+        try Data(count: CourtMediaVault.maximumFileBytes + 1).write(to: large)
+        XCTAssertThrowsError(try CourtMediaVault.checkedSize(large))
+        XCTAssertTrue(store.data.court.media.isEmpty)
     }
 }

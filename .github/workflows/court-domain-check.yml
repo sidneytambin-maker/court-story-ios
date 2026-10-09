@@ -71,6 +71,9 @@ jobs:
           if [ -n "${WATCH_SIMULATOR_ID:-}" ]; then
             mkdir -p CourtWatchReview
             xcrun simctl spawn "$WATCH_SIMULATOR_ID" log show --last 30m --style compact --predicate 'subsystem == "com.inclusophy.tennistracker.dev.watchkitapp" AND category == "Workout"' > CourtWatchReview/workout-diagnostics.log
+            # This fresh simulator contains fictional test records only. Preserve
+            # the system permission failure, not just the app's translated error.
+            xcrun simctl spawn "$WATCH_SIMULATOR_ID" log show --last 10m --style compact --info --predicate '(process == "healthd" OR subsystem BEGINSWITH "com.apple.HealthKit") AND (eventMessage CONTAINS[c] "authoriz" OR eventMessage CONTAINS[c] "entitlement" OR eventMessage CONTAINS[c] "error")' > CourtWatchReview/health-authorization.log
           fi
       - uses: actions/upload-artifact@v4
         if: always()
