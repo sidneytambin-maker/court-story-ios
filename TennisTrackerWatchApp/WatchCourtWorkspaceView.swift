@@ -25,10 +25,26 @@ struct WatchCourtWorkspaceView: View {
     }
 }
 
-private enum WatchCourtRosterRoute: Hashable {
+enum WatchCourtRosterRoute: Hashable {
     case player(UUID)
     case edit(UUID)
     case journal(UUID)
+}
+
+struct WatchCourtRosterDestination: View {
+    @EnvironmentObject private var store: WatchTennisStore
+    let route: WatchCourtRosterRoute
+
+    var body: some View {
+        switch route {
+        case .player(let id): WatchCourtPlayerView(playerID: id)
+        case .edit(let id):
+            if let player = store.snapshot.players.first(where: { $0.id == id }) {
+                WatchCourtProfileEditor(player: player)
+            } else { Text("This player is no longer available.") }
+        case .journal(let id): WatchCourtJournalView(athleteID: id)
+        }
+    }
 }
 
 struct WatchCourtRosterView: View {
@@ -59,16 +75,6 @@ struct WatchCourtRosterView: View {
             }
             if players.isEmpty { Text(showArchived ? "No archived players for this sport." : "No players added for this sport.") }
         }.navigationTitle("Players")
-            .navigationDestination(for: WatchCourtRosterRoute.self) { route in
-                switch route {
-                case .player(let id): WatchCourtPlayerView(playerID: id)
-                case .edit(let id):
-                    if let player = store.snapshot.players.first(where: { $0.id == id }) {
-                        WatchCourtProfileEditor(player: player)
-                    } else { Text("This player is no longer available.") }
-                case .journal(let id): WatchCourtJournalView(athleteID: id)
-                }
-            }
             .sheet(item: $newPlayer) { player in NavigationStack { WatchCourtProfileEditor(player: player, isNew: true) } }
     }
 }
