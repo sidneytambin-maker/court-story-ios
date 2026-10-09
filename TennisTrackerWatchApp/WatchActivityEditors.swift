@@ -33,8 +33,8 @@ struct WatchTrainingEditor: View {
             .accessibilityValue(draft.context.participantSummary(in: store.snapshot.players).fallback("None"))
             .onChange(of: draft.context.participantIDs) { _, _ in draft.context.participantNames = [] }
             WatchVenueFields(venueID: $draft.context.venueID, venue: $draft.venue, location: $draft.location)
-            TennisTournamentPicker(tournaments: store.snapshot.tournaments, tournamentID: $draft.context.tournamentID, customName: $draft.context.customTournamentName)
-            TennisLinkedMatchesPicker(matches: store.snapshot.matches.filter { $0.playerID == draft.playerID }, sessionID: draft.id, selected: $linkedMatchIDs)
+            TennisTournamentPicker(tournaments: store.snapshot.scoped(playerID: draft.playerID, sport: draft.court.sport).tournaments, tournamentID: $draft.context.tournamentID, customName: $draft.context.customTournamentName)
+            TennisLinkedMatchesPicker(matches: store.snapshot.scoped(playerID: draft.playerID, sport: draft.court.sport).matches, sessionID: draft.id, selected: $linkedMatchIDs)
             TextField("Notes", text: $draft.notes)
             Toggle("Include session feedback", isOn: $draft.hasSessionDetails)
             if draft.hasSessionDetails {
@@ -84,8 +84,8 @@ struct WatchMatchEditor: View {
             OrderedChoicePicker(title: "Match round", selection: $draft.matchPosition, values: MatchPosition.allCases) { $0.label }
                 .accessibilityIdentifier("matchRoundPicker")
             WatchVenueFields(venueID: $draft.venueID, venue: $draft.venue, location: $draft.location)
-            TennisTournamentPicker(tournaments: store.snapshot.tournaments, tournamentID: $draft.tournamentID, customName: $draft.customTournamentName)
-            TennisTrainingSessionPicker(sessions: store.snapshot.trainingSessions.filter { $0.playerID == draft.playerID }, coaches: store.snapshot.setup.coaches, selection: $draft.trainingSessionID)
+            TennisTournamentPicker(tournaments: store.snapshot.scoped(playerID: draft.playerID, sport: draft.court.sport).tournaments, tournamentID: $draft.tournamentID, customName: $draft.customTournamentName)
+            TennisTrainingSessionPicker(sessions: store.snapshot.scoped(playerID: draft.playerID, sport: draft.court.sport).trainingSessions, coaches: store.snapshot.setup.coaches, selection: $draft.trainingSessionID)
             if draft.status == .completed {
                 if draft.usesCourtScoring {
                     CourtRecordedScoreFields(match: $draft, validationMessage: $courtScoreError)

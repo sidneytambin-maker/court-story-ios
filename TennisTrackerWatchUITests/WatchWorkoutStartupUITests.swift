@@ -9,6 +9,11 @@ final class WatchWorkoutStartupUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["Track Training Session"].waitForExistence(timeout: 10))
         app.buttons["Track Training Session"].tap()
+        if !app.navigationBars["Scheduled"].waitForExistence(timeout: 5),
+           app.navigationBars["Track"].exists, app.buttons["Track Training Session"].isHittable {
+            app.buttons["Track Training Session"].tap()
+        }
+        XCTAssertTrue(app.navigationBars["Scheduled"].waitForExistence(timeout: 5), app.debugDescription)
         let start = app.buttons["startWatchWorkout"]
         reveal(start, in: app)
         XCTAssertEqual(start.label, "Start Workout")
@@ -22,7 +27,7 @@ final class WatchWorkoutStartupUITests: XCTestCase {
         let app = start("authorized")
         assertRecording(app)
         finish(app)
-        XCTAssertTrue(app.staticTexts["Tennis workout saved."].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Workout saved to Apple Health."].waitForExistence(timeout: 10))
     }
 
     func testUndecidedPermissionStartsAfterGrant() {
@@ -65,7 +70,7 @@ final class WatchWorkoutStartupUITests: XCTestCase {
         assertRecording(app)
         finish(app)
         XCTAssertTrue(app.staticTexts["Training saved. The Health workout could not be saved."].waitForExistence(timeout: 10))
-        XCTAssertFalse(app.staticTexts["Tennis workout saved."].exists)
+        XCTAssertFalse(app.staticTexts["Workout saved to Apple Health."].exists)
     }
 
     func testNativeHealthKitStartAndSave() {
@@ -90,7 +95,10 @@ final class WatchWorkoutStartupUITests: XCTestCase {
         systemTree.lifetime = .keepAlways; add(systemTree)
         assertRecording(app)
         finish(app)
-        XCTAssertTrue(app.staticTexts["Tennis workout saved."].waitForExistence(timeout: 35))
+        XCTAssertTrue(app.staticTexts["Workout saved to Apple Health."].waitForExistence(timeout: 35))
+        let readback = app.staticTexts["nativeHealthReadback"]
+        reveal(readback, in: app)
+        XCTAssertEqual(readback.label, "Saved workout independently found in HealthKit.")
         capture(app, "Native Watch HealthKit saved workout")
     }
 
@@ -101,6 +109,8 @@ final class WatchWorkoutStartupUITests: XCTestCase {
         for title in ["Review", "Turn On All", "Allow All"] {
             let button = root.buttons[title]
             if button.exists && button.isHittable { button.tap(); return true }
+            let cell = root.cells[title]
+            if cell.exists && cell.isHittable { cell.tap(); return true }
         }
         for toggle in root.switches.allElementsBoundByIndex where toggle.isHittable && toggle.value as? String == "0" {
             toggle.tap(); return true
@@ -108,8 +118,10 @@ final class WatchWorkoutStartupUITests: XCTestCase {
         for title in ["Next", "Allow", "Done"] {
             let button = root.buttons[title]
             if button.exists && button.isHittable { button.tap(); return true }
+            let cell = root.cells[title]
+            if cell.exists && cell.isHittable { cell.tap(); return true }
         }
-        if root.staticTexts["Health Access"].exists || !root.switches.allElementsBoundByIndex.isEmpty {
+        if ["Health Access", "Write Access", "Read Access"].contains(where: { root.navigationBars[$0].exists }) || !root.switches.allElementsBoundByIndex.isEmpty {
             root.swipeUp(); return true
         }
         return false

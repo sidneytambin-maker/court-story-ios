@@ -300,7 +300,7 @@ final class WatchHealthWorkout: NSObject, ObservableObject, TennisWorkoutClient,
             // A successful save may return no sample while the Watch is locked.
             ending?.resume(returning: TennisWorkoutResult(workoutID: workout?.uuid, durationSeconds: workout?.duration ?? builder.elapsedTime,
                 averageHeartRate: average, activeEnergyKcal: energy, peakHeartRate: peak, distanceMeters: distance, stepCount: steps))
-            statusMessage = workout == nil ? "Health finished saving. Workout link pending until available." : "Tennis workout saved."
+            statusMessage = workout == nil ? "Health finished saving. Workout link pending until available." : "Workout saved to Apple Health."
         } catch {
             guard self.builder === builder else { return }
             recordFailure(error, stage: "workout-save")

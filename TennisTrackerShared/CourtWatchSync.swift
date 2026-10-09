@@ -79,6 +79,22 @@ enum CourtWatchMutation: Codable, Equatable {
 }
 
 extension TennisWatchSnapshot {
+    func scoped(playerID: UUID?, sport: CourtSportSelection) -> Self {
+        var result = self
+        result.selectedPlayerID = playerID
+        result.matches = matches.filter { $0.playerID == playerID && $0.court.sport == sport }
+        result.trainingSessions = trainingSessions.filter { $0.playerID == playerID && $0.court.sport == sport }
+        result.tournaments = tournaments.filter { $0.playerID == playerID && $0.court.sport == sport }
+        result.achievementHistory = achievementHistory.filter { $0.playerID == playerID && ($0.courtSport ?? .tennis) == sport }
+        return result
+    }
+
+    func mayUseHealth(for playerID: UUID) -> Bool {
+        guard let player = players.first(where: { $0.id == playerID }) else { return false }
+        let owner = court.deviceOwnerPlayerID ?? (courtProtocolVersion < 2 ? selectedPlayerID : nil)
+        return owner == playerID && player.court.coachOwnerID == nil
+    }
+
     var courtLibrary: AppData {
         var data = AppData()
         data.libraryID = libraryID ?? data.libraryID

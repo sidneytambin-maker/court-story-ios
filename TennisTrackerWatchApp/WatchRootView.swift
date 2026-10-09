@@ -216,6 +216,11 @@ private struct WatchLiveView: View {
                         .accessibilityIdentifier("workoutSaveOutcome")
                         .accessibilityFocused($outcomeFocused)
                 }
+                #if DEBUG && targetEnvironment(simulator)
+                if !store.nativeHealthReadback.isEmpty {
+                    Text(store.nativeHealthReadback).accessibilityIdentifier("nativeHealthReadback")
+                }
+                #endif
                 WatchTrainingRow(training: training, identifier: "Completed training summary")
                 if training.trainingType == .matchPlay {
                     NavigationLink("Record Practice Result") { WatchPracticeResultView() }

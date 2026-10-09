@@ -2,6 +2,51 @@ import XCTest
 @testable import TennisTracker
 
 final class CourtSyncTests: XCTestCase {
+    func testHealthOwnerIsIndependentOfSelectedAthleteAndRequiresAnExistingPersonalProfile() {
+        var owner = PlayerProfile(); owner.name = "Demo Owner"
+        var athlete = PlayerProfile(); athlete.name = "Demo Athlete"; athlete.court.coachOwnerID = owner.id
+        var snapshot = TennisWatchSnapshot()
+        snapshot.players = [owner, athlete]
+        snapshot.court.deviceOwnerPlayerID = owner.id
+        snapshot.selectedPlayerID = athlete.id
+        XCTAssertTrue(snapshot.mayUseHealth(for: owner.id))
+        XCTAssertFalse(snapshot.mayUseHealth(for: athlete.id))
+        snapshot.players.removeAll { $0.id == owner.id }
+        XCTAssertFalse(snapshot.mayUseHealth(for: owner.id))
+        snapshot.court.deviceOwnerPlayerID = athlete.id
+        XCTAssertFalse(snapshot.mayUseHealth(for: athlete.id))
+    }
+
+    func testSelectedSportScopesAllTimeHistoryAndLeavesOtherRecordsUntouched() {
+        let owner = UUID(), other = UUID()
+        var tennis = MatchRecord(playerID: owner); tennis.status = .completed
+        var badminton = tennis; badminton.id = UUID(); badminton.court.sport = CourtSportSelection(sport: .badminton)
+        var anotherPlayer = badminton; anotherPlayer.id = UUID(); anotherPlayer.playerID = other
+        var snapshot = TennisWatchSnapshot()
+        snapshot.matches = [tennis, badminton, anotherPlayer]
+        snapshot.achievementHistory = TennisAchievementRecord.collect(matches: snapshot.matches, training: [], tournaments: [])
+        let scoped = snapshot.scoped(playerID: owner, sport: badminton.court.sport)
+        XCTAssertEqual(scoped.matches.map(\.id), [badminton.id])
+        XCTAssertEqual(scoped.achievementHistory.map(\.id), [badminton.id])
+        XCTAssertEqual(snapshot.matches.count, 3)
+        XCTAssertEqual(snapshot.achievementHistory.count, 3)
+    }
+
+    func testArchivingSelectedAthleteRestoresOwnerSelectionWithoutDeletingHistory() {
+        var owner = PlayerProfile(); owner.name = "Demo Coach"
+        owner.court.sports[0].role = .coach
+        var athlete = PlayerProfile(); athlete.name = "Demo Athlete"; athlete.court.coachOwnerID = owner.id
+        var data = AppData(); data.players = [owner, athlete]
+        data.court.ownerPlayerID = owner.id; data.court.activeAthleteID = athlete.id; data.selectedPlayerID = athlete.id
+        let match = MatchRecord(playerID: athlete.id); data.matches = [match]
+        athlete.court.archivedAt = Date(); athlete.court.revision += 1
+        XCTAssertTrue(CourtWatchMutation.profile(athlete).apply(to: &data))
+        XCTAssertNil(data.court.activeAthleteID)
+        XCTAssertEqual(data.selectedPlayerID, owner.id)
+        XCTAssertEqual(data.matches, [match])
+        XCTAssertNil(CourtLibraryValidation.message(in: data))
+    }
+
     func testLegacySnapshotKeepsOldTennisTotalsWithoutMixingSportsOrUnsupportedResults() {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         var owner = PlayerProfile(); owner.name = "Demo Owner"

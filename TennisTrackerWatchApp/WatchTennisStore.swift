@@ -25,6 +25,9 @@ final class WatchTennisStore: NSObject, ObservableObject, WCSessionDelegate {
     @Published var isPreparingWorkout = false
     @Published var isFinishingWorkout = false
     @Published var pendingHealthStart: TrainingSession?
+    #if DEBUG && targetEnvironment(simulator)
+    @Published private(set) var nativeHealthReadback = ""
+    #endif
     private var workoutStartID: UUID?
     private var workoutObservation: AnyCancellable?
     private let pendingHealthDraftKey = "pendingHealthTrainingDraft"
@@ -34,7 +37,12 @@ final class WatchTennisStore: NSObject, ObservableObject, WCSessionDelegate {
     }
 
     var defaultUseHealth: Bool {
-        guard let player = selectedPlayer, mayUseHealth(for: player.id) else { return false }
+        guard let player = selectedPlayer else { return false }
+        return defaultUseHealth(for: player.id)
+    }
+
+    private func defaultUseHealth(for playerID: UUID) -> Bool {
+        guard mayUseHealth(for: playerID) else { return false }
         return workoutAccess.useHealthByDefault(
             preference: UserDefaults.standard.object(forKey: "trackTrainingAsWorkout") as? Bool)
     }
@@ -310,7 +318,7 @@ final class WatchTennisStore: NSObject, ObservableObject, WCSessionDelegate {
         guard !snapshot.deletedRecordIDs.contains(planned.id), planned.actualStart == nil, planned.actualFinish == nil else {
             announce("This session has already started or was deleted."); return false
         }
-        return prepareTrainingStart(planned, useHealth: useHealth ?? defaultUseHealth)
+        return prepareTrainingStart(planned, useHealth: useHealth ?? defaultUseHealth(for: planned.playerID))
     }
 
     func retryHealthStart() {
@@ -494,6 +502,20 @@ final class WatchTennisStore: NSObject, ObservableObject, WCSessionDelegate {
                 guard snapshot.libraryID == libraryID else { return }
                 attachWorkout(result, to: id)
                 if result.workoutID != nil { healthClient.acknowledgeSavedWorkout(id) }
+                #if DEBUG && targetEnvironment(simulator)
+                if ProcessInfo.processInfo.arguments.contains("-ui-testing-watch"),
+                   ProcessInfo.processInfo.arguments.contains("-watch-health=real") {
+                    nativeHealthReadback = "Saved workout was not found in HealthKit."
+                    for _ in 0..<5 {
+                        if let saved = try? await healthClient.savedWorkout(activityID: id),
+                           let workoutID = result.workoutID, saved.workoutID == workoutID {
+                            nativeHealthReadback = "Saved workout independently found in HealthKit."
+                            break
+                        }
+                        try? await Task.sleep(nanoseconds: 500_000_000)
+                    }
+                }
+                #endif
             }
             guard snapshot.libraryID == libraryID else { return }
             workoutMessage = workoutCoordinator.message
@@ -1068,17 +1090,10 @@ extension WatchTennisStore {
         return snapshot.players.filter { $0.court.coachOwnerID == owner.id && !$0.isArchived && $0.court.sports.contains { $0.sport == courtSport } }
     }
     var scopedSnapshot: TennisWatchSnapshot {
-        var scoped = snapshot
-        let id = selectedPlayer?.id
-        scoped.matches = snapshot.matches.filter { $0.playerID == id && $0.court.sport == courtSport }
-        scoped.trainingSessions = snapshot.trainingSessions.filter { $0.playerID == id && $0.court.sport == courtSport }
-        scoped.tournaments = snapshot.tournaments.filter { $0.playerID == id && $0.court.sport == courtSport }
-        scoped.achievementHistory = snapshot.achievementHistory.filter { $0.playerID == id && ($0.courtSport ?? .tennis) == courtSport }
-        return scoped
+        snapshot.scoped(playerID: selectedPlayer?.id, sport: courtSport)
     }
     func mayUseHealth(for playerID: UUID) -> Bool {
-        let owner = snapshot.court.deviceOwnerPlayerID ?? (snapshot.courtProtocolVersion < 2 ? snapshot.selectedPlayerID : nil)
-        return owner == playerID && snapshot.players.first { $0.id == playerID }?.court.coachOwnerID == nil
+        snapshot.mayUseHealth(for: playerID)
     }
     @discardableResult
     func saveCourtMutation(_ mutation: CourtWatchMutation) -> Bool {

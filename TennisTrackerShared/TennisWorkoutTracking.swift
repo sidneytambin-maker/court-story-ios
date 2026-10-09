@@ -119,7 +119,7 @@ final class TennisWorkoutCoordinator: ObservableObject {
         } catch {
             guard token == generation else { return }
             state = .recordingWithoutHealth
-            message = "Health workout recovery failed. Tennis tracking continues."
+            message = "Health workout recovery failed. Session timing continues without Health."
         }
     }
 
@@ -135,7 +135,7 @@ final class TennisWorkoutCoordinator: ObservableObject {
                 guard token == generation else { return nil }
                 message = result.workoutID == nil
                     ? "Health finished saving. Workout link pending until available."
-                    : "Tennis workout saved."
+                    : "Workout saved to Apple Health."
                 return result
             } catch {
                 guard token == generation else { return nil }
