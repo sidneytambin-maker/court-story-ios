@@ -227,7 +227,11 @@ private struct WatchLiveView: View {
                 #endif
                 WatchTrainingRow(training: training, identifier: "Completed training summary")
                 if training.trainingType == .matchPlay {
-                    NavigationLink("Record Practice Result") { WatchPracticeResultView() }
+                    NavigationLink("Record Practice Result") {
+                        if training.court.rules != nil || training.court.sport.sport != .tennis {
+                            WatchRecordedMatchView(linkedTraining: training)
+                        } else { WatchPracticeResultView() }
+                    }
                 }
             } else if store.activeTraining == nil && store.activeTournamentID == nil && store.pendingHealthStart == nil {
                 Text("No tennis activity in progress.")

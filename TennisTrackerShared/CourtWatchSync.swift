@@ -18,7 +18,7 @@ enum CourtWatchMutation: Codable, Equatable {
     }
 
     @discardableResult
-    func apply(to data: inout AppData) -> Bool {
+    func apply(to data: inout AppData, importingSavedRecord: Bool = false) -> Bool {
         switch self {
         case .onboarding(let profile, let settings):
             guard data.players.isEmpty, !data.onboardingCompleted, !profile.name.isBlank else { return false }
@@ -46,11 +46,11 @@ enum CourtWatchMutation: Codable, Equatable {
                 }
             }
         case .observation(let value):
-            guard !data.court.deletedIDs.contains(value.id), CourtFeature.observations.isAvailable(in: data.settings.trackingMode) else { return false }
+            guard !data.court.deletedIDs.contains(value.id), importingSavedRecord || CourtFeature.observations.isAvailable(in: data.settings.trackingMode) else { return false }
             if let old = data.court.observations.first(where: { $0.id == value.id }), !TennisRecordConflictResolver.shouldReplace(incomingRevision: value.revision, incomingModifiedAt: value.modifiedAt, existingRevision: old.revision, existingModifiedAt: old.modifiedAt) { return false }
             data.court.observations.removeAll { $0.id == value.id }; data.court.observations.append(value)
         case .drill(let value):
-            guard !data.court.deletedIDs.contains(value.id), CourtFeature.measuredDrills.isAvailable(in: data.settings.trackingMode) else { return false }
+            guard !data.court.deletedIDs.contains(value.id), importingSavedRecord || CourtFeature.measuredDrills.isAvailable(in: data.settings.trackingMode) else { return false }
             if let old = data.court.drills.first(where: { $0.id == value.id }), !TennisRecordConflictResolver.shouldReplace(incomingRevision: value.revision, incomingModifiedAt: value.modifiedAt, existingRevision: old.revision, existingModifiedAt: old.modifiedAt) { return false }
             data.court.drills.removeAll { $0.id == value.id }; data.court.drills.append(value)
         case .deleteCoaching(let id):
@@ -82,6 +82,11 @@ enum CourtWatchMutation: Codable, Equatable {
 }
 
 extension TennisWatchSnapshot {
+    var selectedCourtSport: CourtSportSelection {
+        let owner = players.first { $0.id == court.ownerPlayerID } ?? players.first { $0.id == selectedPlayerID }
+        return owner?.selectedSport ?? .tennis
+    }
+
     func scoped(playerID: UUID?, sport: CourtSportSelection) -> Self {
         var result = self
         result.selectedPlayerID = playerID

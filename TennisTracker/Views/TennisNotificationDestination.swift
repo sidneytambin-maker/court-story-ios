@@ -9,7 +9,7 @@ struct TennisNotificationDestination: View {
             switch route.kind {
             case .training:
                 if let session = store.data.trainingSessions.first(where: { $0.id == route.recordID }) {
-                    if route.action == .reflection && !session.isActive { TrainingReflectionEditor(session: session) }
+                    if route.action == .reflection && !session.isActive && CourtFeature.observations.isAvailable(in: store.data.settings.trackingMode) { TrainingReflectionEditor(session: session) }
                     else { NavigationStack { TrainingDetailView(session: session).toolbar { closeButton } } }
                 } else { unavailable }
             case .match:
@@ -24,14 +24,14 @@ struct TennisNotificationDestination: View {
                 } else { unavailable }
             case .weekly:
                 NavigationStack {
-                    TennisWeeklyReview(records: store.data.achievementRecords, playerID: store.selectedPlayerID,
+                    TennisWeeklyReview(records: store.data.achievementRecords.filter { ($0.courtSport ?? .tennis) == store.selectedSport }, playerID: store.selectedPlayerID,
                         weekStart: route.weekStart ?? TennisReportingWeek.interval(containing: Date()).start)
                         .tennisThemedList().toolbar { closeButton }
                 }
             case .achievements:
                 NavigationStack { TennisAchievementsView(achievements: store.data.achievements).tennisThemedList().toolbar { closeButton } }
             }
-        }.onAppear { selectRecordPlayer() }
+        }
     }
     private var closeButton: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }
@@ -43,12 +43,6 @@ struct TennisNotificationDestination: View {
                     .accessibilityIdentifier("notificationActivityUnavailable")
             }.tennisThemedList().navigationTitle("Activity Unavailable").toolbar { closeButton }
         }
-    }
-    private func selectRecordPlayer() {
-        let id = store.data.trainingSessions.first { $0.id == route.recordID }?.playerID ??
-            store.data.matches.first { $0.id == route.recordID }?.playerID ??
-            store.data.tournaments.first { $0.id == route.recordID }?.playerID
-        if id != store.selectedPlayerID, let player = store.data.players.first(where: { $0.id == id }) { store.selectPlayer(player) }
     }
 }
 
@@ -62,8 +56,9 @@ struct TrainingReflectionEditor: View {
     var body: some View {
         NavigationStack {
             TennisForm {
-                if let current {
+                if let current, CourtFeature.observations.isAvailable(in: store.data.settings.trackingMode) {
                     TennisReflectionFields(draft: $draft, summary: store.trainingSummary(current, style: .short))
+                } else if current != nil { Text("Reflections are available in Standard and Power. Your saved reflection is retained.")
                 } else { Text("This session is no longer available. Your reflection has not been saved.") }
                 if !message.isEmpty { Text(message) }
             }
@@ -72,12 +67,12 @@ struct TrainingReflectionEditor: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save Reflection") {
-                        guard let current, !current.isActive, let updated = draft.applying(to: current) else {
+                        guard CourtFeature.observations.isAvailable(in: store.data.settings.trackingMode), let current, !current.isActive, let updated = draft.applying(to: current) else {
                             message = "This session is unavailable or still active. Finish tracking before saving a reflection."
                             store.announce(message); return
                         }
-                        store.upsertTraining(updated); dismiss()
-                    }.disabled(current == nil).accessibilityIdentifier("saveTrainingReflection")
+                        if store.upsertTraining(updated) { dismiss() }
+                    }.disabled(current == nil || !CourtFeature.observations.isAvailable(in: store.data.settings.trackingMode)).accessibilityIdentifier("saveTrainingReflection")
                 }
             }
         }
@@ -89,27 +84,35 @@ struct NotificationMatchResultEditor: View {
     @Environment(\.dismiss) private var dismiss
     @State private var draft: MatchRecord
     @State private var message = ""
+    @State private var courtScoreError = ""
     init(match: MatchRecord) { _draft = State(initialValue: TennisNotificationResult.draft(match)) }
     var body: some View {
         NavigationStack {
             TennisForm {
                 Text(TennisSummaryFormatter.match(draft, style: .short)).accessibilityIdentifier("notificationMatchSummary")
                 if !message.isEmpty { Text(message) }
-                OrderedChoicePicker(title: "Match format", selection: $draft.matchFormat, values: MatchFormat.allCases) { $0.label }
-                TennisRecordedScoreFields(match: $draft)
-                TextField("Next practice focus", text: $draft.nextPracticeFocus, axis: .vertical)
+                if draft.usesCourtScoring {
+                    CourtRecordedScoreFields(match: $draft, validationMessage: $courtScoreError, showsRules: true)
+                } else {
+                    OrderedChoicePicker(title: "Match format", selection: $draft.matchFormat, values: MatchFormat.allCases) { $0.label }
+                    TennisRecordedScoreFields(match: $draft)
+                }
+                if CourtFeature.observations.isAvailable(in: store.data.settings.trackingMode) {
+                    TextField("Next practice focus", text: $draft.nextPracticeFocus, axis: .vertical)
+                }
             }.tennisThemedList().navigationTitle("Match Result")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save Result") {
-                        if let error = TennisRecordedScore.validationMessage(for: draft) { message = error; store.announce(error); return }
+                        if draft.usesCourtScoring && !courtScoreError.isEmpty { message = courtScoreError; store.announce(message); return }
+                        if !draft.usesCourtScoring, let error = TennisRecordedScore.validationMessage(for: draft) { message = error; store.announce(error); return }
                         guard let current = store.data.matches.first(where: { $0.id == draft.id }),
                               let updated = TennisNotificationResult.applying(draft, to: current) else {
                             message = "This match is unavailable or live scoring has started. Close this reminder and resume the live match."
                             store.announce(message); return
                         }
-                        store.upsertMatch(updated); dismiss()
+                        if store.upsertMatch(updated) { dismiss() }
                     }.accessibilityIdentifier("saveNotificationMatchResult")
                 }
             }

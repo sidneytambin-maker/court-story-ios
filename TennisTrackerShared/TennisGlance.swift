@@ -14,14 +14,16 @@ struct TennisGlance: Equatable {
     var relevanceScore: Float { isStale ? 0 : destination == .score || destination == .live ? 10 : destination == .today ? 5 : 0 }
 
     static func make(snapshot: TennisWatchSnapshot, now: Date = Date()) -> Self {
-        let matches = snapshot.matches.filter { snapshot.selectedPlayerID == nil || $0.playerID == snapshot.selectedPlayerID }
-        let training = snapshot.trainingSessions.filter { snapshot.selectedPlayerID == nil || $0.playerID == snapshot.selectedPlayerID }
+        let sport = snapshot.selectedCourtSport
+        let matches = snapshot.matches.filter { (snapshot.selectedPlayerID == nil || $0.playerID == snapshot.selectedPlayerID) && $0.court.sport == sport }
+        let training = snapshot.trainingSessions.filter { (snapshot.selectedPlayerID == nil || $0.playerID == snapshot.selectedPlayerID) && $0.court.sport == sport }
         if let match = matches.filter({ $0.status == .inProgress }).max(by: { $0.modifiedAt < $1.modifiedAt }) {
             let stale = now.timeIntervalSince(match.modifiedAt) > 6 * 3600
             let names = [match.playerName.fallback("Player"), match.matchType == .doubles ? match.partnerName.fallback("Partner") : ""]
             let compactTeam = names.filter { !$0.isBlank }.map { String($0.split(separator: " ").first?.prefix(3) ?? "") }.joined(separator: "/")
             return Self(title: stale ? "Saved match" : compactTeam,
-                        detail: match.liveScore.map { "\($0.playerGames)-\($0.opponentGames)" } ?? "In progress",
+                        detail: match.court.score.map { $0.rules.system == .tennisGames ? "\($0.frame.tennis.playerGames)-\($0.frame.tennis.opponentGames)" : $0.frame.points.map(String.init).joined(separator: "-") }
+                            ?? match.liveScore.map { "\($0.playerGames)-\($0.opponentGames)" } ?? "In progress",
                         accessibilitySummary: TennisSummaryFormatter.liveMatchScore(match, saved: stale),
                         destination: .score, isStale: stale)
         }
@@ -57,14 +59,14 @@ struct TennisGlance: Equatable {
                 destination: .today, isStale: false, compactDetail: session.hasStartTime ? session.date.shortTennisTime : session.date.shortTennisDate)))
         }
         for tournament in snapshot.tournaments where (snapshot.selectedPlayerID == nil || tournament.playerID == snapshot.selectedPlayerID)
-            && tournament.endDate >= today && tournament.finalResult != .completed && tournament.finalResult != .withdrawn {
+            && tournament.court.sport == sport && tournament.endDate >= today && tournament.finalResult != .completed && tournament.finalResult != .withdrawn {
             events.append((tournament.date, tournament.id.uuidString, Self(title: tournament.name.fallback("Tournament"),
                 detail: TennisSummaryFormatter.dateRange(from: tournament.date, through: tournament.endDate),
                 accessibilitySummary: TennisSummaryFormatter.tournament(tournament, style: .short, matches: snapshot.matches), destination: .today, isStale: false,
                 compactDetail: compactRange(tournament.date, tournament.endDate))))
         }
         if let event = events.sorted(by: { $0.date == $1.date ? $0.id < $1.id : $0.date < $1.date }).first { return event.glance }
-        return Self(title: "Track Tennis", detail: "Start an activity", accessibilitySummary: "Track a tennis activity.", destination: .track, isStale: false)
+        return Self(title: "Track \(sport.name)", detail: "Start an activity", accessibilitySummary: "Track a \(sport.name.lowercased()) activity.", destination: .track, isStale: false)
     }
 }
 

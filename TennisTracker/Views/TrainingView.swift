@@ -209,7 +209,7 @@ struct TrainingEditorView: View {
             .navigationTitle("Training")
             .onAppear {
                 guard !loadedLinks else { return }
-                linkedMatchIDs = store.selectedMatches.filter { $0.trainingSessionID == session.id }.map(\.id)
+                linkedMatchIDs = store.data.matches.filter { $0.playerID == session.playerID && $0.court.sport == session.court.sport && $0.trainingSessionID == session.id }.map(\.id)
                 originalMatchIDs = Set(linkedMatchIDs); loadedLinks = true
             }
             .toolbar {

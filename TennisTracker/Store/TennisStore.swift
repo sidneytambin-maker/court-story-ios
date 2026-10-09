@@ -302,7 +302,7 @@ final class TennisStore: ObservableObject {
         case .court(let mutation):
             if case .deleteCoaching(let id) = mutation { _ = removeCoachingRecord(id); return }
             var candidate = data
-            if mutation.apply(to: &candidate) { _ = saveCourtCandidate(candidate, announcement: "Coaching changes synced from Apple Watch.") }
+            if mutation.apply(to: &candidate, importingSavedRecord: true) { _ = saveCourtCandidate(candidate, announcement: "Coaching changes synced from Apple Watch.") }
         case .deleteRecord(let deletion):
             var candidate = data
             candidate.delete(deletion)

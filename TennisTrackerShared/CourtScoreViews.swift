@@ -197,13 +197,14 @@ private struct CourtPointCorrection: View {
 struct CourtRecordedScoreFields: View {
     @Binding var match: MatchRecord
     @Binding var validationMessage: String
+    var showsRules = false
     @State private var score: CourtScoreSession?
     @State private var rounds: [CourtScoreRound] = []
     @State private var decidingWinner: Int?
     var body: some View {
         Group {
             if let score {
-                if match.court.sport.sport == .custom {
+                if match.court.sport.sport == .custom || showsRules {
                     CourtScoreSetupFields(score: Binding(get: { self.score ?? score }, set: { updated in
                         self.score = updated
                         match.court.rules = updated.rules
@@ -213,7 +214,7 @@ struct CourtRecordedScoreFields: View {
                             return value
                         }
                         apply()
-                    }), showsService: false)
+                    }), showsSideNames: match.court.sport.sport == .custom, doubles: match.matchType == .doubles, showsService: false)
                 }
                 ForEach(rounds.indices, id: \.self) { index in
                     Text(score.rules.system == .aggregate ? CourtScoreSession.disciplines[min(index, 3)] : "Round \(index + 1)")

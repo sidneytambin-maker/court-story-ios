@@ -20,6 +20,11 @@ def check_empty(data):
     if data.get("selectedPlayerID") is not None: raise ValueError("Fresh installation has a selected player")
     for key in ("knownVenues", "achievementHistory", "achievementRecords"):
         if data.get(key, []) != []: raise ValueError("Fresh installation contains unexpected " + key)
+    workspace = data.get("court", {})
+    for key in ("ownerPlayerID", "deviceOwnerPlayerID", "activeAthleteID"):
+        if workspace.get(key) is not None: raise ValueError("Fresh coaching workspace contains a previous identity")
+    for key in ("observations", "drills", "media", "deletedIDs"):
+        if workspace.get(key, []) != []: raise ValueError("Fresh coaching workspace contains previous records")
 
 
 def check_watch_preferences(preferences):
@@ -59,7 +64,7 @@ def main(app, platform):
             run("bootstatus", device, "-b")
             run("install", device, app)
             # Release must ignore all fixture/reset arguments.
-            run("launch", device, identifier, "-ui-testing-reset-store", "-ui-testing-venue-dashboard", "-ui-testing-watch")
+            run("launch", device, identifier, "-ui-testing-reset-store", "-ui-testing-venue-dashboard", "-ui-testing-watch", "-ui-testing-court-coach", "-ui-court-power")
             container = Path(run("get_app_container", device, identifier, "data"))
             path = container / ("Library/Preferences/" + identifier + ".plist" if platform == "watchOS" else "Library/Application Support/TennisTracker/tennis-tracker-data.json")
             data = None

@@ -3,6 +3,7 @@ import SwiftUI
 struct WatchRecordedMatchView: View {
     @EnvironmentObject private var store: WatchTennisStore
     @Environment(\.dismiss) private var dismiss
+    var linkedTraining: TrainingSession?
     @State private var match = MatchRecord(playerID: UUID())
     @State private var configured = false
     @State private var validationMessage = ""
@@ -11,14 +12,14 @@ struct WatchRecordedMatchView: View {
     var body: some View {
         Form {
             if !validationMessage.isBlank { Text(validationMessage).accessibilityIdentifier("recordMatchValidation") }
-            CourtCaptureIdentity(athlete: store.selectedPlayer?.displayName ?? "Player", sport: match.court.sport, coached: match.court.enteredByCoachID != nil)
+            CourtCaptureIdentity(athlete: store.snapshot.players.first { $0.id == match.playerID }?.displayName ?? "Player", sport: match.court.sport, coached: match.court.enteredByCoachID != nil)
             if match.court.sport.sport != .custom { TennisMatchPeopleFields(players: store.snapshot.players, match: $match) }
             WatchMatchScheduleFields(match: $match)
             OrderedChoicePicker(title: "Match round", selection: $match.matchPosition, values: MatchPosition.allCases) { $0.label }
                 .accessibilityIdentifier("matchRoundPicker")
             WatchVenueFields(venueID: $match.venueID, venue: $match.venue, location: $match.location)
-            TennisTournamentPicker(tournaments: store.scopedSnapshot.tournaments, tournamentID: $match.tournamentID, customName: $match.customTournamentName)
-            TennisTrainingSessionPicker(sessions: store.scopedSnapshot.trainingSessions, coaches: store.snapshot.setup.coaches, selection: $match.trainingSessionID)
+            TennisTournamentPicker(tournaments: store.snapshot.tournaments.filter { $0.playerID == match.playerID && $0.court.sport == match.court.sport }, tournamentID: $match.tournamentID, customName: $match.customTournamentName)
+            TennisTrainingSessionPicker(sessions: store.snapshot.trainingSessions.filter { $0.playerID == match.playerID && $0.court.sport == match.court.sport }, coaches: store.snapshot.setup.coaches, selection: $match.trainingSessionID)
             if configured {
                 if match.court.sport.sport != .custom {
                     NavigationLink("Scoring rules") {
@@ -32,8 +33,10 @@ struct WatchRecordedMatchView: View {
                 CourtRecordedScoreFields(match: $match, validationMessage: $scoreError)
             }
             Section("Conditions") { TennisMatchConditionsFields(match: $match) }
+            if CourtFeature.observations.isAvailable(in: store.snapshot.settings.trackingMode) {
             TextField("Next practice focus", text: $match.nextPracticeFocus)
                 .accessibilityHint("Your latest completed match review appears in What to work on on the iPhone dashboard.")
+            }
             TextField("Notes", text: $match.notes)
             Button("Save Match Result") {
                 if !scoreError.isEmpty { validationMessage = scoreError; store.announce(scoreError); return }
@@ -46,8 +49,18 @@ struct WatchRecordedMatchView: View {
         .onAppear {
             guard !configured, let draft = store.makeCourtMatch() else { return }
             match = draft
+            if let linkedTraining {
+                match.playerID = linkedTraining.playerID
+                match.playerName = store.snapshot.players.first { $0.id == linkedTraining.playerID }?.displayName ?? "Player"
+                match.court = linkedTraining.court
+                match.court.score = nil
+                match.trainingSessionID = linkedTraining.id
+                match.tournamentID = linkedTraining.context.tournamentID
+                match.venueID = linkedTraining.context.venueID; match.venue = linkedTraining.venue; match.location = linkedTraining.location
+                match.configureNewCourtMatch()
+            }
             match.status = .completed
-            match.date = Calendar.current.startOfDay(for: Date())
+            match.date = linkedTraining?.date ?? Calendar.current.startOfDay(for: Date())
             configured = true
         }
     }

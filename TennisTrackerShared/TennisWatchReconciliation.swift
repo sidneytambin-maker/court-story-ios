@@ -27,7 +27,7 @@ enum TennisWatchReconciliation {
                 var library = snapshot.courtLibrary
                 acknowledged = mutation.isAcknowledged(in: library)
                 if !acknowledged {
-                    _ = mutation.apply(to: &library)
+                    _ = mutation.apply(to: &library, importingSavedRecord: true)
                     snapshot.applyCourtLibrary(library)
                 }
             case .deleteRecord(let deletion):

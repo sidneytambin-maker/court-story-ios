@@ -164,7 +164,7 @@ extension TennisWatchSnapshot {
         TennisAchievementRecord.merge(history: achievementHistory,
             current: TennisAchievementRecord.collect(matches: matches, training: trainingSessions, tournaments: tournaments, now: now, players: players), deleted: deletedRecordIDs)
     }
-    var achievements: [TennisAchievement] { TennisAchievement.build(records: achievementRecords, playerID: selectedPlayerID) }
+    var achievements: [TennisAchievement] { TennisAchievement.build(records: achievementRecords.filter { ($0.courtSport ?? .tennis) == selectedCourtSport }, playerID: selectedPlayerID) }
 }
 
 extension AppData {

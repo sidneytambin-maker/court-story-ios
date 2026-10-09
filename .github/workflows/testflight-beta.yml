@@ -30,7 +30,7 @@ jobs:
         timeout-minutes: 90
         run: |
           set -euo pipefail
-          ID=$(xcrun simctl list devices available --json | jq -r '[.devices | to_entries[] | select(.key | contains("iOS")) | .value[] | select(.isAvailable and (.name | startswith("iPhone")))][0].udid')
+          ID=$(python3 Scripts/create_apple_test_simulator.py small-phone)
           xcrun simctl bootstatus "$ID" -b
           xcodebuild test -project TennisTrackeriOS.xcodeproj -scheme TennisTracker -destination "id=$ID" -parallel-testing-enabled NO -configuration Debug -resultBundlePath iPhoneBetaTests.xcresult CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" 2>&1 | tee iPhoneBetaTests.log
       - name: Export iPhone test summary and screenshots
@@ -52,18 +52,32 @@ jobs:
           retention-days: 7
   watch-tests:
     runs-on: macos-latest
-    timeout-minutes: 60
+    timeout-minutes: 100
     steps:
       - uses: actions/checkout@v4
       - run: brew install xcodegen
       - run: xcodegen generate --spec project-watch-tests.yml
       - name: Native Watch accessibility tests
-        timeout-minutes: 50
+        timeout-minutes: 90
         run: |
           set -euo pipefail
-          ID=$(xcrun simctl list devices available --json | jq -r '[.devices | to_entries[] | select(.key | contains("watchOS")) | .value[] | select(.isAvailable and (.name | contains("Ultra")))][0].udid')
+          ID=$(python3 Scripts/create_apple_test_simulator.py watch)
+          PHONE=$(python3 Scripts/create_apple_test_simulator.py phone)
+          PAIR=$(xcrun simctl pair "$ID" "$PHONE")
+          if ACTIVATE_OUTPUT=$(xcrun simctl pair_activate "$PAIR" 2>&1); then
+            printf '%s\n' "$ACTIVATE_OUTPUT"
+          else
+            ACTIVATE_STATUS=$?
+            if [ "$ACTIVATE_STATUS" -ne 37 ] || [[ "$ACTIVATE_OUTPUT" != *"This pair is already active."* ]]; then
+              printf '%s\n' "$ACTIVATE_OUTPUT" >&2
+              exit "$ACTIVATE_STATUS"
+            fi
+          fi
+          xcrun simctl bootstatus "$PHONE" -b
           xcrun simctl bootstatus "$ID" -b
-          xcodebuild test -project TennisTrackeriOS.xcodeproj -scheme TennisTrackerWatchTests -destination "id=$ID" -parallel-testing-enabled NO -configuration Debug -resultBundlePath WatchBetaTests.xcresult CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" 2>&1 | tee WatchBetaTests.log
+          xcodebuild build -project TennisTrackeriOS.xcodeproj -scheme TennisTracker -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath CourtPaired CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=YES CODE_SIGN_IDENTITY="-" > CourtPaired.log 2>&1
+          xcrun simctl install "$PHONE" CourtPaired/Build/Products/Debug-iphonesimulator/TennisTracker.app
+          xcodebuild test -project TennisTrackeriOS.xcodeproj -scheme TennisTrackerWatchTests -destination "id=$ID" -parallel-testing-enabled NO -configuration Debug -resultBundlePath WatchBetaTests.xcresult CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=YES CODE_SIGN_IDENTITY="-" 2>&1 | tee WatchBetaTests.log
       - name: Export Watch test summary and screenshots
         if: always()
         run: |
@@ -80,6 +94,7 @@ jobs:
             WatchBetaTests.xcresult
             WatchReview
             WatchBetaTests.log
+            CourtPaired.log
           retention-days: 7
   release-privacy:
     runs-on: macos-latest

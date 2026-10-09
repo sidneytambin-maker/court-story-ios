@@ -15,7 +15,7 @@ enum TennisGlanceKind: String, CaseIterable {
     var name: String {
         switch self {
         case .current: return "Current Activity"
-        case .next: return "Next Tennis Event"
+        case .next: return "Next Sport Event"
         case .week: return "This Week"
         case .latest: return "Latest Result"
         case .startTraining: return "Start Training"
@@ -24,10 +24,10 @@ enum TennisGlanceKind: String, CaseIterable {
     var description: String {
         switch self {
         case .current: return "Live score or elapsed training and tournament time."
-        case .next: return "The next scheduled tennis activity."
+        case .next: return "The next scheduled activity for the selected sport and player."
         case .week: return "Completed training time and match results from Monday to Sunday."
-        case .latest: return "The most recently completed tennis activity."
-        case .startTraining: return "Start tennis training, with scheduled details ready near the start time."
+        case .latest: return "The most recently completed activity for the selected sport and player."
+        case .startTraining: return "Start training, with scheduled details ready near the start time."
         }
     }
     var symbol: String {
@@ -44,9 +44,10 @@ enum TennisGlanceKind: String, CaseIterable {
 extension TennisGlance {
     static func make(kind: TennisGlanceKind, snapshot: TennisWatchSnapshot, now: Date = Date(), calendar: Calendar = .current) -> Self {
         var selected = snapshot
-        selected.matches = snapshot.matches.filter { snapshot.selectedPlayerID == nil || $0.playerID == snapshot.selectedPlayerID }
-        selected.trainingSessions = snapshot.trainingSessions.filter { snapshot.selectedPlayerID == nil || $0.playerID == snapshot.selectedPlayerID }
-        selected.tournaments = snapshot.tournaments.filter { snapshot.selectedPlayerID == nil || $0.playerID == snapshot.selectedPlayerID }
+        let sport = snapshot.selectedCourtSport
+        selected.matches = snapshot.matches.filter { (snapshot.selectedPlayerID == nil || $0.playerID == snapshot.selectedPlayerID) && $0.court.sport == sport }
+        selected.trainingSessions = snapshot.trainingSessions.filter { (snapshot.selectedPlayerID == nil || $0.playerID == snapshot.selectedPlayerID) && $0.court.sport == sport }
+        selected.tournaments = snapshot.tournaments.filter { (snapshot.selectedPlayerID == nil || $0.playerID == snapshot.selectedPlayerID) && $0.court.sport == sport }
         switch kind {
         case .startTraining:
             if let active = selected.trainingSessions.first(where: \.isActive) {
@@ -55,7 +56,7 @@ extension TennisGlance {
             let candidates = TennisScheduling.nearbyTraining(in: selected, now: now)
             let summary = candidates.count == 1
                 ? "Start scheduled training. " + TennisSummaryFormatter.training(candidates[0], coaches: selected.setup.coaches, players: selected.players)
-                : "Start tennis training. " + (candidates.isEmpty ? "Choose session details." : "Choose a scheduled session.")
+                : "Start \(sport.name.lowercased()) training. " + (candidates.isEmpty ? "Choose session details." : "Choose a scheduled session.")
             return Self(title: "Start Training", detail: candidates.count == 1 ? candidates[0].trainingType.rawValue : "Ready to play",
                 accessibilitySummary: summary, destination: .track, isStale: false, compactDetail: "Start",
                 actionURL: URL(string: "tennistracker://watch/start-training"))
@@ -69,14 +70,14 @@ extension TennisGlance {
                     accessibilitySummary: tournament.name + ". Tracked duration " + duration + ".",
                     destination: .live, isStale: false, compactDetail: "\(max(0, Int(now.timeIntervalSince(tournament.actualStart ?? now) / 60))) min")
             }
-            return Self(title: "Current Activity", detail: "No activity running", accessibilitySummary: "No tennis activity is running. Open Track.", destination: .track, isStale: false, compactDetail: "Start")
+            return Self(title: "Current Activity", detail: "No activity running", accessibilitySummary: "No \(sport.name.lowercased()) activity is running. Open Track.", destination: .track, isStale: false, compactDetail: "Start")
         case .next:
             selected.matches.removeAll { $0.status != .scheduled }
             selected.trainingSessions.removeAll { $0.actualStart != nil || $0.actualFinish != nil }
             selected.tournaments.removeAll { $0.actualStart != nil && $0.actualFinish == nil }
             let next = make(snapshot: selected, now: now)
             if next.destination == .today { return next }
-            return Self(title: "Next Tennis", detail: "Nothing scheduled", accessibilitySummary: "No upcoming tennis event is scheduled.", destination: .today, isStale: false, compactDetail: "None")
+            return Self(title: "Next \(sport.name)", detail: "Nothing scheduled", accessibilitySummary: "No upcoming \(sport.name.lowercased()) event is scheduled.", destination: .today, isStale: false, compactDetail: "None")
         case .week:
             let start = TennisReportingWeek.interval(containing: now, calendar: calendar).start
             let training = selected.trainingSessions.filter { !$0.isActive && ($0.actualStart ?? $0.date) >= start && ($0.actualFinish ?? $0.expectedEndDate) <= now }
@@ -93,7 +94,7 @@ extension TennisGlance {
                 results.append((match.actualFinish ?? match.date, match.id.uuidString,
                     Self(title: "Latest Match", detail: TennisSummaryFormatter.match(match, style: .short),
                         accessibilitySummary: TennisSummaryFormatter.match(match, tournaments: selected.tournaments),
-                        destination: .recent, isStale: false, compactDetail: match.setScores.fallback(match.result.rawValue))))
+                        destination: .recent, isStale: false, compactDetail: match.setScores.fallback(match.resultDescription))))
             }
             for training in selected.trainingSessions where !training.isActive && (training.actualFinish ?? training.expectedEndDate) <= now {
                 results.append((training.actualFinish ?? training.expectedEndDate, training.id.uuidString,
@@ -108,7 +109,7 @@ extension TennisGlance {
                         destination: .recent, isStale: false, compactDetail: tournament.stageReached.rawValue)))
             }
             return results.sorted { $0.0 == $1.0 ? $0.1 < $1.1 : $0.0 > $1.0 }.first?.2
-                ?? Self(title: "Latest Result", detail: "No completed activity", accessibilitySummary: "No completed tennis activity is recorded.", destination: .recent, isStale: false, compactDetail: "None")
+                ?? Self(title: "Latest Result", detail: "No completed activity", accessibilitySummary: "No completed \(sport.name.lowercased()) activity is recorded.", destination: .recent, isStale: false, compactDetail: "None")
         }
     }
 }

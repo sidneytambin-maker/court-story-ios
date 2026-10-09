@@ -34,6 +34,16 @@ class FreshReleaseTests(unittest.TestCase):
         for key in ("activeHealthTrainingID", "pendingHealthTrainingIDs", "activeTournamentID", "pendingIntentRoute"):
             with self.assertRaises(ValueError): check_watch_preferences({key: "old-state"})
 
+    def test_coaching_workspace_cannot_ship_identity_journal_drills_or_media(self):
+        for key in ("ownerPlayerID", "deviceOwnerPlayerID", "activeAthleteID"):
+            data = self.empty(); data["court"] = {key: "previous-person"}
+            with self.subTest(key=key), self.assertRaises(ValueError): check_empty(data)
+        for key in ("observations", "drills", "media", "deletedIDs"):
+            data = self.empty(); data["court"] = {key: ["previous-record"]}
+            with self.subTest(key=key), self.assertRaises(ValueError): check_empty(data)
+        data = self.empty(); data["court"] = {"observations": [], "drills": [], "media": [], "deletedIDs": []}
+        check_empty(data)
+
     def test_watch_queue_allows_only_an_unassociated_empty_handshake(self):
         check_watch_preferences({"queuedWatchCommands": json.dumps({"commands": []}).encode()})
         check_watch_preferences({"queuedWatchCommands": json.dumps({"commands": [{"requestSnapshot": {}}]}).encode()})

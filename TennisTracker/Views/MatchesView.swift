@@ -97,10 +97,17 @@ struct MatchDetailView: View {
     var body: some View {
         TennisList {
             TennisSection("Summary") {
-                SummaryRow(title: TennisSummaryFormatter.match(match, tournaments: store.selectedTournaments, style: .short), value: "\(match.matchType.rawValue). \(match.date.shortTennisDate).")
+                SummaryRow(title: TennisSummaryFormatter.match(match, tournaments: store.data.tournaments, style: .short), value: "\(match.matchType.rawValue). \(match.date.shortTennisDate).")
                 SummaryRow(title: "Players", value: "\(match.playerTeam) against \(match.opponentSummary.fallback("opponent not recorded")).")
                 SummaryRow(title: "Score", value: TennisSummaryFormatter.matchSummary(match).scoreText)
-                SummaryRow(title: "Rules", value: "\(match.sightLevel.label). \(match.allowedBounces) bounces. Sudden-death deuce \(match.suddenDeathDeuce ? "on" : "off").")
+                if match.usesCourtScoring {
+                    SummaryRow(title: "Sport and rules", value: match.court.sport.name + ". " + match.makeCourtScore().rules.formatSummary)
+                    if let access = match.court.access, let bounces = access.allowedBounces(for: match.court.sport.sport) {
+                        SummaryRow(title: "Bounce allowance", value: "\(bounces)")
+                    }
+                } else {
+                    SummaryRow(title: "Rules", value: "\(match.sightLevel.label). \(match.allowedBounces) bounces. Sudden-death deuce \(match.suddenDeathDeuce ? "on" : "off").")
+                }
                 SummaryRow(title: "Place", value: [match.venue, match.location].filter { !$0.isBlank }.joined(separator: ", ").fallback("not recorded"))
                 if !match.conditionsSummary.isBlank { SummaryRow(title: "Conditions", value: match.conditionsSummary) }
             }
@@ -276,7 +283,7 @@ struct MatchEditorView: View {
 
     private var linkedTournament: TournamentRecord? {
         guard let tournamentID = match.tournamentID else { return nil }
-        return store.selectedTournaments.first { $0.id == tournamentID }
+        return store.data.tournaments.first { $0.id == tournamentID && $0.playerID == match.playerID && $0.court.sport == match.court.sport }
     }
 
     private func applyTournamentDefaults() {

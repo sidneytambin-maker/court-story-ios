@@ -168,6 +168,7 @@ enum TennisSummaryFormatter {
 
     static func liveMatchScore(_ match: MatchRecord, saved: Bool = false) -> String {
         let participants = "\(match.playerTeam) against \(match.opponentSummary.fallback("opponent not recorded"))"
+        if let score = match.court.score { return (saved ? "Saved match. " : "") + match.court.sport.name + ". " + score.summary }
         if saved { return "Saved match: \(participants). \(matchSummary(match).scoreText)." }
         guard let score = match.liveScore else { return "\(participants). Match in progress; score not recorded." }
         return participants + ". " + scoreAnnouncement(state: TennisScoreState(snapshot: score), playerName: match.playerTeam,

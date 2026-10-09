@@ -15,7 +15,7 @@ struct WatchNotificationDestination: View {
         switch route.kind {
         case .training:
             if let session = store.snapshot.trainingSessions.first(where: { $0.id == route.recordID }) {
-                if route.action == .reflection && !session.isActive { WatchTrainingReflectionEditor(session: session) }
+                if route.action == .reflection && !session.isActive && CourtFeature.observations.isAvailable(in: store.snapshot.settings.trackingMode) { WatchTrainingReflectionEditor(session: session) }
                 else {
                     List {
                         WatchTrainingRow(training: session)
@@ -50,10 +50,10 @@ struct WatchNotificationDestination: View {
                 List { WatchTournamentRow(tournament: tournament) }.navigationTitle("Tournament")
             } else { unavailable }
         case .weekly:
-            TennisWeeklyReview(records: store.snapshot.achievementRecords, playerID: store.snapshot.selectedPlayerID,
+            TennisWeeklyReview(records: store.scopedSnapshot.achievementRecords, playerID: store.snapshot.selectedPlayerID,
                 weekStart: route.weekStart ?? TennisReportingWeek.interval(containing: Date()).start)
         case .achievements:
-            TennisAchievementsView(achievements: store.snapshot.achievements)
+            TennisAchievementsView(achievements: store.scopedSnapshot.achievements)
         }
     }
     private var unavailable: some View {
@@ -83,16 +83,17 @@ struct WatchTrainingReflectionEditor: View {
     private var current: TrainingSession? { store.snapshot.trainingSessions.first { $0.id == draft.sessionID } }
     var body: some View {
         Form {
-            if let current { TennisReflectionFields(draft: $draft, summary: store.trainingSummary(current, style: .short)) }
+            if let current, CourtFeature.observations.isAvailable(in: store.snapshot.settings.trackingMode) { TennisReflectionFields(draft: $draft, summary: store.trainingSummary(current, style: .short)) }
+            else if current != nil { Text("Reflections are available in Standard and Power. Saved reflections are retained.") }
             else { Text("This session is no longer available.") }
             if !message.isEmpty { Text(message) }
             Button("Save Reflection") {
-                guard let current, !current.isActive, let updated = draft.applying(to: current) else {
+                guard CourtFeature.observations.isAvailable(in: store.snapshot.settings.trackingMode), let current, !current.isActive, let updated = draft.applying(to: current) else {
                     message = "This session is unavailable or still active. Finish tracking before saving a reflection."
                     store.announce(message); return
                 }
                 store.updateTrainingDetails(updated); dismiss()
-            }.disabled(current == nil).accessibilityIdentifier("saveTrainingReflection")
+            }.disabled(current == nil || !CourtFeature.observations.isAvailable(in: store.snapshot.settings.trackingMode)).accessibilityIdentifier("saveTrainingReflection")
         }.navigationTitle("Training Reflection")
     }
 }
@@ -102,28 +103,37 @@ struct WatchNotificationResultEditor: View {
     @Environment(\.dismiss) private var dismiss
     @State private var draft: MatchRecord
     @State private var message = ""
+    @State private var courtScoreError = ""
     init(match: MatchRecord) { _draft = State(initialValue: TennisNotificationResult.draft(match)) }
     var body: some View {
         Form {
             Text(TennisSummaryFormatter.match(draft, style: .short)).accessibilityIdentifier("notificationMatchSummary")
             if !message.isEmpty { Text(message) }
-            OrderedChoicePicker(title: "Match format", selection: $draft.matchFormat, values: MatchFormat.allCases) { $0.label }
-            TennisRecordedScoreFields(match: $draft)
+            if draft.usesCourtScoring { CourtRecordedScoreFields(match: $draft, validationMessage: $courtScoreError, showsRules: true) }
+            else {
+                OrderedChoicePicker(title: "Match format", selection: $draft.matchFormat, values: MatchFormat.allCases) { $0.label }
+                TennisRecordedScoreFields(match: $draft)
+            }
             if let current = store.snapshot.matches.first(where: { $0.id == draft.id }),
                current.opponentName.isBlank || (current.matchType == .doubles && (current.partnerName.isBlank || current.opponent2Name.isBlank)) {
                 NavigationLink("Add Missing Players") { WatchMatchEditor(draft: current) }
                     .accessibilityHint("Choose the missing players, save those details, then finish recording this result.")
             }
-            TextField("Next practice focus", text: $draft.nextPracticeFocus)
+            if CourtFeature.observations.isAvailable(in: store.snapshot.settings.trackingMode) { TextField("Next practice focus", text: $draft.nextPracticeFocus) }
             Button("Save Result") {
-                if let error = TennisRecordedScore.validationMessage(for: draft) { message = error; store.announce(error); return }
+                if draft.usesCourtScoring && !courtScoreError.isEmpty { message = courtScoreError; store.announce(message); return }
+                if !draft.usesCourtScoring, let error = TennisRecordedScore.validationMessage(for: draft) { message = error; store.announce(error); return }
                 guard let current = store.snapshot.matches.first(where: { $0.id == draft.id }),
                       let updated = TennisNotificationResult.applying(draft, to: current) else {
                     message = "This match is unavailable or live scoring has started. Close this reminder and resume the live match."
                     store.announce(message); return
                 }
-                if let error = TennisManualMatchEntry.validationMessage(for: updated) { message = error; store.announce(error); return }
-                store.saveRecordedMatch(updated); dismiss()
+                if updated.usesCourtScoring {
+                    if store.saveCourtMatch(updated, showAsActive: false) { dismiss() }
+                } else {
+                    if let error = TennisManualMatchEntry.validationMessage(for: updated) { message = error; store.announce(error); return }
+                    store.saveRecordedMatch(updated); dismiss()
+                }
             }.accessibilityIdentifier("saveNotificationMatchResult")
         }.navigationTitle("Match Result")
     }

@@ -53,7 +53,7 @@ enum TennisNotificationPlanner {
             }
         }
 
-        if settings.postSessionRemindersEnabled {
+        if settings.postSessionRemindersEnabled && CourtFeature.observations.isAvailable(in: settings.trackingMode) {
             let delay = TimeInterval(settings.postSessionDelayMinutes * 60)
             for session in data.trainingSessions where !session.isActive && session.hasStartTime && session.notes.isBlank && session.sessionOutcome.isBlank {
                 let fireDate = (session.actualFinish ?? session.expectedEndDate).addingTimeInterval(delay)
@@ -90,7 +90,7 @@ enum TennisNotificationPlanner {
             let reviewStart = Calendar.current.date(byAdding: .day, value: -7, to: monday) ?? monday
             requests.append(PlannedNotification(
                 identifier: "weekly-summary",
-                title: "Tennis weekly summary",
+                title: "Weekly sport summary",
                 body: "Review your matches, training and tournaments for \(TennisReportingWeek.summary(containing: reviewStart)).",
                 fireDate: nextWeek,
                 deepLink: TennisActivityRoute(kind: .weekly, weekStart: reviewStart).url

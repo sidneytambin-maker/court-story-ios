@@ -102,7 +102,7 @@ struct CourtDoublesService: Codable, Equatable {
 
     mutating func refreshTennis(sport: CourtSport, rules: CourtScoringRules, frame: CourtScoreFrame) {
         let deciding = rules.decidingMatchTieBreak && rules.roundsToWin > 1 && frame.roundsWon.allSatisfy { $0 == rules.roundsToWin - 1 }
-        let tie = deciding || frame.tennis.isTiebreak
+        let tie = deciding || frame.tennis.isTiebreak || rules.tieBreakAt.map { frame.tennis.playerGames == $0 && frame.tennis.opponentGames == $0 } == true
         let total = frame.points.reduce(0, +)
         let turn = frame.serviceTurn + (tie ? (total + 1) / 2 : 0)
         serverMember = (firstMembers[frame.server] + turn / 2) % 2
