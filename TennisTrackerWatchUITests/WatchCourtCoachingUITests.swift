@@ -20,19 +20,25 @@ final class WatchCourtCoachingUITests: XCTestCase {
         button.press(forDuration: 0.15)
     }
     private func reveal(_ button: XCUIElement, label: String) {
-        for step in 0..<40 {
+        for step in 0..<60 {
             let top = app.navigationBars.allElementsBoundByIndex.last(where: { $0.isHittable })?.frame.maxY ?? 48
             if button.exists && button.isHittable &&
-                ((button.frame.midY > top && button.frame.midY < app.frame.maxY - 6) || ["Cancel", "Save"].contains(label)) {
+                ((button.frame.midY > top + 8 && button.frame.midY < app.frame.maxY - 20) || ["Cancel", "Save"].contains(label)) {
                 return
             }
-            let up = button.exists ? button.frame.midY > top : (step < 12 || step >= 32)
-            let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: up ? 0.80 : 0.53))
-            let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: up ? 0.53 : 0.80))
+            let up = button.exists ? button.frame.midY > top + 8 : step < 30
+            let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: up ? 0.85 : 0.38))
+            let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: up ? 0.38 : 0.85))
             start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.2)
         }
         evidence("Failed to reach " + label)
         XCTFail("Could not reach \(label)")
+    }
+    private func toggle(_ control: XCUIElement, label: String) {
+        reveal(control, label: label)
+        // watchOS exposes the label and switch as one wide accessibility frame.
+        // A touch must land on the native switch, not its text label.
+        control.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5)).tap()
     }
     private func evidence(_ name: String) {
         let screenshot = XCTAttachment(screenshot: app.screenshot()); screenshot.name = name; screenshot.lifetime = .keepAlways; add(screenshot)
@@ -99,8 +105,7 @@ final class WatchCourtCoachingUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Access Preferences"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["accessPreferenceSummary"].exists)
         let wheelchair = app.switches["accessPreference_Wheelchair"]
-        reveal(wheelchair, label: "Wheelchair preference")
-        wheelchair.press(forDuration: 0.15)
+        toggle(wheelchair, label: "Wheelchair preference")
         XCTAssertEqual(wheelchair.value as? String, "1")
         evidence("Watch athlete access preferences")
         app.navigationBars["Access Preferences"].buttons.firstMatch.tap()
@@ -123,15 +128,13 @@ final class WatchCourtCoachingUITests: XCTestCase {
         app.navigationBars["Demo Player Morgan"].buttons.firstMatch.tap()
         XCTAssertFalse(app.buttons["Demo Player Morgan"].exists)
         let archived = app.switches["Show archived players"]
-        reveal(archived, label: "Show archived players")
-        archived.press(forDuration: 0.15)
+        toggle(archived, label: "Show archived players")
         tap("Demo Player Morgan"); tap("Restore Player")
         tap("watchConfirmPlayerArchiveChange")
         XCTAssertTrue(app.buttons["Archive Player"].waitForExistence(timeout: 10))
         app.navigationBars["Demo Player Morgan"].buttons.firstMatch.tap()
         XCTAssertFalse(app.buttons["Demo Player Morgan"].exists)
-        reveal(archived, label: "Show archived players")
-        archived.press(forDuration: 0.15)
+        toggle(archived, label: "Show archived players")
         XCTAssertTrue(app.buttons["Demo Player Morgan"].waitForExistence(timeout: 10))
         evidence("Watch roster refreshed after archive and restore")
     }
