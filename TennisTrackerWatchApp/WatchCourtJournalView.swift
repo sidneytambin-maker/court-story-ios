@@ -189,7 +189,7 @@ private struct WatchCourtObservationEditor: View {
             Button("Cancel", role: .cancel) { dismiss() }
         }.navigationTitle("Observation").pickerStyle(.navigationLink)
             .onAppear { if original == nil { original = draft } }
-            .sheet(item: $plan) { value in NavigationStack { WatchTrainingEditor(draft: value) } }
+            .sheet(item: $plan) { value in NavigationStack { WatchTrainingEditor(draft: value, isNew: true) } }
     }
     private func save() -> Bool {
         if let current = store.snapshot.court.observations.first(where: { $0.id == draft.id }), current != original {

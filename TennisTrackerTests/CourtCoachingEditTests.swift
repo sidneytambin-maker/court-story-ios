@@ -35,4 +35,49 @@ final class CourtCoachingEditTests: XCTestCase {
         XCTAssertFalse(CourtWatchMutation.profile(athlete).apply(to: &data))
         XCTAssertEqual(try JSONEncoder.tennisTracker.encode(data), original)
     }
+
+    func testWatchPracticePlanTransfersAndReloadsWithIndependentAthleteRules() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let store = TennisStore(storeURL: url)
+        try store.restoreBackup(CourtDemoLibrary.make())
+        let observation = try XCTUnwrap(store.data.court.observations.first)
+        let athlete = try XCTUnwrap(store.data.players.first { $0.id == observation.athleteID })
+        var planned = observation.practicePlan(on: Date().addingTimeInterval(86400))
+        planned.court.access = athlete.court.selected.access
+        planned.court.rules = athlete.court.selected.rules
+        planned = TennisRecordConflictResolver.prepareLocalTraining(planned)
+        store.applyWatchCommand(.upsertTraining(planned))
+        store.applyWatchCommand(.upsertTraining(planned))
+        let restored = TennisStore(storeURL: url)
+        let saved = try XCTUnwrap(restored.data.trainingSessions.first { $0.id == planned.id })
+        XCTAssertEqual(restored.data.trainingSessions.filter { $0.id == planned.id }.count, 1)
+        XCTAssertEqual(saved.court.plan?.sourceObservationID, observation.id)
+        XCTAssertEqual(saved.court.plan?.objective, observation.nextAction)
+        XCTAssertEqual(saved.court.access?.allowedBounces(for: .tennis), 3)
+        XCTAssertEqual(saved.playerID, athlete.id)
+        XCTAssertNil(saved.actualStart); XCTAssertNil(saved.actualFinish); XCTAssertNil(saved.workout)
+    }
+
+    func testWatchPlanEditPreservesConcurrentPhoneSchedulePlanAndLiveTiming() throws {
+        let data = CourtDemoLibrary.make()
+        var original = try XCTUnwrap(data.trainingSessions.first { $0.actualStart == nil })
+        original.court.plan = CourtSessionPlan(objective: "Original objective")
+        var draft = original
+        draft.date = original.date.addingTimeInterval(3600)
+        draft.court.plan?.objective = "New Watch objective"
+        let edited = TennisWatchRecordEdits.training(draft, current: original, original: original)
+        XCTAssertEqual(edited.date, draft.date)
+        XCTAssertEqual(edited.court.plan?.objective, "New Watch objective")
+        var current = original
+        current.date = original.date.addingTimeInterval(7200)
+        current.court.plan?.objective = "New phone objective"
+        let merged = TennisWatchRecordEdits.training(draft, current: current, original: original)
+        XCTAssertEqual(merged.date, current.date)
+        XCTAssertEqual(merged.court.plan, current.court.plan)
+        current = original; current.actualStart = Date()
+        let active = TennisWatchRecordEdits.training(draft, current: current, original: original)
+        XCTAssertEqual(active.actualStart, current.actualStart)
+        XCTAssertEqual(active.date, original.date)
+    }
 }

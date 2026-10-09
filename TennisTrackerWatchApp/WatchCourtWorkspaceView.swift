@@ -82,6 +82,15 @@ private struct WatchCourtPlayerView: View {
                 let totals = TennisMatchResultTotals.build(records: records, playerID: player.id)
                 Text("Singles: " + totals.singles.summary).accessibilityElement(children: .combine)
                 Text("Doubles: " + totals.doubles.summary).accessibilityElement(children: .combine)
+                let planned = store.snapshot.trainingSessions.filter {
+                    $0.playerID == playerID && $0.court.sport == store.courtSport && $0.actualStart == nil && $0.actualFinish == nil
+                        && $0.date >= Calendar.current.startOfDay(for: Date()) && !store.snapshot.deletedRecordIDs.contains($0.id)
+                }.sorted { $0.date < $1.date }
+                if !planned.isEmpty {
+                    Section("Planned training") {
+                        ForEach(planned) { WatchTrainingRow(training: $0, identifier: "watchPlannedTraining") }
+                    }
+                }
                 Button(player.isArchived ? "Restore Player" : "Archive Player", role: player.isArchived ? nil : .destructive) { confirmArchive = true }
             } else { Text("This player is no longer available.") }
         }.navigationTitle(player?.displayName ?? "Player")

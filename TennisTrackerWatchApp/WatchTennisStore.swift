@@ -624,16 +624,37 @@ final class WatchTennisStore: NSObject, ObservableObject, WCSessionDelegate {
         announce("Deleted on Watch. The deletion will sync to iPhone.")
     }
 
-    func updateTrainingDetails(_ draft: TrainingSession, durationWasEdited: Bool = false) {
-        guard let current = snapshot.trainingSessions.first(where: { $0.id == draft.id }) else { return }
+    @discardableResult
+    func updateTrainingDetails(_ draft: TrainingSession, durationWasEdited: Bool = false, original: TrainingSession? = nil) -> Bool {
+        guard let current = snapshot.trainingSessions.first(where: { $0.id == draft.id }), !snapshot.deletedRecordIDs.contains(draft.id) else {
+            announce("This session is no longer available. Your unsaved changes are still shown."); return false
+        }
         let beforeAchievements = TennisAchievement.earnedIDs(records: snapshot.achievementRecords, playerID: draft.playerID)
-        let updated = TennisWatchRecordEdits.training(draft, current: current, durationWasEdited: durationWasEdited)
+        let updated = TennisWatchRecordEdits.training(draft, current: current, durationWasEdited: durationWasEdited, original: original)
         if activeTraining?.id == updated.id { activeTraining = updated }
         if completedTraining?.id == updated.id { completedTraining = updated }
         mergeTraining(updated); send(.upsertTraining(updated))
         announce("Training details saved on Watch.")
         sound(TennisAchievement.feedback(before: beforeAchievements, records: snapshot.achievementRecords, playerID: draft.playerID,
             settings: snapshot.settings.sounds, otherwise: .save))
+        return true
+    }
+
+    @discardableResult
+    func savePlannedTraining(_ draft: TrainingSession) -> Bool {
+        guard !snapshot.deletedRecordIDs.contains(draft.id), !snapshot.trainingSessions.contains(where: { $0.id == draft.id }),
+              draft.actualStart == nil, draft.actualFinish == nil, draft.workout == nil,
+              snapshot.players.contains(where: { $0.id == draft.playerID && !$0.isArchived }) else {
+            announce("This practice plan is no longer available to save. Your draft is retained."); return false
+        }
+        var candidate = snapshot.courtLibrary
+        candidate.trainingSessions.append(draft)
+        if let error = CourtLibraryValidation.message(in: candidate, validateLinks: false) { announce(error); return false }
+        let saved = TennisRecordConflictResolver.prepareLocalTraining(draft)
+        mergeTraining(saved); send(.upsertTraining(saved))
+        announce("Practice planned for \(saved.date.fullTennisDate). Saved on Watch.")
+        sound(.save)
+        return true
     }
 
     func updateMatchDetails(_ draft: MatchRecord, original: MatchRecord? = nil) {

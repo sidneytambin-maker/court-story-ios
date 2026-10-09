@@ -4,6 +4,9 @@ struct WatchTrainingEditor: View {
     @EnvironmentObject private var store: WatchTennisStore
     @Environment(\.dismiss) private var dismiss
     @State var draft: TrainingSession
+    var isNew = false
+    @State private var original: TrainingSession?
+    @State private var validationMessage = ""
     @State private var linkedMatchIDs: [UUID] = []
     @State private var originalMatchIDs = Set<UUID>()
     @State private var loadedLinks = false
@@ -13,10 +16,17 @@ struct WatchTrainingEditor: View {
 
     var body: some View {
         Form {
+            CourtCaptureIdentity(athlete: store.snapshot.players.first { $0.id == draft.playerID }?.displayName ?? "Unavailable player", sport: draft.court.sport, coached: draft.court.enteredByCoachID != nil)
+            if !validationMessage.isEmpty { Text(validationMessage).accessibilityIdentifier("watchTrainingSaveError") }
             Picker("Training type", selection: $draft.trainingType) {
                 ForEach(TrainingType.allCases) { Text($0.rawValue).tag($0) }
             }
             TennisTrainingFocusPicker(focus: $draft.focus, additionalFocus: $draft.additionalFocus, sport: draft.court.sport.sport)
+            if draft.actualStart == nil && current?.actualStart == nil {
+                WatchDateField(title: "Session date", date: $draft.date)
+                Toggle("Start time specified", isOn: $draft.hasStartTime)
+                if draft.hasStartTime { FiveMinuteTimePicker(title: "Start time", date: $draft.date) }
+            }
             if !draft.isActive && current?.isActive != true {
                 Section("Duration") {
                     DurationFields(minutes: Binding(
@@ -35,16 +45,25 @@ struct WatchTrainingEditor: View {
             WatchVenueFields(venueID: $draft.context.venueID, venue: $draft.venue, location: $draft.location)
             TennisTournamentPicker(tournaments: store.snapshot.scoped(playerID: draft.playerID, sport: draft.court.sport).tournaments, tournamentID: $draft.context.tournamentID, customName: $draft.context.customTournamentName)
             TennisLinkedMatchesPicker(matches: store.snapshot.scoped(playerID: draft.playerID, sport: draft.court.sport).matches, sessionID: draft.id, selected: $linkedMatchIDs)
+            if draft.court.plan != nil || draft.court.enteredByCoachID != nil {
+                Section("Session plan") {
+                    CourtPlanFields(plan: Binding(get: { draft.court.plan ?? CourtSessionPlan() }, set: { draft.court.plan = $0 }))
+                }
+            }
             TextField("Notes", text: $draft.notes)
+            if CourtFeature.observations.isAvailable(in: store.snapshot.settings.trackingMode) {
             Toggle("Include session feedback", isOn: $draft.hasSessionDetails)
             if draft.hasSessionDetails {
                 TextField("Session outcome", text: $draft.sessionOutcome)
                 OrderedChoicePicker(title: "Effort", selection: $draft.effortLevel, values: RatingLevel.allCases) { $0.rawValue }
             }
+            }
             Toggle("Details complete", isOn: Binding(get: { !draft.needsDetails }, set: { draft.needsDetails = !$0 }))
         }
-        .navigationTitle("Edit Training")
+        .navigationTitle(isNew ? "Plan Practice" : "Edit Training")
+        .pickerStyle(.navigationLink)
         .onAppear {
+            if original == nil { original = draft }
             guard !loadedLinks else { return }
             linkedMatchIDs = store.snapshot.matches.filter { $0.trainingSessionID == draft.id }.map(\.id)
             originalMatchIDs = Set(linkedMatchIDs); loadedLinks = true
@@ -55,10 +74,12 @@ struct WatchTrainingEditor: View {
                 Button("Save") {
                     draft.context.captureLegacyNames(coaches: store.snapshot.setup.coaches, players: store.snapshot.players)
                     if draft.context.needsOtherCoachName { draft.needsDetails = true }
-                    store.updateTrainingDetails(draft, durationWasEdited: durationWasEdited)
+                    let saved = isNew ? store.savePlannedTraining(draft)
+                        : store.updateTrainingDetails(draft, durationWasEdited: durationWasEdited, original: original)
+                    guard saved else { validationMessage = store.lastAnnouncement; return }
                     store.updateTrainingLinks(draft, original: originalMatchIDs, selected: Set(linkedMatchIDs))
                     dismiss()
-                }
+                }.accessibilityIdentifier("saveWatchTraining")
             }
         }
     }
@@ -95,8 +116,10 @@ struct WatchMatchEditor: View {
                 }
             }
             Section("Conditions") { TennisMatchConditionsFields(match: $draft) }
+            if CourtFeature.observations.isAvailable(in: store.snapshot.settings.trackingMode) {
             TextField("Next practice focus", text: $draft.nextPracticeFocus)
                 .accessibilityHint("Your latest completed match review appears in What to work on on the iPhone dashboard.")
+            }
             TextField("Notes", text: $draft.notes)
             Toggle("Details complete", isOn: Binding(get: { !draft.needsDetails }, set: { draft.needsDetails = !$0 }))
         }

@@ -1,8 +1,17 @@
 import Foundation
 
 enum TennisWatchRecordEdits {
-    static func training(_ draft: TrainingSession, current: TrainingSession, durationWasEdited: Bool = false, now: Date = Date()) -> TrainingSession {
+    static func training(_ draft: TrainingSession, current: TrainingSession, durationWasEdited: Bool = false, original: TrainingSession? = nil, now: Date = Date()) -> TrainingSession {
         var updated = current
+        let before = original ?? draft
+        if current.actualStart == nil && draft.actualStart == nil && current.actualFinish == nil && draft.actualFinish == nil,
+           current.date == before.date && current.hasStartTime == before.hasStartTime {
+            updated.date = draft.date; updated.hasStartTime = draft.hasStartTime
+        }
+        if draft.playerID == current.playerID && draft.court.sport == current.court.sport && draft.court.enteredByCoachID == current.court.enteredByCoachID {
+            if current.court.plan == before.court.plan { updated.court.plan = draft.court.plan }
+            if current.court.sessionType == before.court.sessionType { updated.court.sessionType = draft.court.sessionType }
+        }
         updated.retainManualDuration(from: draft)
         // Wire timestamps have whole-second precision. An explicit edit of the unchanged revision
         // can still change minutes within that second; a newer phone revision keeps precedence.

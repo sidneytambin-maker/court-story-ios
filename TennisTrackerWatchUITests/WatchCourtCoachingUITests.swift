@@ -54,6 +54,24 @@ final class WatchCourtCoachingUITests: XCTestCase {
         XCTAssertFalse(app.buttons["Journal and Progress"].exists)
         evidence("Large text Basic player details")
     }
+    func testObservationCreatesPracticePlanThatSurvivesRelaunch() {
+        launch(); tap("Your Players"); tap("Demo Player Morgan"); tap("Journal and Progress")
+        let observation = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Demo observation: deeper returns")).firstMatch
+        reveal(observation, label: "Saved observation"); observation.tap()
+        tap("Plan Practice")
+        XCTAssertTrue(app.navigationBars["Plan Practice"].waitForExistence(timeout: 10))
+        tap("saveWatchTraining")
+        XCTAssertTrue(app.navigationBars["Observation"].waitForExistence(timeout: 10))
+        app.terminate()
+        app.launchArguments = []
+        app.launch()
+        XCTAssertTrue(app.buttons["Your Players"].waitForExistence(timeout: 20))
+        tap("Your Players"); tap("Demo Player Morgan")
+        let planned = app.buttons.matching(NSPredicate(format: "identifier == %@ AND label CONTAINS[c] %@", "watchPlannedTraining", "Returning")).firstMatch
+        reveal(planned, label: "Saved planned returning practice")
+        XCTAssertTrue(planned.exists)
+        evidence("Watch saved practice plan after relaunch")
+    }
     func testAthleteProgressHasPeriodAndScopedResults() {
         launch(); tap("Your Players"); tap("Demo Player Morgan")
         tap("Journal and Progress"); tap("Progress by Period")
