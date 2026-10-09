@@ -232,13 +232,18 @@ final class WatchHealthWorkout: NSObject, ObservableObject, TennisWorkoutClient,
         return try await withCheckedThrowingContinuation { continuation in
             ending = continuation
             statusMessage = "Saving workout to Apple Health."
+            logger.notice("Workout finish requested: state \(session.state.rawValue), valid end \(date >= (session.startDate ?? date))")
             if session.state == .stopped || session.state == .ended {
                 Task { await self.saveEndedWorkout(at: session.endDate ?? date) }
-            } else { session.stopActivity(with: date) }
+            } else {
+                session.stopActivity(with: date)
+                logger.notice("Workout stop request returned: state \(session.state.rawValue)")
+            }
             finishTimeout = Task { @MainActor [weak self] in
                 do { try await Task.sleep(nanoseconds: 30_000_000_000) }
                 catch { return }
                 guard let self, self.ending != nil else { return }
+                self.logger.error("Workout finish deadline: state \(self.session?.state.rawValue ?? -1), builder finishing \(self.finishing)")
                 self.failWorkout(TennisWorkoutFailure.saveTimedOut)
             }
         }
@@ -302,9 +307,11 @@ final class WatchHealthWorkout: NSObject, ObservableObject, TennisWorkoutClient,
     private func saveEndedWorkout(at date: Date) async {
         guard let builder, !finishing else { return }
         finishing = true
+        logger.notice("Workout builder ending collection")
         do {
             try await builder.endCollection(at: date)
             guard self.builder === builder else { return }
+            logger.notice("Workout builder collection ended")
             let heartType = HKQuantityType.quantityType(forIdentifier: .heartRate)!
             let energyType = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned)!
             let average = builder.statistics(for: heartType)?.averageQuantity()?.doubleValue(for: HKUnit.count().unitDivided(by: .minute()))
@@ -314,6 +321,7 @@ final class WatchHealthWorkout: NSObject, ObservableObject, TennisWorkoutClient,
             let steps = builder.statistics(for: HKQuantityType(.stepCount))?.sumQuantity()?.doubleValue(for: .count())
             let workout = try await builder.finishWorkout()
             guard self.builder === builder else { return }
+            logger.notice("Workout builder save returned: sample available \(workout != nil)")
             // A successful save may return no sample while the Watch is locked.
             ending?.resume(returning: TennisWorkoutResult(workoutID: workout?.uuid, durationSeconds: workout?.duration ?? builder.elapsedTime,
                 averageHeartRate: average, activeEnergyKcal: energy, peakHeartRate: peak, distanceMeters: distance, stepCount: steps))
