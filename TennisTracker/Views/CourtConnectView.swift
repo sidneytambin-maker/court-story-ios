@@ -63,6 +63,25 @@ struct CourtConnectView: View {
                     Button("Pause uploads on this device") { connect.run { try connect.stopUploads() } }
                     Button("Refresh and retry sync") { connect.run { try await connect.sync(store.data) } }
                 }
+                if !connect.syncConflicts.isEmpty {
+                    Section("Review changed records") {
+                        ForEach(connect.syncConflicts.compactMap { request -> ConnectSelection? in var row=request; row["id"]=request["p_id"]; return ConnectSelection(row) }) { item in
+                            Text("Queued device version: " + ConnectRecordView.summary(item.value["p_body"] as? [String:Any] ?? [:]))
+                            Text("Current online version: " + ConnectRecordView.summary(connect.records.first { $0["id"] as? String == item.id }?["body"] as? [String:Any] ?? [:]))
+                            Button("Keep online version; leave local record unchanged") { connect.run { try connect.resolveConflict(item.id,useDevice:false) } }
+                            Button("Use reviewed device version") { connect.run { try connect.resolveConflict(item.id,useDevice:true) } }
+                        }
+                    }
+                }
+                if !connect.pendingFeedback.isEmpty {
+                    Section("Outgoing feedback") {
+                        ForEach(connect.pendingFeedback.compactMap { request -> ConnectSelection? in var row=request; row["id"]=request["p_id"]; return ConnectSelection(row) }) { item in
+                            Text(item.value["p_text"] as? String ?? "")
+                            Button("Remove queued feedback",role:.destructive) { connect.run { try connect.discardFeedback(item.id) } }
+                        }
+                        Text("Reconnect and use Refresh and retry sync. If sharing was revoked, remove feedback that can no longer be sent.")
+                    }
+                }
                 Section("Players and shared records") {
                     ForEach(connect.playerGroups) { group in
                         NavigationLink { ConnectPlayerDashboard(player:group) } label: {
@@ -189,6 +208,7 @@ struct ConnectRecordView: View {
     @ObservedObject private var connect = CourtConnect.shared
     @State private var message = ""
     @State private var kind = "feedback"
+    static func summary(_ body: [String:Any]) -> String { body.keys.sorted().map { fieldLabel($0) + ": " + String(describing:body[$0] ?? "") }.joined(separator:". ") }
     static func fieldLabel(_ key: String) -> String {
         key.replacingOccurrences(of:"([a-z])([A-Z])",with:"$1 $2",options:.regularExpression).replacingOccurrences(of:"_",with:" ").capitalized
     }
@@ -214,7 +234,7 @@ struct ConnectRecordView: View {
                     Picker("Contribution type",selection:$kind) { Text("Feedback").tag("feedback"); Text("Suggested goal").tag("goal"); if connection["capability"] as? String == "contribute" { Text("Suggested record change").tag("contribution") } }
                     TextField("Feedback or suggestion",text:$message,axis:.vertical)
                     Button("Send to player") { connect.run {
-                        try await connect.rpc("cs_add_feedback",["p_id":UUID().uuidString,"p_connection":connection["id"] as! String,"p_record":record.id,"p_kind":kind,"p_text":message]); message=""; try await connect.refresh()
+                        try connect.queueFeedback(["p_id":UUID().uuidString,"p_connection":connection["id"] as! String,"p_record":record.id,"p_kind":kind,"p_text":message]); message=""
                     } }.disabled(message.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty)
                 }
                 Text("Suggestions never automatically change official scores. The player reviews and edits their own record.")

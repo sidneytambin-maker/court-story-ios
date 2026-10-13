@@ -41,4 +41,19 @@ import XCTest
         XCTAssertEqual(people?[2]["team"] as? Int,1)
         XCTAssertEqual(Set(projected.compactMap { $0["p_id"] as? String }).count,projected.count)
     }
+    func testTrainingPlanSharesSportingFieldsAndSeparatesReview() throws {
+        let owner=PlayerProfile()
+        var training=TrainingSession(playerID:owner.id)
+        var plan=CourtSessionPlan(); plan.objective="Serve placement"; plan.drills="Ten serves"; plan.equipment="Racket"; plan.successMeasure="Eight in target"; plan.review="Improving"; plan.adaptations="Sensitive access information"
+        training.court.plan=plan; training.court.surface="Clay"
+        var library=AppData(); library.players=[owner]; library.trainingSessions=[training]
+        let rows=try CourtConnect.projections(library,players:[owner.id.uuidString.lowercased()])
+        let body=rows.first { $0["p_category"] as? String == "training" }?["p_body"] as? [String:Any]
+        XCTAssertEqual(body?["planObjective"] as? String,"Serve placement")
+        XCTAssertEqual(body?["surface"] as? String,"Clay")
+        XCTAssertNil(body?["adaptations"]); XCTAssertNil(body?["review"])
+        let serialized=String(data:try JSONSerialization.data(withJSONObject:rows),encoding:.utf8)!
+        XCTAssertFalse(serialized.contains("Sensitive access information"))
+        XCTAssertTrue(rows.contains { $0["p_category"] as? String == "reflection" })
+    }
 }

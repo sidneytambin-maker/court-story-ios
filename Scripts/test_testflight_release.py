@@ -26,6 +26,19 @@ class ReleasePrivacyTests(unittest.TestCase):
             (path / "PrivacyInfo.xcprivacy").write_bytes(plistlib.dumps({"NSPrivacyTracking": False, "NSPrivacyCollectedDataTypes": [{"NSPrivacyCollectedDataType":t,"NSPrivacyCollectedDataTypeLinked":True,"NSPrivacyCollectedDataTypeTracking":False,"NSPrivacyCollectedDataTypePurposes":["NSPrivacyCollectedDataTypePurposeAppFunctionality"]} for t in CONNECT_DATA_TYPES]}))
             (path / "Main").write_bytes(b"compiled-test-placeholder")
 
+        (self.app / "CourtConnectConfig.json").write_text(json.dumps({"supabase_url":"https://vfgxingpburwhrjbibvf.supabase.co", "publishable_key":"sb_publishable_" + "a" * 32, "link_host":"connect.courtstory.test"}), encoding="utf-8")
+
+    def test_missing_connect_configuration_blocks_release(self):
+        (self.app / "CourtConnectConfig.json").unlink()
+        with self.assertRaisesRegex(ValueError, "production service configuration"): verify(self.app)
+
+    def test_private_or_misdirected_connect_configuration_blocks_release(self):
+        path = self.app / "CourtConnectConfig.json"
+        original = json.loads(path.read_bytes())
+        for mutation in ({"service_role":"secret"}, {"publishable_key":"sb_secret_private"}, {"supabase_url":"https://wrong.supabase.co"}, {"link_host":"example.invalid"}, {"link_host":"example.com/path"}):
+            path.write_text(json.dumps(dict(original, **mutation)), encoding="utf-8")
+            with self.subTest(mutation=mutation), self.assertRaises(ValueError): verify(self.app)
+
     def test_clean_structure_passes(self):
         self.assertEqual(len(verify(self.app)["components"]), 3)
 

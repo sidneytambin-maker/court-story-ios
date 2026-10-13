@@ -45,6 +45,8 @@ await as(1);
 await test('Private reflection and unrelated sport excluded',async()=>assert.deepEqual(new Set(await visible()),new Set([record,reflection])));
 await test('Cross-user write denied',async()=>deny(()=>rpc('cs_put_record',[randomUUID(),record,player,'Tennis','match',old,{score:'1'},1,false,false])));
 const feedback=randomUUID();await rpc('cs_add_feedback',[feedback,connections[0],record,'feedback','Synthetic feedback']);
+await test('Offline feedback retry creates one message',async()=>{await rpc('cs_add_feedback',[feedback,connections[0],record,'feedback','Synthetic feedback']);assert.equal((await db.query('select count(*)::int as n from public.cs_feedback')).rows[0].n,1)});
+await test('Feedback retry cannot replace message content',async()=>deny(()=>rpc('cs_add_feedback',[feedback,connections[0],record,'feedback','Changed feedback'])));
 await test('Coach cannot approve contribution',async()=>deny(()=>rpc('cs_review_feedback',[feedback,true])));
 await test('Feedback capability cannot submit official contribution',async()=>deny(()=>rpc('cs_add_feedback',[randomUUID(),connections[0],record,'contribution','Change score'])));
 await as(2);await test('Coach cannot read another coach feedback',async()=>assert.equal((await db.query('select count(*)::int as n from public.cs_feedback')).rows[0].n,0));

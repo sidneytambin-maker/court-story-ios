@@ -338,6 +338,12 @@ struct CourtConnectSession: Codable {
                 for key in ["status", "matchType", "matchFormat", "yourSetsWon", "opponentSetsWon", "aces", "doubleFaults", "winners", "unforcedErrors", "hadTiebreak", "tiebreakScore", "tournamentID", "trainingSessionID", "finalResult", "matchesPlayed", "format", "stageReached", "finishingPosition", "endDate"] {
                     if let value=row[key], value is String || value is NSNumber { body[key]=value }
                 }
+                if let summary=row["customScoreSummary"] as? String, !summary.isEmpty { body["customScoreSummary"]=summary }
+                for field in ["surface","sessionType"] { if let value=court[field] as? String, !value.isEmpty { body[field]=value } }
+                let plan=court["plan"] as? [String:Any] ?? [:]
+                for (source,destination) in [("objective","planObjective"),("drills","planDrills"),("equipment","planEquipment"),("successMeasure","planSuccessMeasure")] {
+                    if let value=plan[source] as? String, !value.isEmpty { body[destination]=value }
+                }
                 var record: [String:Any] = ["p_id":id.lowercased(),"p_player":player.lowercased(),"p_sport":key,"p_category":category,"p_occurred":date,"p_body":body,"p_private":false,"p_deleted":false]
                 if category=="match", let uuid=UUID(uuidString:id) {
                     var people: [[String:Any]]=[]
@@ -349,7 +355,7 @@ struct CourtConnectSession: Codable {
                 output.append(record)
                 if let uuid=UUID(uuidString:id) {
                     let reflectionKeys=category == "match" ? ["matchStory","matchStrengths","matchNeedsWork","pressureMoment"] : ["sessionOutcome"]
-                    let reflection=reflectionKeys.compactMap { row[$0] as? String }.filter { !$0.isEmpty }.joined(separator:"\n")
+                    let reflection=(reflectionKeys.compactMap { row[$0] as? String } + [plan["review"] as? String ?? ""]).filter { !$0.isEmpty }.joined(separator:"\n")
                     let goalKeys=category == "tournament" ? ["goal"] : ["nextPracticeFocus"]
                     let goal=goalKeys.compactMap { row[$0] as? String }.filter { !$0.isEmpty }.joined(separator:"\n")
                     for (derivedCategory,text) in [("reflection",reflection),("goal",goal)] where !text.isEmpty {
@@ -363,6 +369,48 @@ struct CourtConnectSession: Codable {
             }
         }
         return output
+    }
+    var syncConflicts: [[String:Any]] {
+        (state["queue"] as? [[String:Any]] ?? []).filter { queued in
+            records.contains { remote in remote["id"] as? String == queued["p_id"] as? String && (remote["revision"] as? Int ?? 0) > (queued["p_expected"] as? Int ?? 0) }
+        }
+    }
+    func resolveConflict(_ id: String, useDevice: Bool) throws {
+        guard let remote=records.first(where: { $0["id"] as? String == id }), remote["owner_id"] as? String == accountID else { throw CourtConnectError.message("Refresh this record before reviewing the conflict.") }
+        var queue=state["queue"] as? [[String:Any]] ?? []
+        guard let index=queue.firstIndex(where: { $0["p_id"] as? String == id }) else { return }
+        var revisions=state["revisions"] as? [String:Int] ?? [:]; revisions[id]=remote["revision"] as? Int
+        if useDevice {
+            guard remote["deleted"] as? Bool != true else { throw CourtConnectError.message("A deleted online record cannot be restored by a queued edit.") }
+            queue[index]["p_expected"]=remote["revision"]; queue[index]["p_operation"]=UUID().uuidString
+            if remote["private"] as? Bool == true {
+                var privacy=state["privateRecords"] as? [String:Bool] ?? [:]; privacy[id]=true; state["privateRecords"]=privacy; queue[index]["p_private"]=true
+                var sporting=queue[index]; sporting.removeValue(forKey:"p_expected"); sporting.removeValue(forKey:"p_operation"); sporting.removeValue(forKey:"local_hash")
+                queue[index]["local_hash"]=SHA256.hash(data:try JSONSerialization.data(withJSONObject:sporting,options:.sortedKeys)).map { String(format:"%02x",$0) }.joined()
+            }
+        } else {
+            var hashes=state["hashes"] as? [String:String] ?? [:]; hashes[id]=queue[index]["local_hash"] as? String; state["hashes"]=hashes; queue.remove(at:index)
+        }
+        state["revisions"]=revisions; state["queue"]=queue; try persist()
+        status=useDevice ? "Reviewed device version queued. Retry sync to send it with a fresh version check." : "Online version kept. Your local record remains unchanged."
+    }
+    var pendingFeedback: [[String:Any]] { state["feedbackQueue"] as? [[String:Any]] ?? [] }
+    func queueFeedback(_ request: [String:Any]) throws {
+        guard isSignedIn, let text=request["p_text"] as? String, (1...4000).contains(text.count), !text.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty else { throw CourtConnectError.message("Enter feedback of up to 4,000 characters.") }
+        var queue=pendingFeedback; queue.append(request); state["feedbackQueue"]=queue; try persist()
+        status="Feedback saved to the outgoing queue. It will be sent when connected and sharing is still permitted."
+        Self.scheduleBackground()
+    }
+    func discardFeedback(_ id: String) throws {
+        state["feedbackQueue"]=pendingFeedback.filter { $0["p_id"] as? String != id }; try persist(); status="Queued feedback removed."
+    }
+    private func flushFeedback() async throws {
+        let actor=accountID
+        while let request=pendingFeedback.first {
+            try await rpc("cs_add_feedback",request)
+            guard actor==accountID else { return }
+            state["feedbackQueue"]=Array(pendingFeedback.dropFirst()); try persist()
+        }
     }
     func sync(_ library: AppData) async throws {
         guard isSignedIn else { return }
@@ -391,7 +439,7 @@ struct CourtConnectSession: Codable {
         }
         state["queue"]=queue; try persist()
         // Build the durable queue before network access, then recheck server permission before sending.
-        try await refresh(); guard actor==accountID else { return }
+        try await refresh(); guard actor==accountID else { return }; try await flushFeedback()
         queue=queue.filter { ($0["p_deleted"] as? Bool == true) || permits($0) }
         state["queue"]=queue; try persist()
         while !queue.isEmpty {

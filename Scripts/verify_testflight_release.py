@@ -14,6 +14,21 @@ FORBIDDEN_SUFFIXES = {".json", ".db", ".sqlite", ".sqlite3", ".p8", ".p12", ".pe
 TEST_MARKERS = (b"-ui-testing-", b"-watch-manual-match", b"-test-notification-", b"TennisRegressionFixtures", b"TennisNotificationTestSupport")
 
 
+def verify_connect_config(path):
+    if not path.is_file():
+        raise ValueError("Connect release requires the production service configuration")
+    config = json.loads(path.read_bytes())
+    if not isinstance(config, dict) or set(config) != {"supabase_url", "publishable_key", "link_host"}:
+        raise ValueError("Connect configuration contains unexpected or private fields")
+    if config["supabase_url"] != "https://vfgxingpburwhrjbibvf.supabase.co":
+        raise ValueError("Connect configuration must target the approved production project")
+    if not isinstance(config["publishable_key"], str) or not re.fullmatch(r"sb_publishable_[A-Za-z0-9_-]{20,200}", config["publishable_key"]):
+        raise ValueError("Connect must use a public publishable key, never a secret or service-role key")
+    host = config["link_host"]
+    if not isinstance(host, str) or not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+", host) or host.endswith((".invalid", ".example", ".localhost")):
+        raise ValueError("Connect invitation host must be a production HTTPS domain")
+
+
 def verify(app):
     app = Path(app)
     watches = list((app / "Watch").glob("*.app"))
@@ -70,6 +85,7 @@ def verify(app):
     widget_info = plistlib.loads((widgets[0] / "Info.plist").read_bytes())
     if widget_info.get("NSExtension", {}).get("NSExtensionPointIdentifier") != "com.apple.widgetkit-extension":
         raise ValueError("Incorrect complication extension type")
+    verify_connect_config(app / "CourtConnectConfig.json")
     count = 0
     for path in app.rglob("*"):
         if not path.is_file():
@@ -77,6 +93,8 @@ def verify(app):
         count += 1
         name = path.name.lower()
         relative = path.relative_to(app).as_posix().lower()
+        if path == app / "CourtConnectConfig.json":
+            continue
         if path.name == "version.json" and path.parent.name == "Metadata.appintents" and path.parent.parent in {bundle for bundle, _ in expected}:
             metadata = json.loads(path.read_bytes())
             if not isinstance(metadata, dict) or set(metadata) != {"toolsVersion", "version"}:
