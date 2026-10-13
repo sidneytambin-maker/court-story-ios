@@ -1,6 +1,9 @@
 import Foundation
+import Combine
 import Security
 import CryptoKit
+import UIKit
+import UserNotifications
 
 enum CourtConnectError: LocalizedError {
     case message(String)
@@ -19,8 +22,9 @@ enum CourtConnectProtocol {
         } else { candidate = text }
         return candidate.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil ? candidate : nil
     }
-    static func noteID(_ id: UUID) -> UUID {
-        var bytes = Array(SHA256.hash(data: Data(("court-story-note:" + id.uuidString.lowercased()).utf8)).prefix(16))
+    static func noteID(_ id: UUID) -> UUID { derivedID(id,category:"note") }
+    static func derivedID(_ id: UUID, category: String) -> UUID {
+        var bytes = Array(SHA256.hash(data: Data(("court-story-" + category + ":" + id.uuidString.lowercased()).utf8)).prefix(16))
         bytes[6] = (bytes[6] & 15) | 80; bytes[8] = (bytes[8] & 63) | 128
         return UUID(uuid: (bytes[0],bytes[1],bytes[2],bytes[3],bytes[4],bytes[5],bytes[6],bytes[7],bytes[8],bytes[9],bytes[10],bytes[11],bytes[12],bytes[13],bytes[14],bytes[15]))
     }
@@ -40,11 +44,16 @@ struct CourtConnectSession: Codable {
     @Published private(set) var connections: [[String: Any]] = []
     @Published private(set) var records: [[String: Any]] = []
     @Published private(set) var feedback: [[String: Any]] = []
+    @Published private(set) var notifications: [[String: Any]] = []
+    @Published private(set) var notificationSettings: [String: Any] = [:]
     @Published var status = "Local-only. Nothing is uploaded until you approve sharing."
     @Published var pendingCode = ""
     @Published private(set) var busy = false
     private var state: [String: Any] = [:]
     private var syncing = false
+    private var pendingLibrary: AppData?
+    private var recordCursor = 0
+    private var connectionFingerprint = Data()
     private let keychainService = "app.courtstory.connect.session"
     private var config: [String: String] {
         guard let url = Bundle.main.url(forResource: "CourtConnectConfig", withExtension: "json"),
@@ -89,9 +98,15 @@ struct CourtConnectSession: Codable {
         session = newSession
         if changed { records = []; feedback = []; connections = []; loadState() }
     }
-    func signOut() {
+    func signOut() async throws {
+        if isSignedIn, let installation=UserDefaults.standard.string(forKey:"CourtConnectInstallation") {
+            try await rpc("cs_unregister_device",["p_installation":installation])
+        }
+        let delivered = await UNUserNotificationCenter.current().deliveredNotifications()
+        UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: delivered.filter { $0.request.content.userInfo["connect_notification"] != nil }.map { $0.request.identifier })
+        UIApplication.shared.unregisterForRemoteNotifications()
         SecItemDelete([kSecClass as String:kSecClassGenericPassword,kSecAttrService as String:keychainService] as CFDictionary)
-        session = nil; records = []; feedback = []; connections = []; state = [:]
+        session = nil; records = []; feedback = []; connections = []; notifications = []; notificationSettings = [:]; state = [:]
         status = "Signed out. Your local sporting records are unchanged."
     }
     func receive(_ url: URL) -> Bool {
@@ -142,19 +157,37 @@ struct CourtConnectSession: Codable {
         }
     }
     func refresh() async throws {
-        guard isSignedIn else { return }
-        // Rebuild the authorised view instead of retaining rows which may have been revoked.
-        records = []; feedback = []
-        connections = try await allRows("cs_connections")
-        records = try await allRows("cs_records").filter { !(($0["deleted"] as? Bool) ?? false) }
-        feedback = try await allRows("cs_feedback")
-        status = "Sharing access refreshed."
+        let actor=accountID
+        var cache=Dictionary(uniqueKeysWithValues:records.compactMap { row -> (String,[String:Any])? in guard let id=row["id"] as? String else { return nil }; return (id,row) })
+        records=[]; feedback=[]
+        let latest=try await allRows("cs_connections")
+        let fingerprint=try JSONSerialization.data(withJSONObject:latest,options:.sortedKeys)
+        var cursor=recordCursor
+        if fingerprint != connectionFingerprint || cache.isEmpty { cursor=0; cache=[:] }
+        while true {
+            let page=(try await request("/rest/v1/cs_records?select=*&change_id=gt.\(cursor)&order=change_id&limit=200",method:"GET") as? [[String:Any]]) ?? []
+            for row in page { guard let id=row["id"] as? String else { continue }; cursor=max(cursor,row["change_id"] as? Int ?? 0); if row["deleted"] as? Bool == true { cache.removeValue(forKey:id) } else { cache[id]=row } }
+            if page.count<200 { break }
+        }
+        var permitted=Set<String>(); var after="00000000-0000-0000-0000-000000000000"
+        while true {
+            let page=(try await rpc("cs_visible_manifest",["p_after":after,"p_limit":200]) as? [[String:Any]]) ?? []
+            for row in page { if let id=row["id"] as? String { permitted.insert(id); after=id } }
+            if page.count<200 { break }
+        }
+        let messages=try await allRows("cs_feedback")
+        let confirmations=try await allRows("cs_notifications")
+        let preferences=(try await request("/rest/v1/cs_notification_preferences?select=*&limit=1",method:"GET") as? [[String:Any]])?.first ?? [:]
+        guard actor==accountID else { return }
+        connections=latest; records=cache.filter { permitted.contains($0.key) }.values.sorted { ($0["occurred_at"] as? String ?? "") > ($1["occurred_at"] as? String ?? "") }
+        recordCursor=cursor; connectionFingerprint=fingerprint; feedback=messages; notifications=confirmations; notificationSettings=preferences
+        status="Sharing access refreshed."
     }
     func register(_ player: PlayerProfile) async throws {
         try await rpc("cs_register_profile",["p_id":player.id.uuidString,"p_name":player.displayName])
     }
     func invite(role: String, player: PlayerProfile?, sport: String, recipient: String) async throws -> String {
-        if role == "player", let player { try await register(player) }
+        if let player { try await register(player) }
         let result = try await rpc("cs_create_invitation",["p_role":role,"p_player":role == "player" ? (player?.id.uuidString as Any? ?? NSNull()) : NSNull(),"p_sport":sport,"p_recipient":recipient]) as? [String:Any]
         guard let code = result?["code"] as? String else { throw CourtConnectError.message("Invitation was not created.") }
         return linkHost.isEmpty ? code : "https://"+linkHost+"/connect/invite#"+code
@@ -165,6 +198,36 @@ struct CourtConnectSession: Codable {
         try await rpc("cs_accept_invitation",["p_code":code,"p_player":player?.id.uuidString as Any? ?? NSNull()])
         pendingCode = ""; UserDefaults.standard.removeObject(forKey:"CourtConnectPendingInvitation")
         try await refresh(); status = "Invitation accepted. Sharing starts only after player approval."
+    }
+    func preview(_ input: String) async throws -> [String:Any] {
+        guard let code=CourtConnectProtocol.code(input,host:linkHost) else { throw CourtConnectError.message("Use the full invitation link or 64-character code.") }
+        return try await rpc("cs_preview_invitation",["p_code":code]) as? [String:Any] ?? [:]
+    }
+    func decline(_ input: String) async throws {
+        guard let code=CourtConnectProtocol.code(input,host:linkHost) else { throw CourtConnectError.message("Invalid invitation link or code.") }
+        try await rpc("cs_decline_invitation",["p_code":code]); pendingCode=""
+        UserDefaults.standard.removeObject(forKey:"CourtConnectPendingInvitation"); status="Invitation declined. Nothing is shared."
+    }
+    func saveNotifications(push: Bool,requests: Bool,sharing: Bool,feedback: Bool) async throws {
+        var permitted=push
+        if push { permitted = try await UNUserNotificationCenter.current().requestAuthorization(options:[.alert,.sound,.badge]) }
+        try await rpc("cs_set_notifications",["p_push":permitted,"p_requests":requests,"p_sharing":sharing,"p_feedback":feedback])
+        if permitted { UIApplication.shared.registerForRemoteNotifications() }
+        else {
+            if let installation=UserDefaults.standard.string(forKey:"CourtConnectInstallation") { try await rpc("cs_unregister_device",["p_installation":installation]) }
+            UIApplication.shared.unregisterForRemoteNotifications()
+        }
+        try await refresh()
+        status=push && !permitted ? "Push is disabled in iPhone Settings. Confirmations remain available inside Connect." : "Connect notification settings saved."
+    }
+    func registeredForPush(_ token: Data) {
+        guard isSignedIn else { return }
+        let defaults=UserDefaults.standard
+        let installation=defaults.string(forKey:"CourtConnectInstallation") ?? UUID().uuidString
+        defaults.set(installation,forKey:"CourtConnectInstallation")
+        let value=token.map { String(format:"%02x",$0) }.joined()
+        Task { do { try await rpc("cs_register_device",["p_installation":installation,"p_platform":"apns","p_token":value]) }
+            catch { status="Push registration needs attention. " + error.localizedDescription } }
     }
     func permission(id: String,state: String,categories: [String],history: String,start: Date,end: Date,future: Bool,capability: String) async throws {
         let iso = ISO8601DateFormatter()
@@ -183,6 +246,16 @@ struct CourtConnectSession: Codable {
         if !allowed.contains(player.id.uuidString.lowercased()) { allowed.append(player.id.uuidString.lowercased()) }
         state["uploadPlayers"] = allowed; try persist()
         try await sync(library)
+    }
+    func isPrivate(_ id: String) -> Bool { (state["privateRecords"] as? [String:Bool] ?? [:])[id.lowercased()] ?? false }
+    func setPrivate(_ id: String, private value: Bool, library: AppData) async throws {
+        var values=state["privateRecords"] as? [String:Bool] ?? [:]; values[id.lowercased()]=value; state["privateRecords"]=values; state["queue"]=(state["queue"] as? [[String:Any]] ?? []).filter { ($0["p_id"] as? String)?.lowercased() != id.lowercased() }; try persist()
+        if let remote=records.first(where:{ ($0["id"] as? String)?.lowercased()==id.lowercased() }) {
+            let revision=try await rpc("cs_set_record_private",["p_id":id,"p_private":value,"p_expected":remote["revision"] ?? 0])
+            var revisions=state["revisions"] as? [String:Int] ?? [:]; revisions[id.lowercased()]=revision as? Int; state["revisions"]=revisions; try persist()
+        }
+        try await sync(library)
+        status=value ? "Record kept private. Server access is removed; previously saved copies cannot necessarily be erased." : "Record eligible for the sharing permissions you approve."
     }
     func stopUploads() throws {
         state["uploadPlayers"] = [String](); state["queue"] = [[String:Any]](); try persist()
@@ -228,9 +301,21 @@ struct CourtConnectSession: Codable {
                 // Deliberately do not encode workout, health, wellness, media, location, disability or the full record.
                 var body: [String:Any] = ["title":(row["name"] as? String) ?? (row["trainingType"] as? String) ?? "Match"]
                 if category == "match" { body["score"] = row["setScores"] as? String ?? ""; body["result"] = row["result"] as? String ?? "" }
-                if category == "training" { body["focus"] = row["focus"] as? String ?? "" }
+                if category == "training" { body["focus"] = row["focus"] as? String ?? ""; body["duration_minutes"] = row["durationMinutes"] as? Int ?? 0 }
+                for key in ["status", "matchType", "matchFormat", "yourSetsWon", "opponentSetsWon", "aces", "doubleFaults", "winners", "unforcedErrors", "hadTiebreak", "tiebreakScore", "tournamentID", "trainingSessionID", "finalResult", "matchesPlayed", "format", "stageReached", "finishingPosition", "endDate"] {
+                    if let value=row[key], value is String || value is NSNumber { body[key]=value }
+                }
                 let record: [String:Any] = ["p_id":id.lowercased(),"p_player":player.lowercased(),"p_sport":key,"p_category":category,"p_occurred":date,"p_body":body,"p_private":false,"p_deleted":false]
                 output.append(record)
+                if let uuid=UUID(uuidString:id) {
+                    let reflectionKeys=category == "match" ? ["matchStory","matchStrengths","matchNeedsWork","pressureMoment"] : ["sessionOutcome"]
+                    let reflection=reflectionKeys.compactMap { row[$0] as? String }.filter { !$0.isEmpty }.joined(separator:"\n")
+                    let goalKeys=category == "tournament" ? ["goal"] : ["nextPracticeFocus"]
+                    let goal=goalKeys.compactMap { row[$0] as? String }.filter { !$0.isEmpty }.joined(separator:"\n")
+                    for (derivedCategory,text) in [("reflection",reflection),("goal",goal)] where !text.isEmpty {
+                        var derived=record; derived["p_id"]=CourtConnectProtocol.derivedID(uuid,category:derivedCategory).uuidString.lowercased(); derived["p_category"]=derivedCategory; derived["p_body"]=["text":text]; output.append(derived)
+                    }
+                }
                 if let notes = row["notes"] as? String, !notes.isEmpty, let uuid = UUID(uuidString:id) {
                     var note = record; note["p_id"] = CourtConnectProtocol.noteID(uuid).uuidString.lowercased(); note["p_category"] = "note"; note["p_body"] = ["text":notes]
                     output.append(note)
@@ -240,33 +325,50 @@ struct CourtConnectSession: Codable {
         return output
     }
     func sync(_ library: AppData) async throws {
-        guard !syncing, isSignedIn else { return }; syncing = true; defer { syncing = false }
+        guard isSignedIn else { return }
+        if syncing { pendingLibrary=library; return }
+        syncing=true
+        defer { syncing=false; if let next=pendingLibrary { pendingLibrary=nil; changed(next) } }
         let actor = accountID
-        // Fetch current permissions BEFORE flushing an offline queue. Revocation or pause invalidates queued uploads.
-        try await refresh()
-        guard actor == accountID else { return }
         let players = state["uploadPlayers"] as? [String] ?? []
         var queue = state["queue"] as? [[String:Any]] ?? []
         var hashes = (state["hashes"] as? [String:String]) ?? [:]
         var revisions = (state["revisions"] as? [String:Int]) ?? [:]
-        let projections = try Self.projections(library,players:players)
+        var uploaded=state["uploaded"] as? [String:[String:Any]] ?? [:]
+        let projections = try Self.projections(library,players:players).map { record -> [String:Any] in var result=record; result["p_private"]=isPrivate(record["p_id"] as? String ?? ""); return result }
         for candidate in projections where permits(candidate) {
             let id = candidate["p_id"] as! String
             let hash = SHA256.hash(data:try JSONSerialization.data(withJSONObject:candidate,options:.sortedKeys)).map { String(format:"%02x",$0) }.joined()
-            guard hashes[id] != hash, !queue.contains(where:{ $0["p_id"] as? String == id }) else { continue }
+            if let prior=queue.first(where:{ $0["p_id"] as? String == id }) { if prior["local_hash"] as? String != hash { pendingLibrary=library }; continue }
+            guard hashes[id] != hash else { continue }
             var queued = candidate; queued["p_operation"] = UUID().uuidString; queued["p_expected"] = revisions[id] ?? 0; queued["local_hash"] = hash
             queue.append(queued)
         }
-        queue = queue.filter { permits($0) }
-        state["queue"] = queue; try persist()
+        let present=Set(projections.compactMap { $0["p_id"] as? String })
+        for (id,metadata) in uploaded where !present.contains(id) && players.contains(metadata["p_player"] as? String ?? "") && !queue.contains(where:{ $0["p_id"] as? String == id }) {
+            var tombstone=metadata; tombstone["p_body"]=[String:String](); tombstone["p_deleted"]=true; tombstone["p_private"]=true; tombstone["p_operation"]=UUID().uuidString; tombstone["p_expected"]=revisions[id] ?? 0; tombstone["local_hash"]="deleted"; queue.append(tombstone)
+        }
+        state["queue"]=queue; try persist()
+        // Build the durable queue before network access, then recheck server permission before sending.
+        try await refresh(); guard actor==accountID else { return }
+        queue=queue.filter { ($0["p_deleted"] as? Bool == true) || permits($0) }
+        state["queue"]=queue; try persist()
         while !queue.isEmpty {
             guard actor == accountID else { return }
             var item = queue[0]; let hash = item.removeValue(forKey:"local_hash") as? String; let id = item["p_id"] as! String
             let response = (try await rpc("cs_put_record",item) as? [String:Any]) ?? [:]
             guard actor == accountID else { return }
             hashes[id] = hash; revisions[id] = response["revision"] as? Int
+            if item["p_deleted"] as? Bool == true { uploaded.removeValue(forKey:id) }
+            else { var metadata=item; metadata.removeValue(forKey:"p_body"); metadata.removeValue(forKey:"p_expected"); metadata.removeValue(forKey:"p_operation"); uploaded[id]=metadata }
+            state["uploaded"]=uploaded
             queue.removeFirst(); state["queue"] = queue; state["hashes"] = hashes; state["revisions"] = revisions; try persist()
         }
-        try await refresh(); status = "Permitted sporting records synchronised. Health and media stay on the device."
+        try await refresh()
+        for record in projections where permits(record) {
+            let hash=SHA256.hash(data:try JSONSerialization.data(withJSONObject:record,options:.sortedKeys)).map { String(format:"%02x",$0) }.joined()
+            if hashes[record["p_id"] as? String ?? ""] != hash { pendingLibrary=library; break }
+        }
+        status = "Permitted sporting records synchronised. Health and media stay on the device."
     }
 }

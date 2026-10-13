@@ -42,7 +42,7 @@ create table public.cs_records (
   change_id bigint not null, private boolean not null default false, deleted boolean not null default false,
   body jsonb not null, foreign key(player_id,owner_id) references public.cs_profiles(id,account_id) on delete cascade,
   check(jsonb_typeof(body)='object' and octet_length(body::text)<=16384),
-  check(body - array['title','result','score','duration_minutes','focus','text'] = '{}'::jsonb)
+  check(body - array['title','result','score','duration_minutes','focus','text','status','matchType','matchFormat','yourSetsWon','opponentSetsWon','aces','doubleFaults','winners','unforcedErrors','hadTiebreak','tiebreakScore','tournamentID','trainingSessionID','finalResult','matchesPlayed','format','stageReached','finishingPosition','endDate'] = '{}'::jsonb)
 );
 create table public.cs_participants (
   record_id uuid not null references public.cs_records(id) on delete cascade,

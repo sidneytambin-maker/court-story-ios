@@ -11,6 +11,8 @@ struct CourtConnectView: View {
     @State private var invitationRole = "player"
     @State private var selectedConnection: ConnectSelection?
     @State private var consent = false
+    @State private var invitationPreview: [String:Any] = [:]
+    @State private var reviewInvitation = false
     private var player: PlayerProfile? { store.workspaceOwner }
     var body: some View {
         Form {
@@ -40,7 +42,8 @@ struct CourtConnectView: View {
                         Text(shareLink).textSelection(.enabled)
                     }
                     TextField("Invitation link or code",text:$invitation,axis:.vertical).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    Button("Accept invitation") { connect.run { try await connect.accept(invitation,player:player) } }
+                    Button("Review invitation") { connect.run { invitationPreview = try await connect.preview(invitation); reviewInvitation = true } }
+                    Button("Decline invitation",role:.destructive) { connect.run { try await connect.decline(invitation); invitation="" } }
                 }
                 Section("Connections and approval") {
                     if connect.connections.isEmpty { Text("No connections yet.") }
@@ -50,6 +53,7 @@ struct CourtConnectView: View {
                 }
                 Section("Upload consent on this device") {
                     Text("Only the owner profile and the sporting categories and history you approve for an active connection are eligible. Existing local records remain unchanged.")
+                    NavigationLink("Manage private records and notes") { ConnectRecordPrivacyView() }
                     Toggle("I approve uploading permitted sporting records",isOn:$consent)
                     Button("Enable sharing and synchronise") {
                         guard let player else { return }
@@ -58,27 +62,41 @@ struct CourtConnectView: View {
                     Button("Pause uploads on this device") { connect.run { try connect.stopUploads() } }
                     Button("Refresh and retry sync") { connect.run { try await connect.sync(store.data) } }
                 }
-                Section("Shared sporting records") {
-                    ForEach(connect.records.compactMap(ConnectRecord.init)) { record in
-                        NavigationLink { ConnectRecordView(record:record) } label: {
-                            VStack(alignment:.leading) { Text(record.title); Text(record.sport + " · " + record.category).font(.caption) }
+                Section("Players and shared records") {
+                    ForEach(connect.playerGroups) { group in
+                        NavigationLink { ConnectPlayerDashboard(player:group) } label: {
+                            VStack(alignment:.leading) { Text(group.name); Text(group.id == player?.id.uuidString.lowercased() ? "Your shared player record" : "Separate player record").font(.caption) }
                         }
                     }
+                    if connect.playerGroups.isEmpty { Text("Approved players appear here. Each player's records stay separate.") }
                 }
-                Section("Account") { Button("Sign out") { connect.signOut() } }
+                Section("Confirmations and notifications") {
+                    NavigationLink("Manage Connect notifications") { ConnectNotificationSettingsView() }
+                    ForEach(connect.notifications.compactMap(ConnectSelection.init)) { item in
+                        Text(item.value["message"] as? String ?? "Connection updated")
+                    }
+                }
+                Section("Account") { Button("Sign out") { connect.run { try await connect.signOut() } } }
             }
         }
         .navigationTitle("Court Story Connect")
         .disabled(connect.busy)
         .overlay { if connect.busy { ProgressView("Connecting") } }
         .onAppear { invitation = connect.pendingCode; if connect.isSignedIn { connect.run { try await connect.refresh() } } }
+        .alert("Connection invitation",isPresented:$reviewInvitation) {
+            Button("Accept") { connect.run { try await connect.accept(invitation,player:player) } }
+            Button("Decline",role:.destructive) { connect.run { try await connect.decline(invitation); invitation="" } }
+            Button("Cancel",role:.cancel) {}
+        } message: {
+            Text((invitationPreview["name"] as? String ?? "Court Story member") + " · " + (invitationPreview["sport"] as? String ?? "Sport") + ". Player approval is required before sharing.")
+        }
         .sheet(item:$selectedConnection) { selected in NavigationStack { ConnectPermissionView(connection:selected) } }
     }
 }
 struct ConnectSelection: Identifiable {
     let id: String; let value: [String:Any]
     init?(_ value: [String:Any]) { guard let id=value["id"] as? String else { return nil }; self.id=id; self.value=value }
-    var label: String { (value["sport"] as? String ?? "Sport") + " · " + (value["state"] as? String ?? "Pending") + " · " + String(id.prefix(8)) }
+    @MainActor var label: String { ((value["player_account"] as? String)?.lowercased() == CourtConnect.shared.accountID ? (value["coach_name"] as? String ?? "Coach") : (value["player_name"] as? String ?? "Player")) + " · " + (value["sport"] as? String ?? "Sport") + " · " + (value["state"] as? String ?? "Pending") }
 }
 struct ConnectRecord: Identifiable {
     let id: String; let value: [String:Any]
@@ -104,7 +122,7 @@ struct ConnectPermissionView: View {
             Section { Text(connection.label); Text(connect.status) }
             if owner {
                 Section("Sporting categories") {
-                    Button("Share all eligible sporting categories") { categories=Set(CourtConnectProtocol.categories) }
+                    Button("Share all sporting data, including history") { categories=Set(CourtConnectProtocol.categories); history="all"; future=true }
                     ForEach(CourtConnectProtocol.categories,id:\.self) { category in
                         Toggle(category.capitalized,isOn:Binding(get:{ categories.contains(category) },set:{ if $0 { categories.insert(category) } else { categories.remove(category) } }))
                     }
@@ -120,7 +138,10 @@ struct ConnectPermissionView: View {
                 Button("Keep private / pause connection") { save("paused") }
                 Button("Revoke access",role:.destructive) { save("revoked") }
                 Text("Revocation immediately stops server access. Copies previously saved by a coach cannot necessarily be erased remotely.")
-            } else { Text("The player controls sharing and must approve this connection. This link alone gives no access.") }
+            } else {
+                Text("The player controls sharing and must approve this connection. This link alone gives no access.")
+                Button("Decline or leave connection",role:.destructive) { connect.run { try await connect.rpc("cs_leave_connection",["p_id":connection.id]);try await connect.refresh() } }
+            }
         }.navigationTitle("Sharing permission").toolbar { Button("Done") { dismiss() } }.disabled(connect.busy)
         .onAppear {
             if connection.value["approved_at"] is String {
@@ -133,6 +154,28 @@ struct ConnectPermissionView: View {
         }
     }
     private func save(_ state: String) { connect.run { try await connect.permission(id:connection.id,state:state,categories:Array(categories),history:history,start:start,end:end,future:future,capability:capability) } }
+}
+struct ConnectNotificationSettingsView: View {
+    @ObservedObject private var connect=CourtConnect.shared
+    @State private var push=false
+    @State private var requests=true
+    @State private var sharing=true
+    @State private var feedback=true
+    var body: some View {
+        Form {
+            Section("Connect push notifications") {
+                Toggle("Enable Connect push notifications",isOn:$push)
+                Toggle("Coach invitations and requests",isOn:$requests)
+                Toggle("Sharing confirmations and revocations",isOn:$sharing)
+                Toggle("New coach feedback",isOn:$feedback)
+                Text("When sharing becomes active, the confirmation names the coach. Sporting records and Health data are not included in notifications. Delivery also depends on your device notification settings and connectivity.")
+                Button("Save notification settings") { connect.run { try await connect.saveNotifications(push:push,requests:requests,sharing:sharing,feedback:feedback) } }
+                Button("Open iPhone notification settings") { if let url=URL(string:UIApplication.openNotificationSettingsURLString) { UIApplication.shared.open(url) } }
+                Text(connect.status)
+            }
+        }.navigationTitle("Connect notifications").disabled(connect.busy)
+        .onAppear { push=connect.notificationSettings["push_enabled"] as? Bool ?? false;requests=connect.notificationSettings["connection_requests"] as? Bool ?? true;sharing=connect.notificationSettings["sharing_confirmations"] as? Bool ?? true;feedback=connect.notificationSettings["coach_feedback"] as? Bool ?? true }
+    }
 }
 struct ConnectRecordView: View {
     let record: ConnectRecord
@@ -162,5 +205,53 @@ struct ConnectRecordView: View {
             }
             Text(connect.status)
         }.navigationTitle("Shared record").disabled(connect.busy)
+    }
+}
+
+struct ConnectRecordPrivacyView: View {
+    @EnvironmentObject private var store: TennisStore
+    @ObservedObject private var connect=CourtConnect.shared
+    private var localRecords: [[String:Any]] { guard let owner=store.workspaceOwner else { return [] }; return (try? CourtConnect.projections(store.data,players:[owner.id.uuidString.lowercased()])) ?? [] }
+    var body: some View {
+        Form {
+            Section { Text("Mark records, notes or reflections private before enabling uploads. Private records are hidden from every coach. If a record was already shared, changing privacy needs an internet connection to remove server access."); Text(connect.status) }
+            ForEach(localRecords.compactMap { row -> ConnectSelection? in var value=row; value["id"]=row["p_id"]; return ConnectSelection(value) }) { row in
+                let body=row.value["p_body"] as? [String:Any] ?? [:]
+                Toggle(isOn:Binding(get:{connect.isPrivate(row.id)},set:{ value in connect.run { try await connect.setPrivate(row.id,private:value,library:store.data) } })) {
+                    Text((row.value["p_category"] as? String ?? "Record").capitalized + ": " + (body["title"] as? String ?? body["text"] as? String ?? "Sporting record"))
+                    Text("Keep private")
+                }
+            }
+        }.navigationTitle("Private records and notes").disabled(connect.busy)
+    }
+}
+struct ConnectPlayerGroup: Identifiable { let id: String; let name: String }
+extension CourtConnect {
+    var playerGroups: [ConnectPlayerGroup] {
+        var groups: [String:String]=[:]
+        for row in connections where row["state"] as? String == "active" {
+            if let id=row["player_id"] as? String { groups[id.lowercased()]=row["player_name"] as? String ?? "Player" }
+        }
+        return groups.map { ConnectPlayerGroup(id:$0.key,name:$0.value) }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+}
+struct ConnectPlayerDashboard: View {
+    let player: ConnectPlayerGroup
+    @ObservedObject private var connect=CourtConnect.shared
+    @State private var sport="All approved sports"
+    @State private var category="All categories"
+    private var rows: [ConnectRecord] { connect.records.filter { ($0["player_id"] as? String)?.lowercased()==player.id }.compactMap(ConnectRecord.init) }
+    private var sports: [String] { Array(Set(rows.map(\.sport))).sorted() }
+    var body: some View {
+        List {
+            Section { Text("Records for " + player.name + " only. Sharing remains under this player's control."); Text(connect.status) }
+            Section("Filter records") {
+                Picker("Sport",selection:$sport) { Text("All approved sports").tag("All approved sports"); ForEach(sports,id:\.self) { Text($0).tag($0) } }
+                Picker("Category",selection:$category) { Text("All categories").tag("All categories"); ForEach(CourtConnectProtocol.categories,id:\.self) { Text($0.capitalized).tag($0) } }
+            }
+            ForEach(rows.filter { (sport=="All approved sports" || $0.sport==sport) && (category=="All categories" || $0.category==category) }) { record in
+                NavigationLink { ConnectRecordView(record:record) } label: { VStack(alignment:.leading) { Text(record.title); Text(record.sport + " · " + record.category); Text(record.value["occurred_at"] as? String ?? "") } }
+            }
+        }.navigationTitle(player.name)
     }
 }

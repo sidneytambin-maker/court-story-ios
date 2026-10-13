@@ -29,7 +29,7 @@ create table public.cs_notifications (
  id uuid primary key default gen_random_uuid(), account_id uuid not null references auth.users(id) on delete cascade,
  connection_id uuid references public.cs_connections(id) on delete cascade,
  kind text not null check(kind in ('connection_request','sharing_started','sharing_stopped','coach_feedback')),
- message text not null, created_at timestamptz not null default now(), read_at timestamptz
+ message text not null, created_at timestamptz not null default clock_timestamp(), read_at timestamptz
 );
 create table cs_private.push_devices (
  account_id uuid not null references auth.users(id) on delete cascade, installation_id uuid not null,
@@ -81,12 +81,12 @@ create trigger cs_connection_names before insert or update on public.cs_connecti
 create function cs_private.connection_notification() returns trigger language plpgsql security definer set search_path='' as $$
 begin
  if TG_OP='INSERT' or (new.state='pending' and old.state is distinct from new.state) then
-  insert into public.cs_notifications(account_id,connection_id,kind,message) values(new.player_account,new.id,'connection_request',new.coach_name||' accepted your connection invitation. Review and approve what you share.');
- elsif new.state='active' and old.state is distinct from new.state and cardinality(new.categories)>0 then
+  insert into public.cs_notifications(account_id,connection_id,kind,message) values(new.player_account,new.id,'connection_request','Review your connection with '||new.coach_name||' and approve what you share.');
+ elsif new.state='active' and (old.state is distinct from new.state or cardinality(old.categories)=0) and cardinality(new.categories)>0 then
   insert into public.cs_notifications(account_id,connection_id,kind,message) values(new.player_account,new.id,'sharing_started','Your permitted sporting data is now being shared with '||new.coach_name||'.');
   insert into public.cs_notifications(account_id,connection_id,kind,message) values(new.coach_account,new.id,'sharing_started',new.player_name||' approved sporting data sharing with you.');
- elsif new.state in ('paused','revoked') and old.state is distinct from new.state then
-  insert into public.cs_notifications(account_id,connection_id,kind,message) values(new.player_account,new.id,'sharing_stopped','Sharing with '||new.coach_name||' is '||new.state||'.');
+ elsif (new.state in ('paused','revoked') and old.state is distinct from new.state) or (new.state='active' and cardinality(new.categories)=0 and cardinality(old.categories)>0) then
+  insert into public.cs_notifications(account_id,connection_id,kind,message) values(new.player_account,new.id,'sharing_stopped','Sharing with '||new.coach_name||' has stopped.');
  end if;
  return new;
 end $$;
@@ -107,6 +107,8 @@ begin
   join public.cs_notification_preferences p on p.account_id=d.account_id
   where d.delivered_at is null and d.attempts<8 and d.next_attempt<=now() and n.created_at>now()-interval '24 hours'
   and p.push_enabled and case n.kind when 'connection_request' then p.connection_requests when 'coach_feedback' then p.coach_feedback else p.sharing_confirmations end
+  and (n.kind<>'sharing_started' or exists(select 1 from public.cs_connections c where c.id=n.connection_id and c.state='active' and cardinality(c.categories)>0 and c.updated_at<=n.created_at))
+  and (n.kind<>'connection_request' or exists(select 1 from public.cs_connections c where c.id=n.connection_id and c.state='pending'))
   order by d.next_attempt for update of d skip locked limit greatest(1,least(p_limit,100))
  ), leased as (
   update cs_private.push_deliveries d set attempts=attempts+1,next_attempt=now()+interval '5 minutes'

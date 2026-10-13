@@ -3,12 +3,22 @@ import UserNotifications
 import UIKit
 
 final class TennisTrackerAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        Task { @MainActor in CourtConnect.shared.registeredForPush(deviceToken) }
+    }
+    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        Task { @MainActor in CourtConnect.shared.status="Push registration failed. Confirmations remain available in Connect." }
+    }
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
         UNUserNotificationCenter.current().delegate = self
         return true
     }
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
+        if response.notification.request.content.userInfo["connect_notification"] is String {
+            await MainActor.run { NotificationCenter.default.post(name:Notification.Name("CourtConnectOpen"),object:nil) }
+            return
+        }
         guard response.actionIdentifier != UNNotificationDismissActionIdentifier,
               let url = TennisActivityRoute.notificationURL(userInfo: response.notification.request.content.userInfo,
                   identifier: response.notification.request.identifier, deliveredAt: response.notification.date) else { return }
