@@ -56,4 +56,14 @@ import XCTest
         XCTAssertFalse(serialized.contains("Sensitive access information"))
         XCTAssertTrue(rows.contains { $0["p_category"] as? String == "reflection" })
     }
+    func testNativeSportScoreHasSharedReadableSummary() throws {
+        let owner=PlayerProfile()
+        var match=MatchRecord(playerID:owner.id)
+        match.court.score=CourtScoreSession(sport:.tennis,rules:CourtScoringRules(),sides:[CourtScoreSide(name:"Synthetic side A"),CourtScoreSide(name:"Synthetic side B")])
+        var library=AppData(); library.players=[owner]; library.matches=[match]
+        let rows=try CourtConnect.projections(library,players:[owner.id.uuidString.lowercased()])
+        let body=rows.first { $0["p_category"] as? String == "match" }?["p_body"] as? [String:Any]
+        XCTAssertEqual(body?["customScoreSummary"] as? String,match.court.score!.summary + ". " + match.court.score!.resultSummary)
+        XCTAssertNil(body?["history"]); XCTAssertNil(body?["access"])
+    }
 }

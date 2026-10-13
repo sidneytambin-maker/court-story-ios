@@ -324,6 +324,8 @@ struct CourtConnectSession: Codable {
         let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
         let library = (try JSONSerialization.jsonObject(with:encoder.encode(data)) as? [String:Any]) ?? [:]
         var output: [[String:Any]] = []
+        var scoreSummaries: [String:String]=[:]
+        for match in data.matches { if let score=match.court.score { scoreSummaries[match.id.uuidString.lowercased()]=score.summary + ". " + score.resultSummary } }
         for (table,category) in [("matches","match"),("trainingSessions","training"),("tournaments","tournament")] {
             for row in library[table] as? [[String:Any]] ?? [] {
                 guard let id = row["id"] as? String, let player = row["playerID"] as? String,
@@ -338,7 +340,7 @@ struct CourtConnectSession: Codable {
                 for key in ["status", "matchType", "matchFormat", "yourSetsWon", "opponentSetsWon", "aces", "doubleFaults", "winners", "unforcedErrors", "hadTiebreak", "tiebreakScore", "tournamentID", "trainingSessionID", "finalResult", "matchesPlayed", "format", "stageReached", "finishingPosition", "endDate"] {
                     if let value=row[key], value is String || value is NSNumber { body[key]=value }
                 }
-                if let summary=row["customScoreSummary"] as? String, !summary.isEmpty { body["customScoreSummary"]=summary }
+                if category == "match", let summary=scoreSummaries[id.lowercased()] { body["customScoreSummary"]=summary }
                 for field in ["surface","sessionType"] { if let value=court[field] as? String, !value.isEmpty { body[field]=value } }
                 let plan=court["plan"] as? [String:Any] ?? [:]
                 for (source,destination) in [("objective","planObjective"),("drills","planDrills"),("equipment","planEquipment"),("successMeasure","planSuccessMeasure")] {

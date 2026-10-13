@@ -18,17 +18,17 @@ struct CourtConnectView: View {
     private var player: PlayerProfile? { store.workspaceOwner }
     var body: some View {
         Form {
-            Section("Your privacy") {
+            Section {
                 Text("Connect is optional. Signing in does not upload your library. Health data and media are never included. Keep personal information out of sporting notes you choose to share.").fixedSize(horizontal:false,vertical:true)
                 Text(connect.status).fixedSize(horizontal:false,vertical:true).accessibilityIdentifier("connectStatus")
-            }
+            } header: { Text("Your privacy").foregroundStyle(.primary) }
             if !connect.isSignedIn {
-                Section("Sign in with an email code") {
-                    TextField("Email address",text:$email).textContentType(.emailAddress).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
+                Section {
+                    TextField("Email address",text:$email,prompt:Text("Email address").foregroundStyle(.primary)).textContentType(.emailAddress).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
                     Button("Send sign-in code") { connect.run { try await connect.sendCode(email:email) } }
-                    TextField("Email sign-in code",text:$signInCode).textContentType(.oneTimeCode).keyboardType(.numberPad)
+                    TextField("Email sign-in code",text:$signInCode,prompt:Text("Email sign-in code").foregroundStyle(.primary)).textContentType(.oneTimeCode).keyboardType(.numberPad)
                     Button("Sign in") { connect.run { try await connect.verify(email:email,code:signInCode) } }
-                }
+                } header: { Text("Sign in with an email code").foregroundStyle(.primary) }
             } else {
                 Section("Invitations") {
                     Picker("Invite as",selection:$invitationRole) { Text("Player inviting coach").tag("player"); Text("Coach requesting player").tag("coach") }
