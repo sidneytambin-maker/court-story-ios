@@ -364,6 +364,16 @@ struct CourtConnectSession: Codable {
                     for (key,team) in [("playerName",0),("partnerName",0),("opponentName",1),("opponent2Name",1)] {
                         if let name=row[key] as? String, !name.isEmpty { people.append(["id":CourtConnectProtocol.derivedID(uuid,category:key).uuidString.lowercased(),"display_name":name,"team":team]) }
                     }
+                    if let score=court["score"] as? [String:Any], let sides=score["sides"] as? [[String:Any]], !sides.isEmpty {
+                        people=[]
+                        for (team,side) in sides.enumerated() {
+                            let names=(side["members"] as? [String] ?? []).filter { !$0.isEmpty }
+                            for (member,name) in (names.isEmpty ? [side["name"] as? String ?? "Team"] : names).enumerated() {
+                                let sideID=(side["id"] as? String ?? String(team)).lowercased()
+                                people.append(["id":CourtConnectProtocol.derivedID(uuid,category:"score-side-"+sideID+"-member-"+String(member)).uuidString.lowercased(),"display_name":name,"team":team])
+                            }
+                        }
+                    }
                     record["p_people"]=people
                 }
                 output.append(record)
