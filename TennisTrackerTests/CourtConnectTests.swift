@@ -66,4 +66,19 @@ import XCTest
         XCTAssertEqual(body?["customScoreSummary"] as? String,match.court.score!.summary + ". " + match.court.score!.resultSummary)
         XCTAssertNil(body?["history"]); XCTAssertNil(body?["access"])
     }
+    func testDevelopmentAndJournalHistoryStayUnderOwner() throws {
+        var owner=PlayerProfile(); owner.primaryGoal="Legacy goal"
+        let other=PlayerProfile(), coach=UUID()
+        var observation=CourtObservation(athleteID:owner.id,coachID:coach,sport:.tennis); observation.happened="Consistent contact"; observation.nextAction="Practice returns"; observation.date=Date(timeIntervalSince1970:1577836800)
+        var drill=CourtMeasuredDrill(athleteID:owner.id,coachID:coach,sport:.tennis); drill.name="Serve target"; drill.totalAttempts=10; drill.successfulAttempts=8
+        var hidden=CourtObservation(athleteID:other.id,coachID:coach,sport:.tennis); hidden.happened="Other player's journal"
+        var library=AppData(); library.players=[owner,other]; library.court.observations=[observation,hidden]; library.court.drills=[drill]
+        let rows=try CourtConnect.projections(library,players:[owner.id.uuidString.lowercased()])
+        XCTAssertEqual(rows.count,4)
+        XCTAssertTrue(rows.allSatisfy { $0["p_player"] as? String == owner.id.uuidString.lowercased() })
+        XCTAssertTrue(rows.contains { ($0["p_body"] as? [String:Any])?["text"] as? String == "Legacy goal" })
+        XCTAssertTrue(rows.contains { $0["p_id"] as? String == observation.id.uuidString.lowercased() && $0["p_occurred"] as? String == "2020-01-01T00:00:00Z" })
+        library.court.deletedIDs.insert(drill.id)
+        XCTAssertEqual(try CourtConnect.projections(library,players:[owner.id.uuidString.lowercased()]).count,3)
+    }
 }

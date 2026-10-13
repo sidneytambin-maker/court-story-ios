@@ -382,6 +382,27 @@ struct CourtConnectSession: Codable {
                 }
             }
         }
+        func appendText(id: UUID, player: UUID, sport: CourtSportSelection, category: String, date: Date, title: String, text: String) {
+            guard players.contains(player.uuidString.lowercased()), !text.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty else { return }
+            output.append(["p_id":id.uuidString.lowercased(),"p_player":player.uuidString.lowercased(),"p_sport":sport.id,"p_category":category,"p_occurred":ISO8601DateFormatter().string(from:date),"p_body":["title":title,"text":text],"p_private":false,"p_deleted":false,"p_people":[[String:Any]]()])
+        }
+        for profile in data.players where players.contains(profile.id.uuidString.lowercased()) {
+            for preferences in profile.court.sports {
+                let sport=preferences.sport
+                appendText(id:CourtConnectProtocol.derivedID(profile.id,category:"profile-goal:"+sport.id),player:profile.id,sport:sport,category:"goal",date:profile.court.modifiedAt,title:"Development goal",text:preferences.primaryGoal)
+                appendText(id:CourtConnectProtocol.derivedID(profile.id,category:"profile-note:"+sport.id),player:profile.id,sport:sport,category:"note",date:profile.court.modifiedAt,title:"Development notes",text:preferences.developmentNotes)
+            }
+        }
+        for observation in data.court.observations where !data.court.deletedIDs.contains(observation.id) {
+            let text=[("Focus",observation.focus),("Observation",observation.happened),("Interpretation",observation.interpretation),("Player perspective",observation.playerPerspective)].filter { !$0.1.isEmpty }.map { $0.0+": "+$0.1 }.joined(separator:"\n")
+            appendText(id:observation.id,player:observation.athleteID,sport:observation.sport,category:"reflection",date:observation.date,title:"Coaching observation",text:text)
+            appendText(id:CourtConnectProtocol.derivedID(observation.id,category:"goal"),player:observation.athleteID,sport:observation.sport,category:"goal",date:observation.date,title:"Next action",text:observation.nextAction)
+        }
+        for drill in data.court.drills where !data.court.deletedIDs.contains(drill.id) {
+            var parts=[drill.summary,"Focus: "+drill.focus,"Setup: "+drill.setup,"Conditions: "+drill.conditions]
+            if let measurement=drill.measurement { parts.append("Measurement: \(measurement) "+drill.unit) }
+            appendText(id:drill.id,player:drill.athleteID,sport:drill.sport,category:"training",date:drill.date,title:drill.name,text:parts.joined(separator:"\n"))
+        }
         return output
     }
     var syncConflicts: [[String:Any]] {
