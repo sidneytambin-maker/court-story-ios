@@ -25,9 +25,13 @@ final class TennisTrackerAppDelegate: NSObject, UIApplicationDelegate, UNUserNot
         return true
     }
 
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
+        guard let id=notification.request.content.userInfo["connect_notification"] as? String else { return [] }
+        return await CourtConnect.shared.shouldPresentNotification(id) ? [.banner,.list,.sound] : []
+    }
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse) async {
         if response.notification.request.content.userInfo["connect_notification"] is String {
-            await MainActor.run { NotificationCenter.default.post(name:Notification.Name("CourtConnectOpen"),object:nil) }
+            await MainActor.run { UserDefaults.standard.set(true,forKey:"CourtConnectOpenPending"); NotificationCenter.default.post(name:Notification.Name("CourtConnectOpen"),object:nil) }
             return
         }
         guard response.actionIdentifier != UNNotificationDismissActionIdentifier,

@@ -254,6 +254,9 @@ extension CourtConnect {
 }
 struct ConnectPlayerDashboard: View {
     let player: ConnectPlayerGroup
+    @EnvironmentObject private var store: TennisStore
+    @State private var localProfile=""
+    @State private var confirmLink=false
     @ObservedObject private var connect=CourtConnect.shared
     @State private var sport="All approved sports"
     @State private var category="All categories"
@@ -262,6 +265,13 @@ struct ConnectPlayerDashboard: View {
     var body: some View {
         List {
             Section { Text("Records for " + player.name + " only. Sharing remains under this player's control."); Text(connect.status) }
+            if player.id != store.workspaceOwner?.id.uuidString.lowercased() {
+                Section("Existing local player profile") {
+                    Picker("Local profile",selection:$localProfile) { Text("No link").tag(""); ForEach(store.data.players.filter { $0.id != store.workspaceOwner?.id }) { Text($0.displayName).tag($0.id.uuidString.lowercased()) } }
+                    Button("Confirm local profile link") { confirmLink=true }
+                    Text("Choose explicitly. Names never merge players automatically, and both histories remain separate.")
+                }
+            }
             Section("Filter records") {
                 Picker("Sport",selection:$sport) { Text("All approved sports").tag("All approved sports"); ForEach(sports,id:\.self) { Text($0).tag($0) } }
                 Picker("Category",selection:$category) { Text("All categories").tag("All categories"); ForEach(CourtConnectProtocol.categories,id:\.self) { Text($0.capitalized).tag($0) } }
@@ -270,5 +280,10 @@ struct ConnectPlayerDashboard: View {
                 NavigationLink { ConnectRecordView(record:record) } label: { VStack(alignment:.leading) { Text(record.title); Text(record.sport + " · " + record.category); Text(record.value["occurred_at"] as? String ?? "") } }
             }
         }.navigationTitle(player.name)
+        .onAppear { localProfile=connect.linkedPlayer(player.id) ?? "" }
+        .alert("Confirm this player's local profile link?",isPresented:$confirmLink) {
+            Button("Confirm link") { connect.run { try connect.linkPlayer(player.id,local:localProfile.isEmpty ? nil : localProfile) } }
+            Button("Cancel",role:.cancel) {}
+        } message: { Text("This links the selected local profile to " + player.name + " on this device. It does not merge, overwrite or upload either player's history.") }
     }
 }

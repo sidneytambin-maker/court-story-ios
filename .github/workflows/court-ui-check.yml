@@ -2,6 +2,10 @@ name: Court Story interface regression check
 on:
   workflow_dispatch:
     inputs:
+      connect_only:
+        description: Check Connect sign-in accessibility and local tracking navigation
+        type: boolean
+        default: false
       expansion_only:
         description: Run only the new coaching journeys
         type: boolean
@@ -39,6 +43,7 @@ jobs:
       - run: xcodegen generate --spec project-tests.yml
       - name: Run iPhone interface journeys
         env:
+          CONNECT_ONLY: ${{ inputs.connect_only }}
           EXPANSION_ONLY: ${{ inputs.expansion_only }}
           PHONE_REGRESSION_ONLY: ${{ inputs.phone_regression_only }}
         run: |
@@ -48,6 +53,7 @@ jobs:
           TEST_SELECTION=(-only-testing:TennisTrackerUITests)
           if [ "$EXPANSION_ONLY" = true ]; then TEST_SELECTION=(-only-testing:TennisTrackerUITests/CourtCoachingUITests); fi
           if [ "$PHONE_REGRESSION_ONLY" = true ]; then TEST_SELECTION=(-only-testing:TennisTrackerUITests/CourtCoachingUITests -only-testing:TennisTrackerUITests/TennisNotificationsAndAchievementsUITests/testLargeTextAchievementBadgesRemainAccessible -only-testing:TennisTrackerUITests/TennisTrackerAccessibilityUITests/testRecordedTiebreakAndTrainingLinkCanBeEnteredWithPickers); fi
+          if [ "$CONNECT_ONLY" = true ]; then TEST_SELECTION=(-only-testing:TennisTrackerTests/CourtConnectTests -only-testing:TennisTrackerUITests/CourtConnectUITests); fi
           xcodebuild test -project TennisTrackeriOS.xcodeproj -scheme TennisTracker -destination "id=$ID" "${TEST_SELECTION[@]}" -parallel-testing-enabled NO -resultBundlePath CourtPhoneUI.xcresult CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" 2>&1 | tee CourtPhoneUI.log
       - name: Export interface evidence
         if: always()
@@ -67,7 +73,7 @@ jobs:
             CourtPhoneReview
           retention-days: 7
   watch-interface:
-    if: ${{ !inputs.phone_regression_only }}
+    if: ${{ !inputs.phone_regression_only && !inputs.connect_only }}
     runs-on: macos-latest
     timeout-minutes: 100
     steps:

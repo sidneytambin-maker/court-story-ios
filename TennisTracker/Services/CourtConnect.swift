@@ -231,6 +231,16 @@ struct CourtConnectSession: Codable {
         try await refresh()
         status=push && !permitted ? "Push is disabled in iPhone Settings. Confirmations remain available inside Connect." : "Connect notification settings saved."
     }
+    func shouldPresentNotification(_ id: String) async -> Bool {
+        guard isSignedIn else { return false }
+        do { try await refresh() } catch { return false }
+        guard notificationSettings["push_enabled"] as? Bool == true, let row=notifications.first(where:{$0["id"] as? String == id}) else { return false }
+        let kind=row["kind"] as? String ?? ""
+        let key=kind == "coach_feedback" ? "coach_feedback" : kind == "connection_request" ? "connection_requests" : "sharing_confirmations"
+        guard notificationSettings[key] as? Bool != false else { return false }
+        if kind=="sharing_started" { return connections.contains { $0["id"] as? String == row["connection_id"] as? String && $0["state"] as? String == "active" && !(($0["categories"] as? [String] ?? []).isEmpty) } }
+        return true
+    }
     func registeredForPush(_ token: Data) {
         guard isSignedIn else { return }
         let defaults=UserDefaults.standard
@@ -257,6 +267,13 @@ struct CourtConnectSession: Codable {
         if !allowed.contains(player.id.uuidString.lowercased()) { allowed.append(player.id.uuidString.lowercased()) }
         state["uploadPlayers"] = allowed; try persist()
         try await sync(library)
+    }
+    func linkedPlayer(_ remote: String) -> String? { (state["linkedPlayers"] as? [String:String])?[remote.lowercased()] }
+    func linkPlayer(_ remote: String, local: String?) throws {
+        var links=state["linkedPlayers"] as? [String:String] ?? [:]
+        if let local, links.contains(where:{$0.key != remote.lowercased() && $0.value==local.lowercased()}) { throw CourtConnectError.message("This local profile is already linked to another online player. Review that link first.") }
+        links[remote.lowercased()]=local?.lowercased(); state["linkedPlayers"]=links; try persist()
+        status="Local profile link saved. Online and local histories remain separate; no records were merged."
     }
     func isPrivate(_ id: String) -> Bool { (state["privateRecords"] as? [String:Bool] ?? [:])[id.lowercased()] ?? false }
     func setPrivate(_ id: String, private value: Bool, library: AppData) async throws {

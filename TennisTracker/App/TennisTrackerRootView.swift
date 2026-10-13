@@ -93,7 +93,8 @@ struct TennisTrackerRootView: View {
             }
         }
         .environmentObject(router)
-        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("CourtConnectOpen"))) { _ in showConnect=true }
+        .onAppear { if UserDefaults.standard.bool(forKey:"CourtConnectOpenPending") && !store.needsOnboarding { UserDefaults.standard.removeObject(forKey:"CourtConnectOpenPending"); showConnect=true } }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("CourtConnectOpen"))) { _ in if !store.needsOnboarding { UserDefaults.standard.removeObject(forKey:"CourtConnectOpenPending"); showConnect=true } }
         .sheet(isPresented: $showConnect) { NavigationStack { CourtConnectView().toolbar { Button("Done") { showConnect = false } } }.environmentObject(store) }
         .sheet(item: $router.activityRoute) { route in TennisNotificationDestination(route: route).environmentObject(store) }
         .onChange(of: scenePhase) { _, phase in

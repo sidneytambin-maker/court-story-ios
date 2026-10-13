@@ -1,9 +1,9 @@
 import SwiftUI
 
 enum TennisPrivacyPolicy {
-    static let updated = "11 September 2026"
+    static let updated = "13 October 2026"
     static let website = URL(string: "https://sidneytambin-maker.github.io/court-story-ios/privacy.html")!
-    static let summary = "Your tennis library belongs to you. Court Story has no app account, shared community database, advertising or automatic analytics service."
+    static let summary = "Your sporting library belongs to you. Local tracking works without an account. Optional Court Story Connect shares only the sporting information you approve with connected coaches."
 
     struct Topic: Identifiable {
         let id: String
@@ -12,6 +12,9 @@ enum TennisPrivacyPolicy {
     }
 
     static let topics: [Topic] = [
+        Topic(id: "connect", title: "Optional Court Story Connect", text: "Court Story works without an online account. Connect is optional. Signing in does not upload your library. After you approve uploads and a coach connection, permitted sporting records are stored in the Supabase service and made available to that coach. Each player and sport has independent permissions. Share all includes sporting history and future records, but excludes private records, Health measurements, raw workouts and media. Notes, reflections and goals have separate controls. Do not include Health details or other sensitive information in text you choose to share. Court Story does not sell data or use advertising or analytics."),
+        Topic(id: "connect-notifications", title: "Connect account and notifications", text: "Connect stores your account identifier, email, chosen display name and sharing settings. Optional push notifications use an installation identifier and provider token: Apple Push Notification service on iPhone and Firebase Cloud Messaging on Android. A sharing confirmation names your coach. Manage push, connection requests, sharing confirmations and feedback alerts in Settings at any time. Phone notification settings also apply. In-app confirmations remain available when push is off."),
+        Topic(id: "connect-delete", title: "Managing and deleting online sharing", text: "Use Connect settings to pause or revoke each coach immediately on the server. Previously saved or exported copies cannot necessarily be erased remotely. Delete Connect account and cloud data removes your online account, records, connections, feedback and device registrations while preserving the independent local library. In-app notifications are retained for 90 days and audit events for 365 days; expired invitations are removed seven days after expiry. Record deletion removes its shared content and keeps only the identifiers needed to prevent old copies returning until account deletion."),
         Topic(id: "library", title: "Your tennis library", text: "Court Story stores the profiles, people, places, activities, notes, goals and preferences you enter on your device. These records power your history, statistics and achievements. Only enter information about other people that you are entitled to keep. New testers receive an empty library, never another player's records."),
         Topic(id: "watch", title: "Your paired Apple Watch", text: "Your iPhone and paired Apple Watch exchange your tennis records and settings using Apple's WatchConnectivity service. The Watch shares a local summary with its complication extension. This is not a public feed or a developer-operated server. Lock-screen notifications and watch-face complications can display activity details; you control their visibility in Apple's settings."),
         Topic(id: "health", title: "Optional Apple Health access", text: "When you choose a Health workout on Apple Watch, Court Story requests permission to read and write tennis workouts and supported measurements: heart rate, active energy, walking or running distance, and steps. It uses these to track your workout and saves its duration, available measurements and Health workout identifier with the session. That summary can sync to your paired iPhone. Basic tennis logging works without Health access. Health information is not sold or used for advertising. You can change access in Apple's Health and privacy settings."),

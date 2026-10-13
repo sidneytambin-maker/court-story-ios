@@ -4,7 +4,7 @@ import XCTest
 final class TennisPrivacyPolicyTests: XCTestCase {
     func testOfflinePolicyHasDistinctCompleteTopics() {
         let topics = TennisPrivacyPolicy.topics
-        XCTAssertEqual(Set(topics.map(\.id)), ["library", "watch", "health", "calendar", "backup", "delete", "beta", "contact"])
+        XCTAssertEqual(Set(topics.map(\.id)), ["connect", "connect-notifications", "connect-delete", "library", "watch", "health", "calendar", "backup", "delete", "beta", "contact"])
         XCTAssertEqual(Set(topics.map(\.id)).count, topics.count)
         XCTAssertTrue(topics.allSatisfy { !$0.title.isEmpty && !$0.text.isEmpty })
         XCTAssertEqual(TennisPrivacyPolicy.website.scheme, "https")

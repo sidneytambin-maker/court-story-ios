@@ -9,6 +9,7 @@ PHONE_ID = "com.inclusophy.tennistracker"
 GROUP_ID = "group.com.inclusophy.tennistracker"
 APP_NAME = "Court Story"
 BUILD = "34"
+CONNECT_DATA_TYPES = {'NSPrivacyCollectedDataTypeFitness', 'NSPrivacyCollectedDataTypeUserID', 'NSPrivacyCollectedDataTypeEmailsOrTextMessages', 'NSPrivacyCollectedDataTypeName', 'NSPrivacyCollectedDataTypeDeviceID', 'NSPrivacyCollectedDataTypeEmailAddress', 'NSPrivacyCollectedDataTypeOtherUserContent'}
 FORBIDDEN_SUFFIXES = {".json", ".db", ".sqlite", ".sqlite3", ".p8", ".p12", ".pem", ".swift", ".csv", ".log"}
 TEST_MARKERS = (b"-ui-testing-", b"-watch-manual-match", b"-test-notification-", b"TennisRegressionFixtures", b"TennisNotificationTestSupport")
 
@@ -55,8 +56,11 @@ def verify(app):
         if any(marker in binary for marker in TEST_MARKERS):
             raise ValueError("A simulator fixture or destructive test hook is present in a release executable")
         manifest = plistlib.loads((bundle / "PrivacyInfo.xcprivacy").read_bytes())
-        if manifest.get("NSPrivacyTracking") is not False or manifest.get("NSPrivacyCollectedDataTypes") != []:
-            raise ValueError("Privacy manifest does not match the local-only application")
+        collected=manifest.get("NSPrivacyCollectedDataTypes", [])
+        if manifest.get("NSPrivacyTracking") is not False or {row.get("NSPrivacyCollectedDataType") for row in collected} != CONNECT_DATA_TYPES:
+            raise ValueError("Privacy manifest must disclose optional Connect data collection")
+        if any(row.get("NSPrivacyCollectedDataTypeTracking") is not False or row.get("NSPrivacyCollectedDataTypeLinked") is not True or row.get("NSPrivacyCollectedDataTypePurposes") != ["NSPrivacyCollectedDataTypePurposeAppFunctionality"] for row in collected):
+            raise ValueError("Connect data must be declared for app functionality without tracking")
         if bundle != app and info.get("TennisSharedAppGroup") != GROUP_ID:
             raise ValueError("A temporary or incorrect App Group is configured")
         report.append({"bundle": identifier, "version": "0.1.0", "build": BUILD, "displayName": APP_NAME})

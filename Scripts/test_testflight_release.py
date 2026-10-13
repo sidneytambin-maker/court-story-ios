@@ -3,7 +3,7 @@ import plistlib
 import tempfile
 import unittest
 from pathlib import Path
-from verify_testflight_release import verify, PHONE_ID, GROUP_ID, APP_NAME, BUILD
+from verify_testflight_release import verify, PHONE_ID, GROUP_ID, APP_NAME, BUILD, CONNECT_DATA_TYPES
 
 
 class ReleasePrivacyTests(unittest.TestCase):
@@ -23,7 +23,7 @@ class ReleasePrivacyTests(unittest.TestCase):
                 info["UISupportedInterfaceOrientations"] = ["UIInterfaceOrientationPortrait", "UIInterfaceOrientationLandscapeLeft", "UIInterfaceOrientationLandscapeRight"]
                 info["UISupportedInterfaceOrientations~ipad"] = info["UISupportedInterfaceOrientations"] + ["UIInterfaceOrientationPortraitUpsideDown"]
             (path / "Info.plist").write_bytes(plistlib.dumps(info))
-            (path / "PrivacyInfo.xcprivacy").write_bytes(plistlib.dumps({"NSPrivacyTracking": False, "NSPrivacyCollectedDataTypes": []}))
+            (path / "PrivacyInfo.xcprivacy").write_bytes(plistlib.dumps({"NSPrivacyTracking": False, "NSPrivacyCollectedDataTypes": [{"NSPrivacyCollectedDataType":t,"NSPrivacyCollectedDataTypeLinked":True,"NSPrivacyCollectedDataTypeTracking":False,"NSPrivacyCollectedDataTypePurposes":["NSPrivacyCollectedDataTypePurposeAppFunctionality"]} for t in CONNECT_DATA_TYPES]}))
             (path / "Main").write_bytes(b"compiled-test-placeholder")
 
     def test_clean_structure_passes(self):
