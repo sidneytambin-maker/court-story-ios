@@ -1,0 +1,7 @@
+{
+  "name": "court-story-connect-security",
+  "private": true,
+  "type": "module",
+  "scripts": {"test": "node tests/security.mjs"},
+  "devDependencies": {"@electric-sql/pglite": "0.5.9"}
+}

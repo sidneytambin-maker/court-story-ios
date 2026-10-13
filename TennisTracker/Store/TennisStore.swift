@@ -568,6 +568,7 @@ final class TennisStore: ObservableObject {
 
     private func publishSavedData() {
         let saved = data
+        CourtConnect.shared.changed(saved)
         Task {
             await TennisNotificationService.shared.rescheduleAll(for: saved)
         }

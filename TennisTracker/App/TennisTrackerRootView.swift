@@ -3,6 +3,7 @@ import SwiftUI
 struct TennisTrackerRootView: View {
     @EnvironmentObject private var store: TennisStore
     @StateObject private var router = AppRouter()
+    @State private var showConnect = false
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -60,7 +61,7 @@ struct TennisTrackerRootView: View {
                 .toolbarBackground(store.data.settings.theme.palette.background, for: .tabBar)
                 .toolbarBackground(.visible, for: .tabBar)
                 .onOpenURL { url in
-                    router.open(url)
+                    if CourtConnect.shared.receive(url) { showConnect = true } else { router.open(url) }
                 }
                 .onReceive(NotificationCenter.default.publisher(for: .tennisTrackerOpenURL)) { notification in
                     router.openPendingIntentRoute()
@@ -83,10 +84,11 @@ struct TennisTrackerRootView: View {
             }
         }
         .environmentObject(router)
+        .sheet(isPresented: $showConnect) { NavigationStack { CourtConnectView().toolbar { Button("Done") { showConnect = false } } }.environmentObject(store) }
         .sheet(item: $router.activityRoute) { route in TennisNotificationDestination(route: route).environmentObject(store) }
         .onChange(of: scenePhase) { _, phase in
             if phase != .active { TennisSoundPlayer.shared.stop() }
-            else if !store.needsOnboarding { router.openPendingIntentRoute() }
+            else if !store.needsOnboarding { router.openPendingIntentRoute(); CourtConnect.shared.changed(store.data) }
         }
         .tint(store.data.settings.theme.accentColor)
         .preferredColorScheme(store.data.settings.theme.preferredColorScheme)

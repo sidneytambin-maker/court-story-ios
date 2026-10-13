@@ -133,6 +133,10 @@ struct SettingsView: View {
                         .accessibilityIdentifier("settingsUpcomingTournamentsToggle")
                 }
 
+                Section("Privacy and Sharing") {
+                    NavigationLink("Court Story Connect") { CourtConnectView() }
+                        .accessibilityHint("Optional account, coach invitations and sporting record permissions.")
+                }
                 Section("About") {
                     NavigationLink("Privacy Policy") { TennisPrivacyPolicyView() }
                         .accessibilityIdentifier("privacyPolicyLink")
