@@ -36,8 +36,10 @@ async function fcm(row:Delivery){
 }
 Deno.serve(async(request:Request)=>{
   if(request.method!=="POST")return new Response("Method not allowed",{status:405});
-  const given=request.headers.get("Authorization")??"";
-  const expected="Bearer "+secret("CONNECT_DISPATCH_SECRET");
+  // The gateway additionally requires a valid legacy JWT. This private header is scheduler-only.
+  const given=request.headers.get("X-Connect-Dispatch-Secret")??"";
+  const expected=Deno.env.get("CONNECT_DISPATCH_SECRET");
+  if(!expected)return new Response("Service unavailable",{status:503});
   const [a,b]=await Promise.all([crypto.subtle.digest("SHA-256",enc.encode(given)),crypto.subtle.digest("SHA-256",enc.encode(expected))]);
   if(!new Uint8Array(a).every((x,i)=>x===new Uint8Array(b)[i]))return new Response("Unauthorized",{status:401});
   let sent=0,failed=0;

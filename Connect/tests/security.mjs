@@ -126,6 +126,13 @@ await as(0);await rpc('cs_delete_my_data',[]);
 await test('Cloud data deletion clears confirmations and preferences',async()=>{assert.equal((await db.query('select count(*)::int n from public.cs_notifications')).rows[0].n,0);assert.equal((await db.query('select count(*)::int n from public.cs_notification_preferences')).rows[0].n,0)});
 await db.exec('reset role');
 await test('Cloud data deletion removes registered push tokens',async()=>assert.equal((await db.query('select count(*)::int n from cs_private.push_devices where account_id=$1',[accounts[0]])).rows[0].n,0));
+
+await db.exec('reset role');
+await test('Every Connect table including private queues enables RLS',async()=>{
+ const rows=(await db.query("select c.relrowsecurity from pg_class c join pg_namespace n on n.oid=c.relnamespace where c.relkind='r' and (n.nspname='cs_private' or (n.nspname='public' and c.relname like 'cs_%'))")).rows;
+ assert.equal(rows.length,14); assert(rows.every(r=>r.relrowsecurity));
+});
+
 console.log(`${passed} PostgreSQL security tests passed`);
 writeFileSync(new URL('./results.txt',import.meta.url),`${passed} PostgreSQL security assertions passed locally using PGlite. Synthetic accounts only. Cloud deployment and mobile flows not yet verified.\n`);
 await db.close();

@@ -23,8 +23,8 @@ Deno.test("Push dispatch requires scheduler authorization and reports no sensiti
  const dispatch=await load("../functions/dispatch-notifications/index.ts");let calls=0;
  globalThis.fetch=async()=>{calls++;return Response.json([])};
  try {
-  const denied=await dispatch(new Request("https://local.invalid",{method:"POST",headers:{Authorization:"Bearer wrong"}}));assert(denied.status===401,"Wrong scheduler secret denied");assert(calls===0,"Unauthorized request cannot claim tokens");
-  const ok=await dispatch(new Request("https://local.invalid",{method:"POST",headers:{Authorization:"Bearer synthetic-scheduler-secret"}}));assert(ok.status===200,"Authorized empty queue succeeds");const body=await ok.json();assert(body.sent===0&&body.failed===0,"Only counts returned");
-  globalThis.fetch=async()=>{throw new Error("sensitive-provider-detail")};const failure=await dispatch(new Request("https://local.invalid",{method:"POST",headers:{Authorization:"Bearer synthetic-scheduler-secret"}}));assert(failure.status===503,"Provider failure is retryable");assert(!(await failure.text()).includes("sensitive-provider-detail"),"Sensitive provider details are not returned");
+  const denied=await dispatch(new Request("https://local.invalid",{method:"POST",headers:{"X-Connect-Dispatch-Secret":"wrong"}}));assert(denied.status===401,"Wrong scheduler secret denied");assert(calls===0,"Unauthorized request cannot claim tokens");
+  const ok=await dispatch(new Request("https://local.invalid",{method:"POST",headers:{"X-Connect-Dispatch-Secret":"synthetic-scheduler-secret"}}));assert(ok.status===200,"Authorized empty queue succeeds");const body=await ok.json();assert(body.sent===0&&body.failed===0,"Only counts returned");
+  globalThis.fetch=async()=>{throw new Error("sensitive-provider-detail")};const failure=await dispatch(new Request("https://local.invalid",{method:"POST",headers:{"X-Connect-Dispatch-Secret":"synthetic-scheduler-secret"}}));assert(failure.status===503,"Provider failure is retryable");assert(!(await failure.text()).includes("sensitive-provider-detail"),"Sensitive provider details are not returned");
  } finally {globalThis.fetch=originalFetch;}
 });

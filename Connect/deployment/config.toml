@@ -1,9 +1,9 @@
 project_id = "court-story-connect"
 
-# Both handlers authenticate explicitly. Gateway legacy-JWT validation would
-# reject the scheduler's secret and can reject current Auth signing algorithms.
+# Account deletion validates the current Auth session directly with Auth.
 [functions.delete-account]
 verify_jwt = false
 
 [functions.dispatch-notifications]
-verify_jwt = false
+# Scheduler supplies a legacy anon JWT plus a separate private dispatch header.
+verify_jwt = true
