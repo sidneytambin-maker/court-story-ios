@@ -16,20 +16,30 @@ struct CourtConnectView: View {
     @State private var invitationPreview: [String:Any] = [:]
     @State private var reviewInvitation = false
     private var player: PlayerProfile? { store.workspaceOwner }
+    private var signInForm: some View {
+        ScrollView {
+            VStack(alignment:.leading,spacing:20) {
+                Text("Your privacy").font(.headline).accessibilityAddTraits(.isHeader)
+                Text("Connect is optional. Signing in does not upload your library. Health data and media are never included. Keep personal information out of sporting notes you choose to share.").fixedSize(horizontal:false,vertical:true)
+                Text(connect.status).fixedSize(horizontal:false,vertical:true).accessibilityIdentifier("connectStatus")
+                Text("Sign in with an email code").font(.headline).fixedSize(horizontal:false,vertical:true).accessibilityAddTraits(.isHeader)
+                Text("Email address").fixedSize(horizontal:false,vertical:true)
+                TextField("",text:$email).accessibilityLabel("Email address").textContentType(.emailAddress).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled().textFieldStyle(.roundedBorder).frame(minHeight:44)
+                Button { connect.run { try await connect.sendCode(email:email) } } label: { Text("Send sign-in code").fixedSize(horizontal:false,vertical:true).frame(maxWidth:.infinity,minHeight:44) }.buttonStyle(.borderedProminent)
+                Text("Email sign-in code").fixedSize(horizontal:false,vertical:true)
+                TextField("",text:$signInCode).accessibilityLabel("Email sign-in code").textContentType(.oneTimeCode).keyboardType(.numberPad).textFieldStyle(.roundedBorder).frame(minHeight:44)
+                Button { connect.run { try await connect.verify(email:email,code:signInCode) } } label: { Text("Sign in").fixedSize(horizontal:false,vertical:true).frame(maxWidth:.infinity,minHeight:44) }.buttonStyle(.borderedProminent)
+            }.font(.body).padding()
+        }.background(Color(uiColor:.systemBackground))
+    }
     var body: some View {
+        Group {
+        if !connect.isSignedIn { signInForm } else {
         Form {
             Section {
                 Text("Connect is optional. Signing in does not upload your library. Health data and media are never included. Keep personal information out of sporting notes you choose to share.").fixedSize(horizontal:false,vertical:true)
                 Text(connect.status).fixedSize(horizontal:false,vertical:true).accessibilityIdentifier("connectStatus")
             } header: { Text("Your privacy").foregroundStyle(Color(uiColor:.label)) }
-            if !connect.isSignedIn {
-                Section {
-                    VStack(alignment:.leading) { Text("Email address").foregroundStyle(Color(uiColor:.label)); TextField("",text:$email).accessibilityLabel("Email address").textContentType(.emailAddress).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled().frame(minHeight:44) }
-                    Button { connect.run { try await connect.sendCode(email:email) } } label: { Text("Send sign-in code").fixedSize(horizontal:false,vertical:true) }
-                    VStack(alignment:.leading) { Text("Email sign-in code").foregroundStyle(Color(uiColor:.label)); TextField("",text:$signInCode).accessibilityLabel("Email sign-in code").textContentType(.oneTimeCode).keyboardType(.numberPad).frame(minHeight:44) }
-                    Button("Sign in") { connect.run { try await connect.verify(email:email,code:signInCode) } }
-                } header: { Text("Sign in with an email code").foregroundStyle(Color(uiColor:.label)) }
-            } else {
                 Section("Invitations") {
                     Picker("Invite as",selection:$invitationRole) { Text("Player inviting coach").tag("player"); Text("Coach requesting player").tag("coach") }
                     Text("Sport: \(store.selectedSport.name)")
@@ -104,7 +114,9 @@ struct CourtConnectView: View {
                 }
             }
         }
+        }
         .navigationTitle("Court Story Connect")
+        .toolbar(.hidden,for:.tabBar)
         .disabled(connect.busy)
         .overlay { if connect.busy { ProgressView("Connecting") } }
         .onAppear { invitation = connect.pendingCode; if connect.isSignedIn { connect.run { try await connect.refresh() } } }
