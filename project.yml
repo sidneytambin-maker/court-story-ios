@@ -19,6 +19,8 @@ targets:
     info:
       path: TennisTracker/Info.plist
       properties:
+        BGTaskSchedulerPermittedIdentifiers: [com.inclusophy.tennistracker.connect-refresh]
+        UIBackgroundModes: [fetch]
         CFBundleDisplayName: Court Story
         CFBundleName: Court Story
         CFBundleShortVersionString: "0.9.0"

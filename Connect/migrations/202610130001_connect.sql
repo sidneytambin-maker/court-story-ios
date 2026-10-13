@@ -168,14 +168,14 @@ begin
  insert into public.cs_audit(actor_id,player_account,coach_account,action,entity_id) values(auth.uid(),c.player_account,c.coach_account,'permission_'||p_state,p_id);
 end $$;
 
-create function public.cs_put_record(p_operation uuid,p_id uuid,p_player uuid,p_sport text,p_category text,p_occurred timestamptz,p_body jsonb,p_expected bigint default 0,p_private boolean default false,p_deleted boolean default false)
+create function public.cs_put_record(p_operation uuid,p_id uuid,p_player uuid,p_sport text,p_category text,p_occurred timestamptz,p_body jsonb,p_expected bigint default 0,p_private boolean default false,p_deleted boolean default false,p_people jsonb default '[]'::jsonb)
 returns jsonb language plpgsql security definer set search_path='' as $$
-declare previous cs_private.operations; r public.cs_records; response jsonb; request jsonb;
+declare previous cs_private.operations; r public.cs_records; response jsonb; request jsonb; person jsonb;
 begin
  if auth.uid() is null or not exists(select 1 from public.cs_profiles where id=p_player and account_id=auth.uid()) then raise exception 'Own player profile required'; end if;
  -- Reject unknown/nested fields: never accept a serialized local library or Health object.
- if jsonb_typeof(p_body)<>'object' or exists(select 1 from jsonb_each(p_body) e where jsonb_typeof(e.value) not in ('string','number','null')) then raise exception 'Structured sporting fields only'; end if;
- request:=jsonb_build_array(p_id,p_player,p_sport,p_category,p_occurred,p_body,p_expected,p_private,p_deleted);
+ if jsonb_typeof(p_body)<>'object' or exists(select 1 from jsonb_each(p_body) e where jsonb_typeof(e.value) not in ('string','number','boolean','null')) then raise exception 'Structured sporting fields only'; end if;
+ request:=jsonb_build_array(p_id,p_player,p_sport,p_category,p_occurred,p_body,p_expected,p_private,p_deleted,p_people);
  perform pg_advisory_xact_lock(1734219001);
  select * into previous from cs_private.operations where account_id=auth.uid() and operation_id=p_operation;
  if found then
@@ -192,6 +192,14 @@ begin
   if p_expected<>0 then raise exception 'Conflict: missing record' using errcode='40001'; end if;
   insert into public.cs_records(id,player_id,owner_id,sport,category,occurred_at,body,private,deleted,change_id)
   values(p_id,p_player,auth.uid(),p_sport,p_category,p_occurred,case when p_deleted then '{}'::jsonb else p_body end,p_private,p_deleted,0) returning * into r;
+ end if;
+ if jsonb_typeof(p_people)<>'array' or jsonb_array_length(p_people)>64 or octet_length(p_people::text)>16384 then raise exception 'Invalid participants'; end if;
+ delete from public.cs_participants where record_id=p_id;
+ if not p_deleted then
+  for person in select value from jsonb_array_elements(p_people) loop
+   if person-array['id','display_name','team']<>'{}'::jsonb then raise exception 'Invalid participant fields'; end if;
+   insert into public.cs_participants values(p_id,(person->>'id')::uuid,person->>'display_name',(person->>'team')::integer);
+  end loop;
  end if;
  response:=jsonb_build_object('id',r.id,'revision',r.revision,'change_id',r.change_id);
  insert into cs_private.operations(account_id,operation_id,request_hash,response) values(auth.uid(),p_operation,sha256(convert_to(request::text,'UTF8')),response);
@@ -222,6 +230,6 @@ begin
 end $$;
 
 revoke execute on all functions in schema cs_private from public,anon;
-revoke execute on function public.cs_register_profile(uuid,text),public.cs_create_invitation(text,uuid,text,text),public.cs_accept_invitation(text,uuid),public.cs_set_permission(uuid,text,text[],text,timestamptz,timestamptz,boolean,text),public.cs_put_record(uuid,uuid,uuid,text,text,timestamptz,jsonb,bigint,boolean,boolean),public.cs_add_feedback(uuid,uuid,uuid,text,text),public.cs_review_feedback(uuid,boolean) from public,anon;
-grant execute on function public.cs_register_profile(uuid,text),public.cs_create_invitation(text,uuid,text,text),public.cs_accept_invitation(text,uuid),public.cs_set_permission(uuid,text,text[],text,timestamptz,timestamptz,boolean,text),public.cs_put_record(uuid,uuid,uuid,text,text,timestamptz,jsonb,bigint,boolean,boolean),public.cs_add_feedback(uuid,uuid,uuid,text,text),public.cs_review_feedback(uuid,boolean) to authenticated;
+revoke execute on function public.cs_register_profile(uuid,text),public.cs_create_invitation(text,uuid,text,text),public.cs_accept_invitation(text,uuid),public.cs_set_permission(uuid,text,text[],text,timestamptz,timestamptz,boolean,text),public.cs_put_record(uuid,uuid,uuid,text,text,timestamptz,jsonb,bigint,boolean,boolean,jsonb),public.cs_add_feedback(uuid,uuid,uuid,text,text),public.cs_review_feedback(uuid,boolean) from public,anon;
+grant execute on function public.cs_register_profile(uuid,text),public.cs_create_invitation(text,uuid,text,text),public.cs_accept_invitation(text,uuid),public.cs_set_permission(uuid,text,text[],text,timestamptz,timestamptz,boolean,text),public.cs_put_record(uuid,uuid,uuid,text,text,timestamptz,jsonb,bigint,boolean,boolean,jsonb),public.cs_add_feedback(uuid,uuid,uuid,text,text),public.cs_review_feedback(uuid,boolean) to authenticated;
 commit;

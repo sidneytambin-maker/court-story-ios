@@ -60,9 +60,6 @@ struct TennisTrackerRootView: View {
                 .onChange(of: store.courtRole) { _, _ in router.selectedTab = "dashboard" }
                 .toolbarBackground(store.data.settings.theme.palette.background, for: .tabBar)
                 .toolbarBackground(.visible, for: .tabBar)
-                .onOpenURL { url in
-                    if CourtConnect.shared.receive(url) { showConnect = true } else { router.open(url) }
-                }
                 .onReceive(NotificationCenter.default.publisher(for: .tennisTrackerOpenURL)) { notification in
                     router.openPendingIntentRoute()
                 }
@@ -81,6 +78,18 @@ struct TennisTrackerRootView: View {
                     }
                 }
                 #endif
+            }
+        }
+        .onOpenURL { url in
+            if CourtConnect.shared.receive(url) { if !store.needsOnboarding { showConnect=true } }
+            else { router.open(url) }
+        }
+        .onChange(of:store.needsOnboarding) { _, needed in if !needed && !CourtConnect.shared.pendingCode.isEmpty { showConnect=true } }
+        .task(id:scenePhase) {
+            guard scenePhase == .active else { return }
+            while !Task.isCancelled {
+                if !store.needsOnboarding && CourtConnect.shared.isSignedIn { do { try await CourtConnect.shared.sync(store.data) } catch { CourtConnect.shared.status="Sync will retry. " + error.localizedDescription } }
+                do { try await Task.sleep(for:.seconds(30)) } catch { return }
             }
         }
         .environmentObject(router)

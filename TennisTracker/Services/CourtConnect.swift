@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import BackgroundTasks
 import Security
 import CryptoKit
 import UIKit
@@ -43,6 +44,7 @@ struct CourtConnectSession: Codable {
     @Published private(set) var session: CourtConnectSession?
     @Published private(set) var connections: [[String: Any]] = []
     @Published private(set) var records: [[String: Any]] = []
+    @Published private(set) var participants: [[String:Any]] = []
     @Published private(set) var feedback: [[String: Any]] = []
     @Published private(set) var notifications: [[String: Any]] = []
     @Published private(set) var notificationSettings: [String: Any] = [:]
@@ -109,6 +111,14 @@ struct CourtConnectSession: Codable {
         session = nil; records = []; feedback = []; connections = []; notifications = []; notificationSettings = [:]; state = [:]
         status = "Signed out. Your local sporting records are unchanged."
     }
+    func deleteAccount() async throws {
+        _ = try await request("/functions/v1/delete-account",method:"DELETE")
+        try? FileManager.default.removeItem(at:stateURL)
+        UIApplication.shared.unregisterForRemoteNotifications()
+        SecItemDelete([kSecClass as String:kSecClassGenericPassword,kSecAttrService as String:keychainService] as CFDictionary)
+        session=nil; state=[:]; records=[]; participants=[]; connections=[]; feedback=[]; notifications=[]; notificationSettings=[:]
+        status="Connect account and cloud data deleted. Your local sporting library is unchanged."
+    }
     func receive(_ url: URL) -> Bool {
         guard !linkHost.isEmpty, let code = CourtConnectProtocol.code(url.absoluteString, host: linkHost) else { return false }
         pendingCode = code; UserDefaults.standard.set(code, forKey:"CourtConnectPendingInvitation"); return true
@@ -149,10 +159,10 @@ struct CourtConnectSession: Codable {
         try saveSession(JSONDecoder().decode(CourtConnectSession.self,from:JSONSerialization.data(withJSONObject:response)))
         try await refresh(); status = "Signed in. Choose a player and approve sharing to upload sporting records."
     }
-    private func allRows(_ table: String) async throws -> [[String:Any]] {
+    private func allRows(_ table: String, order: String = "id") async throws -> [[String:Any]] {
         var rows: [[String:Any]] = []; var offset = 0
         while true {
-            let next = try await request("/rest/v1/"+table+"?select=*&order=id&limit=200&offset=\(offset)",method:"GET") as? [[String:Any]] ?? []
+            let next = try await request("/rest/v1/"+table+"?select=*&order=\(order)&limit=200&offset=\(offset)",method:"GET") as? [[String:Any]] ?? []
             rows += next; if next.count < 200 { return rows }; offset += next.count
         }
     }
@@ -175,12 +185,13 @@ struct CourtConnectSession: Codable {
             for row in page { if let id=row["id"] as? String { permitted.insert(id); after=id } }
             if page.count<200 { break }
         }
+        let people=try await allRows("cs_participants",order:"record_id,id")
         let messages=try await allRows("cs_feedback")
         let confirmations=try await allRows("cs_notifications")
         let preferences=(try await request("/rest/v1/cs_notification_preferences?select=*&limit=1",method:"GET") as? [[String:Any]])?.first ?? [:]
         guard actor==accountID else { return }
         connections=latest; records=cache.filter { permitted.contains($0.key) }.values.sorted { ($0["occurred_at"] as? String ?? "") > ($1["occurred_at"] as? String ?? "") }
-        recordCursor=cursor; connectionFingerprint=fingerprint; feedback=messages; notifications=confirmations; notificationSettings=preferences
+        recordCursor=cursor; connectionFingerprint=fingerprint; participants=people; feedback=messages; notifications=confirmations; notificationSettings=preferences
         status="Sharing access refreshed."
     }
     func register(_ player: PlayerProfile) async throws {
@@ -261,6 +272,11 @@ struct CourtConnectSession: Codable {
         state["uploadPlayers"] = [String](); state["queue"] = [[String:Any]](); try persist()
         status = "Uploads paused on this device. Use Revoke to remove existing server access."
     }
+    static func scheduleBackground() {
+        guard shared.isSignedIn else { return }
+        let request=BGAppRefreshTaskRequest(identifier:"com.inclusophy.tennistracker.connect-refresh"); request.earliestBeginDate=Date(timeIntervalSinceNow:900)
+        try? BGTaskScheduler.shared.submit(request)
+    }
     func changed(_ library: AppData) {
         guard isSignedIn, !(state["uploadPlayers"] as? [String] ?? []).isEmpty else { return }
         Task { do { try await sync(library) } catch { status = "Sync needs attention. " + error.localizedDescription } }
@@ -305,7 +321,14 @@ struct CourtConnectSession: Codable {
                 for key in ["status", "matchType", "matchFormat", "yourSetsWon", "opponentSetsWon", "aces", "doubleFaults", "winners", "unforcedErrors", "hadTiebreak", "tiebreakScore", "tournamentID", "trainingSessionID", "finalResult", "matchesPlayed", "format", "stageReached", "finishingPosition", "endDate"] {
                     if let value=row[key], value is String || value is NSNumber { body[key]=value }
                 }
-                let record: [String:Any] = ["p_id":id.lowercased(),"p_player":player.lowercased(),"p_sport":key,"p_category":category,"p_occurred":date,"p_body":body,"p_private":false,"p_deleted":false]
+                var record: [String:Any] = ["p_id":id.lowercased(),"p_player":player.lowercased(),"p_sport":key,"p_category":category,"p_occurred":date,"p_body":body,"p_private":false,"p_deleted":false]
+                if category=="match", let uuid=UUID(uuidString:id) {
+                    var people: [[String:Any]]=[]
+                    for (key,team) in [("playerName",0),("partnerName",0),("opponentName",1),("opponent2Name",1)] {
+                        if let name=row[key] as? String, !name.isEmpty { people.append(["id":CourtConnectProtocol.derivedID(uuid,category:key).uuidString.lowercased(),"display_name":name,"team":team]) }
+                    }
+                    record["p_people"]=people
+                }
                 output.append(record)
                 if let uuid=UUID(uuidString:id) {
                     let reflectionKeys=category == "match" ? ["matchStory","matchStrengths","matchNeedsWork","pressureMoment"] : ["sessionOutcome"]
@@ -313,11 +336,11 @@ struct CourtConnectSession: Codable {
                     let goalKeys=category == "tournament" ? ["goal"] : ["nextPracticeFocus"]
                     let goal=goalKeys.compactMap { row[$0] as? String }.filter { !$0.isEmpty }.joined(separator:"\n")
                     for (derivedCategory,text) in [("reflection",reflection),("goal",goal)] where !text.isEmpty {
-                        var derived=record; derived["p_id"]=CourtConnectProtocol.derivedID(uuid,category:derivedCategory).uuidString.lowercased(); derived["p_category"]=derivedCategory; derived["p_body"]=["text":text]; output.append(derived)
+                        var derived=record; derived["p_people"]=[[String:Any]](); derived["p_id"]=CourtConnectProtocol.derivedID(uuid,category:derivedCategory).uuidString.lowercased(); derived["p_category"]=derivedCategory; derived["p_body"]=["text":text]; output.append(derived)
                     }
                 }
                 if let notes = row["notes"] as? String, !notes.isEmpty, let uuid = UUID(uuidString:id) {
-                    var note = record; note["p_id"] = CourtConnectProtocol.noteID(uuid).uuidString.lowercased(); note["p_category"] = "note"; note["p_body"] = ["text":notes]
+                    var note = record; note["p_people"]=[[String:Any]](); note["p_id"] = CourtConnectProtocol.noteID(uuid).uuidString.lowercased(); note["p_category"] = "note"; note["p_body"] = ["text":notes]
                     output.append(note)
                 }
             }
@@ -329,6 +352,7 @@ struct CourtConnectSession: Codable {
         if syncing { pendingLibrary=library; return }
         syncing=true
         defer { syncing=false; if let next=pendingLibrary { pendingLibrary=nil; changed(next) } }
+        Self.scheduleBackground()
         let actor = accountID
         let players = state["uploadPlayers"] as? [String] ?? []
         var queue = state["queue"] as? [[String:Any]] ?? []
@@ -346,7 +370,7 @@ struct CourtConnectSession: Codable {
         }
         let present=Set(projections.compactMap { $0["p_id"] as? String })
         for (id,metadata) in uploaded where !present.contains(id) && players.contains(metadata["p_player"] as? String ?? "") && !queue.contains(where:{ $0["p_id"] as? String == id }) {
-            var tombstone=metadata; tombstone["p_body"]=[String:String](); tombstone["p_deleted"]=true; tombstone["p_private"]=true; tombstone["p_operation"]=UUID().uuidString; tombstone["p_expected"]=revisions[id] ?? 0; tombstone["local_hash"]="deleted"; queue.append(tombstone)
+            var tombstone=metadata; tombstone["p_body"]=[String:String](); tombstone["p_people"]=[[String:Any]](); tombstone["p_deleted"]=true; tombstone["p_private"]=true; tombstone["p_operation"]=UUID().uuidString; tombstone["p_expected"]=revisions[id] ?? 0; tombstone["local_hash"]="deleted"; queue.append(tombstone)
         }
         state["queue"]=queue; try persist()
         // Build the durable queue before network access, then recheck server permission before sending.
@@ -360,7 +384,7 @@ struct CourtConnectSession: Codable {
             guard actor == accountID else { return }
             hashes[id] = hash; revisions[id] = response["revision"] as? Int
             if item["p_deleted"] as? Bool == true { uploaded.removeValue(forKey:id) }
-            else { var metadata=item; metadata.removeValue(forKey:"p_body"); metadata.removeValue(forKey:"p_expected"); metadata.removeValue(forKey:"p_operation"); uploaded[id]=metadata }
+            else { var metadata=item; metadata.removeValue(forKey:"p_body"); metadata.removeValue(forKey:"p_people"); metadata.removeValue(forKey:"p_expected"); metadata.removeValue(forKey:"p_operation"); uploaded[id]=metadata }
             state["uploaded"]=uploaded
             queue.removeFirst(); state["queue"] = queue; state["hashes"] = hashes; state["revisions"] = revisions; try persist()
         }

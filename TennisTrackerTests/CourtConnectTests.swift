@@ -26,4 +26,19 @@ import XCTest
         XCTAssertEqual((sporting["p_body"] as? [String:Any])?["score"] as? String,"6–4")
         XCTAssertEqual(library.matches[0],match)
     }
+    func testAllSportingCategoriesStayUnderTheirExplicitPlayer() throws {
+        let owner=PlayerProfile(), other=PlayerProfile()
+        var match=MatchRecord(playerID:owner.id); match.notes="Shared note"; match.matchStory="Sporting reflection"; match.nextPracticeFocus="Practice volleys"; match.playerName="Synthetic player"; match.partnerName="Synthetic partner"; match.opponentName="Synthetic opponent"
+        var training=TrainingSession(playerID:owner.id); training.focus="Footwork"; training.durationMinutes=45
+        var tournament=TournamentRecord(playerID:owner.id); tournament.name="Synthetic event"; tournament.goal="Consistent serves"
+        var library=AppData(); library.players=[owner,other]; library.matches=[match,MatchRecord(playerID:other.id)]; library.trainingSessions=[training]; library.tournaments=[tournament]
+        let projected=try CourtConnect.projections(library,players:[owner.id.uuidString.lowercased()])
+        XCTAssertEqual(Set(projected.compactMap { $0["p_category"] as? String }),Set(CourtConnectProtocol.categories))
+        XCTAssertTrue(projected.allSatisfy { $0["p_player"] as? String == owner.id.uuidString.lowercased() })
+        let people=projected.first { $0["p_category"] as? String == "match" }?["p_people"] as? [[String:Any]]
+        XCTAssertEqual(people?.count,3)
+        XCTAssertEqual(people?[1]["team"] as? Int,0)
+        XCTAssertEqual(people?[2]["team"] as? Int,1)
+        XCTAssertEqual(Set(projected.compactMap { $0["p_id"] as? String }).count,projected.count)
+    }
 }

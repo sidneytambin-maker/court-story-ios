@@ -1,6 +1,7 @@
 """Create an isolated simulator compatible with the selected Xcode SDK."""
 import argparse
 import json
+import re
 import subprocess
 import sys
 
@@ -22,6 +23,12 @@ def select_runtime(runtimes, platform, sdk):
     if not supported:
         raise RuntimeError(f"No available {platform} runtime compatible with SDK {sdk}")
     return max(supported, key=lambda item: version(item["version"]))
+
+
+def select_device(preferred):
+    # simctl does not promise chronological ordering; [-1] can select an obsolete phone.
+    return max(preferred, key=lambda item: (version(item.get("minRuntimeVersionString", "0")),
+               tuple(int(n) for n in re.findall(r"\d+", item["name"]))))
 
 
 def main():
@@ -50,7 +57,7 @@ def main():
         preferred = [item for item in devices if "Pro" in item["name"]]
     if not preferred:
         raise RuntimeError(f"No supported simulator model for {args.kind}")
-    device = preferred[-1]
+    device = select_device(preferred)
     print(json.dumps({"xcode": run("xcodebuild", "-version"), "sdk": sdk,
                       "runtime": runtime["identifier"], "device": device["name"]}), file=sys.stderr)
     print(run("xcrun", "simctl", "create", "Court-" + args.kind, device["identifier"], runtime["identifier"]))

@@ -1,6 +1,7 @@
 import SwiftUI
 import UserNotifications
 import UIKit
+import BackgroundTasks
 
 final class TennisTrackerAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
@@ -10,6 +11,16 @@ final class TennisTrackerAppDelegate: NSObject, UIApplicationDelegate, UNUserNot
         Task { @MainActor in CourtConnect.shared.status="Push registration failed. Confirmations remain available in Connect." }
     }
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        BGTaskScheduler.shared.register(forTaskWithIdentifier:"com.inclusophy.tennistracker.connect-refresh",using:nil) { task in
+            let work=Task { @MainActor in
+                guard UIApplication.shared.isProtectedDataAvailable else { task.setTaskCompleted(success:false); return }
+                let store=TennisStore()
+                do { if store.storageError==nil && CourtConnect.shared.isSignedIn { try await CourtConnect.shared.sync(store.data) }; task.setTaskCompleted(success:true) }
+                catch { task.setTaskCompleted(success:false) }
+                CourtConnect.scheduleBackground()
+            }
+            task.expirationHandler={ work.cancel() }
+        }
         UNUserNotificationCenter.current().delegate = self
         return true
     }

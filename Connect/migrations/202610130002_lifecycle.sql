@@ -2,6 +2,7 @@ begin;
 create function public.cs_replace_participants(p_record uuid,p_expected bigint,p_people jsonb) returns bigint language plpgsql security definer set search_path='' as $$
 declare r public.cs_records; person jsonb; revision bigint;
 begin
+ perform pg_advisory_xact_lock(1734219001);
  select * into r from public.cs_records where id=p_record for update;
  if r.id is null or auth.uid() is null or r.owner_id<>auth.uid() or r.deleted then raise exception 'Own active record required'; end if;
  if r.revision<>p_expected then raise exception 'Conflict: refresh before retrying' using errcode='40001'; end if;

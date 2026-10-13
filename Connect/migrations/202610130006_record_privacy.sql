@@ -2,6 +2,7 @@ begin;
 create function public.cs_set_record_private(p_id uuid,p_private boolean,p_expected bigint) returns bigint language plpgsql security definer set search_path='' as $$
 declare r public.cs_records; revision bigint;
 begin
+ perform pg_advisory_xact_lock(1734219001);
  select * into r from public.cs_records where id=p_id and owner_id=auth.uid() for update;
  if r.id is null or r.deleted then raise exception 'Own active record required'; end if;
  if r.revision<>p_expected then raise exception 'Conflict: refresh before retrying' using errcode='40001'; end if;

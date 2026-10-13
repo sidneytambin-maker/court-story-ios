@@ -11,6 +11,7 @@ struct CourtConnectView: View {
     @State private var invitationRole = "player"
     @State private var selectedConnection: ConnectSelection?
     @State private var consent = false
+    @State private var deleteAccount = false
     @State private var invitationPreview: [String:Any] = [:]
     @State private var reviewInvitation = false
     private var player: PlayerProfile? { store.workspaceOwner }
@@ -76,13 +77,19 @@ struct CourtConnectView: View {
                         Text(item.value["message"] as? String ?? "Connection updated")
                     }
                 }
-                Section("Account") { Button("Sign out") { connect.run { try await connect.signOut() } } }
+                Section("Account") {
+                    Button("Sign out") { connect.run { try await connect.signOut() } }
+                    Button("Delete Connect account and cloud data",role:.destructive) { deleteAccount=true }
+                }
             }
         }
         .navigationTitle("Court Story Connect")
         .disabled(connect.busy)
         .overlay { if connect.busy { ProgressView("Connecting") } }
         .onAppear { invitation = connect.pendingCode; if connect.isSignedIn { connect.run { try await connect.refresh() } } }
+        .confirmationDialog("Delete your Connect account and cloud data?",isPresented:$deleteAccount,titleVisibility:.visible) {
+            Button("Delete account and cloud data",role:.destructive) { connect.run { try await connect.deleteAccount() } }
+        } message: { Text("This removes all your online connections, shared records and feedback. Your local sporting library stays on this device. Copies already saved by coaches cannot necessarily be erased.") }
         .alert("Connection invitation",isPresented:$reviewInvitation) {
             Button("Accept") { connect.run { try await connect.accept(invitation,player:player) } }
             Button("Decline",role:.destructive) { connect.run { try await connect.decline(invitation); invitation="" } }
@@ -182,9 +189,18 @@ struct ConnectRecordView: View {
     @ObservedObject private var connect = CourtConnect.shared
     @State private var message = ""
     @State private var kind = "feedback"
+    static func fieldLabel(_ key: String) -> String {
+        key.replacingOccurrences(of:"([a-z])([A-Z])",with:"$1 $2",options:.regularExpression).replacingOccurrences(of:"_",with:" ").capitalized
+    }
     var body: some View {
         Form {
-            Section("Sporting record") { Text(record.title); ForEach(record.body.keys.sorted(),id:\.self) { key in Text(key + ": " + String(describing:record.body[key] ?? "")) } }
+            if let record=connect.records.compactMap(ConnectRecord.init).first(where:{$0.id==self.record.id}) {
+            Section("Sporting record") { Text(record.title); ForEach(record.body.keys.sorted(),id:\.self) { key in Text(Self.fieldLabel(key) + ": " + String(describing:record.body[key] ?? "")) } }
+            Section("Participants and teams") {
+                ForEach(connect.participants.compactMap(ConnectSelection.init).filter { $0.value["record_id"] as? String == record.id }) { person in
+                    Text((person.value["display_name"] as? String ?? "Participant") + " · Team " + String((person.value["team"] as? Int ?? 0)+1))
+                }
+            }
             Section("Coach feedback") {
                 ForEach(connect.feedback.compactMap(ConnectSelection.init).filter { $0.value["record_id"] as? String == record.id }) { item in
                     Text(item.value["text"] as? String ?? "")
@@ -203,6 +219,7 @@ struct ConnectRecordView: View {
                 }
                 Text("Suggestions never automatically change official scores. The player reviews and edits their own record.")
             }
+            } else { Text("This shared record is no longer available. Refresh connections to check current access.") }
             Text(connect.status)
         }.navigationTitle("Shared record").disabled(connect.busy)
     }
