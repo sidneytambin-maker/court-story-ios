@@ -3,6 +3,7 @@ import SwiftUI
 struct CourtConnectView: View {
     @EnvironmentObject private var store: TennisStore
     @ObservedObject private var connect = CourtConnect.shared
+    @State private var playerSearch = ""
     @State private var email = ""
     @State private var signInCode = ""
     @State private var invitation = ""
@@ -18,8 +19,8 @@ struct CourtConnectView: View {
     var body: some View {
         Form {
             Section("Your privacy") {
-                Text("Connect is optional. Signing in does not upload your library. Health data and media are never included. Keep personal information out of sporting notes you choose to share.")
-                Text(connect.status).accessibilityIdentifier("connectStatus")
+                Text("Connect is optional. Signing in does not upload your library. Health data and media are never included. Keep personal information out of sporting notes you choose to share.").fixedSize(horizontal:false,vertical:true)
+                Text(connect.status).fixedSize(horizontal:false,vertical:true).accessibilityIdentifier("connectStatus")
             }
             if !connect.isSignedIn {
                 Section("Sign in with an email code") {
@@ -83,7 +84,8 @@ struct CourtConnectView: View {
                     }
                 }
                 Section("Players and shared records") {
-                    ForEach(connect.playerGroups) { group in
+                    TextField("Find a player",text:$playerSearch).textInputAutocapitalization(.never).autocorrectionDisabled()
+                    ForEach(connect.playerGroups.filter { playerSearch.isEmpty || $0.name.localizedCaseInsensitiveContains(playerSearch) }) { group in
                         NavigationLink { ConnectPlayerDashboard(player:group) } label: {
                             VStack(alignment:.leading) { Text(group.name); Text(group.id == player?.id.uuidString.lowercased() ? "Your shared player record" : "Separate player record").font(.caption) }
                         }
@@ -280,7 +282,7 @@ struct ConnectPlayerDashboard: View {
     @ObservedObject private var connect=CourtConnect.shared
     @State private var sport="All approved sports"
     @State private var category="All categories"
-    private var rows: [ConnectRecord] { connect.records.filter { ($0["player_id"] as? String)?.lowercased()==player.id }.compactMap(ConnectRecord.init) }
+    private var rows: [ConnectRecord] { connect.records.filter { ($0["player_id"] as? String)?.lowercased()==player.id }.compactMap(ConnectRecord.init).sorted { CourtConnect.parseDate($0.value["occurred_at"] as? String ?? "") > CourtConnect.parseDate($1.value["occurred_at"] as? String ?? "") } }
     private var sports: [String] { Array(Set(rows.map(\.sport))).sorted() }
     var body: some View {
         List {

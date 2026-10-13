@@ -380,16 +380,17 @@ struct CourtConnectSession: Codable {
         var queue=state["queue"] as? [[String:Any]] ?? []
         guard let index=queue.firstIndex(where: { $0["p_id"] as? String == id }) else { return }
         var revisions=state["revisions"] as? [String:Int] ?? [:]; revisions[id]=remote["revision"] as? Int
-        if useDevice {
-            guard remote["deleted"] as? Bool != true else { throw CourtConnectError.message("A deleted online record cannot be restored by a queued edit.") }
-            queue[index]["p_expected"]=remote["revision"]; queue[index]["p_operation"]=UUID().uuidString
             if remote["private"] as? Bool == true {
                 var privacy=state["privateRecords"] as? [String:Bool] ?? [:]; privacy[id]=true; state["privateRecords"]=privacy; queue[index]["p_private"]=true
                 var sporting=queue[index]; sporting.removeValue(forKey:"p_expected"); sporting.removeValue(forKey:"p_operation"); sporting.removeValue(forKey:"local_hash")
                 queue[index]["local_hash"]=SHA256.hash(data:try JSONSerialization.data(withJSONObject:sporting,options:.sortedKeys)).map { String(format:"%02x",$0) }.joined()
             }
+        if useDevice {
+            guard remote["deleted"] as? Bool != true else { throw CourtConnectError.message("A deleted online record cannot be restored by a queued edit.") }
+            queue[index]["p_expected"]=remote["revision"]; queue[index]["p_operation"]=UUID().uuidString
+
         } else {
-            var hashes=state["hashes"] as? [String:String] ?? [:]; hashes[id]=queue[index]["local_hash"] as? String; state["hashes"]=hashes; queue.remove(at:index)
+            var hashes=state["hashes"] as? [String:String] ?? [:]; hashes[id]=queue[index]["local_hash"] as? String; state["hashes"]=hashes; if queue[index]["p_deleted"] as? Bool == true { var uploaded=state["uploaded"] as? [String:[String:Any]] ?? [:]; uploaded.removeValue(forKey:id); state["uploaded"]=uploaded }; queue.remove(at:index)
         }
         state["revisions"]=revisions; state["queue"]=queue; try persist()
         status=useDevice ? "Reviewed device version queued. Retry sync to send it with a fresh version check." : "Online version kept. Your local record remains unchanged."
