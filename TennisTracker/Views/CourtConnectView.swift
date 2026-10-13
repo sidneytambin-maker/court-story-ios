@@ -21,14 +21,14 @@ struct CourtConnectView: View {
             Section {
                 Text("Connect is optional. Signing in does not upload your library. Health data and media are never included. Keep personal information out of sporting notes you choose to share.").fixedSize(horizontal:false,vertical:true)
                 Text(connect.status).fixedSize(horizontal:false,vertical:true).accessibilityIdentifier("connectStatus")
-            } header: { Text("Your privacy").foregroundStyle(.primary) }
+            } header: { Text("Your privacy").foregroundStyle(Color(uiColor:.label)) }
             if !connect.isSignedIn {
                 Section {
-                    TextField("Email address",text:$email,prompt:Text("Email address").foregroundStyle(.primary)).textContentType(.emailAddress).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    Button("Send sign-in code") { connect.run { try await connect.sendCode(email:email) } }
-                    TextField("Email sign-in code",text:$signInCode,prompt:Text("Email sign-in code").foregroundStyle(.primary)).textContentType(.oneTimeCode).keyboardType(.numberPad)
+                    VStack(alignment:.leading) { Text("Email address").foregroundStyle(Color(uiColor:.label)); TextField("",text:$email).accessibilityLabel("Email address").textContentType(.emailAddress).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled().frame(minHeight:44) }
+                    Button { connect.run { try await connect.sendCode(email:email) } } label: { Text("Send sign-in code").fixedSize(horizontal:false,vertical:true) }
+                    VStack(alignment:.leading) { Text("Email sign-in code").foregroundStyle(Color(uiColor:.label)); TextField("",text:$signInCode).accessibilityLabel("Email sign-in code").textContentType(.oneTimeCode).keyboardType(.numberPad).frame(minHeight:44) }
                     Button("Sign in") { connect.run { try await connect.verify(email:email,code:signInCode) } }
-                } header: { Text("Sign in with an email code").foregroundStyle(.primary) }
+                } header: { Text("Sign in with an email code").foregroundStyle(Color(uiColor:.label)) }
             } else {
                 Section("Invitations") {
                     Picker("Invite as",selection:$invitationRole) { Text("Player inviting coach").tag("player"); Text("Coach requesting player").tag("coach") }

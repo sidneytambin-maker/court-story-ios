@@ -101,15 +101,19 @@ struct CourtConnectSession: Codable {
         if changed { records = []; feedback = []; connections = []; loadState() }
     }
     func signOut() async throws {
-        if isSignedIn, let installation=UserDefaults.standard.string(forKey:"CourtConnectInstallation") {
-            try await rpc("cs_unregister_device",["p_installation":installation])
+        var serverConfirmed=true
+        if isSignedIn {
+            do {
+                if let installation=UserDefaults.standard.string(forKey:"CourtConnectInstallation") { try await rpc("cs_unregister_device",["p_installation":installation]) }
+                _ = try await request("/auth/v1/logout?scope=local",method:"POST")
+            } catch { serverConfirmed=false }
         }
         let delivered = await UNUserNotificationCenter.current().deliveredNotifications()
         UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: delivered.filter { $0.request.content.userInfo["connect_notification"] != nil }.map { $0.request.identifier })
         UIApplication.shared.unregisterForRemoteNotifications()
         SecItemDelete([kSecClass as String:kSecClassGenericPassword,kSecAttrService as String:keychainService] as CFDictionary)
-        session = nil; records = []; feedback = []; connections = []; notifications = []; notificationSettings = [:]; state = [:]
-        status = "Signed out. Your local sporting records are unchanged."
+        session = nil; records = []; participants = []; feedback = []; connections = []; notifications = []; notificationSettings = [:]; state = [:]
+        status = "Signed out on this device. Your local sporting records are unchanged." + (serverConfirmed ? "" : " Server sign-out was not confirmed.")
     }
     func deleteAccount() async throws {
         _ = try await request("/functions/v1/delete-account",method:"DELETE")
@@ -173,10 +177,11 @@ struct CourtConnectSession: Codable {
         let latest=try await allRows("cs_connections")
         let fingerprint=try JSONSerialization.data(withJSONObject:latest,options:.sortedKeys)
         var cursor=recordCursor
+        var deletedRemotely=Set(state["remoteDeletedIDs"] as? [String] ?? [])
         if fingerprint != connectionFingerprint || cache.isEmpty { cursor=0; cache=[:] }
         while true {
             let page=(try await request("/rest/v1/cs_records?select=*&change_id=gt.\(cursor)&order=change_id&limit=200",method:"GET") as? [[String:Any]]) ?? []
-            for row in page { guard let id=row["id"] as? String else { continue }; cursor=max(cursor,row["change_id"] as? Int ?? 0); if row["deleted"] as? Bool == true { cache.removeValue(forKey:id) } else { cache[id]=row } }
+            for row in page { guard let id=row["id"] as? String else { continue }; cursor=max(cursor,row["change_id"] as? Int ?? 0); if row["deleted"] as? Bool == true { cache.removeValue(forKey:id); if (row["owner_id"] as? String)?.lowercased()==actor { deletedRemotely.insert(id.lowercased()) } } else { cache[id]=row } }
             if page.count<200 { break }
         }
         var permitted=Set<String>(); var after="00000000-0000-0000-0000-000000000000"
@@ -190,6 +195,7 @@ struct CourtConnectSession: Codable {
         let confirmations=try await allRows("cs_notifications")
         let preferences=(try await request("/rest/v1/cs_notification_preferences?select=*&limit=1",method:"GET") as? [[String:Any]])?.first ?? [:]
         guard actor==accountID else { return }
+        state["remoteDeletedIDs"]=Array(deletedRemotely); try persist()
         connections=latest; records=cache.filter { permitted.contains($0.key) }.values.sorted { ($0["occurred_at"] as? String ?? "") > ($1["occurred_at"] as? String ?? "") }
         recordCursor=cursor; connectionFingerprint=fingerprint; participants=people; feedback=messages; notifications=confirmations; notificationSettings=preferences
         status="Sharing access refreshed."
@@ -263,6 +269,11 @@ struct CourtConnectSession: Codable {
     }
     func enableUploads(for player: PlayerProfile, library: AppData) async throws {
         try await register(player)
+        let libraryID=library.libraryID.uuidString.lowercased()
+        if state["libraryID"] as? String != libraryID {
+            for key in ["queue","hashes","revisions","uploaded","uploadPlayers"] { state.removeValue(forKey:key) }
+        }
+        state["libraryID"]=libraryID
         var allowed = state["uploadPlayers"] as? [String] ?? []
         if !allowed.contains(player.id.uuidString.lowercased()) { allowed.append(player.id.uuidString.lowercased()) }
         state["uploadPlayers"] = allowed; try persist()
@@ -299,6 +310,7 @@ struct CourtConnectSession: Codable {
         Task { do { try await sync(library) } catch { status = "Sync needs attention. " + error.localizedDescription } }
     }
     private func permits(_ record: [String:Any]) -> Bool {
+        if (state["remoteDeletedIDs"] as? [String] ?? []).contains((record["p_id"] as? String ?? "").lowercased()) { return false }
         guard let player = record["p_player"] as? String, let sport = record["p_sport"] as? String,
               let category = record["p_category"] as? String, let date = record["p_occurred"] as? String else { return false }
         return connections.contains { c in
@@ -415,14 +427,19 @@ struct CourtConnectSession: Codable {
             state["feedbackQueue"]=Array(pendingFeedback.dropFirst()); try persist()
         }
     }
-    func sync(_ library: AppData) async throws {
+    func sync(_ requestedLibrary: AppData) async throws {
         guard isSignedIn else { return }
-        if syncing { pendingLibrary=library; return }
+        if syncing { pendingLibrary=requestedLibrary; return }
         syncing=true
-        defer { syncing=false; if let next=pendingLibrary { pendingLibrary=nil; changed(next) } }
+        var completed=false
+        defer { syncing=false; let next=pendingLibrary; pendingLibrary=nil; if completed, let next { changed(next) } }
+        // Read the saved library afresh. An older screen snapshot must never delete newer records.
+        let savedURL=FileManager.default.urls(for:.applicationSupportDirectory,in:.userDomainMask)[0].appendingPathComponent("TennisTracker/tennis-tracker-data.json")
+        let library=try TennisBackup.decodeStoredLibrary(Data(contentsOf:savedURL))
         Self.scheduleBackground()
         let actor = accountID
         let players = state["uploadPlayers"] as? [String] ?? []
+        if !players.isEmpty && state["libraryID"] as? String != library.libraryID.uuidString.lowercased() { throw CourtConnectError.message("Your local library changed. Review the selected profile and approve uploads again; online records have not been deleted.") }
         var queue = state["queue"] as? [[String:Any]] ?? []
         var hashes = (state["hashes"] as? [String:String]) ?? [:]
         var revisions = (state["revisions"] as? [String:Int]) ?? [:]
@@ -437,13 +454,13 @@ struct CourtConnectSession: Codable {
             queue.append(queued)
         }
         let present=Set(projections.compactMap { $0["p_id"] as? String })
-        for (id,metadata) in uploaded where !present.contains(id) && players.contains(metadata["p_player"] as? String ?? "") && !queue.contains(where:{ $0["p_id"] as? String == id }) {
+        for (id,metadata) in uploaded where !(state["remoteDeletedIDs"] as? [String] ?? []).contains(id) && !present.contains(id) && players.contains(metadata["p_player"] as? String ?? "") && !queue.contains(where:{ $0["p_id"] as? String == id }) {
             var tombstone=metadata; tombstone["p_body"]=[String:String](); tombstone["p_people"]=[[String:Any]](); tombstone["p_deleted"]=true; tombstone["p_private"]=true; tombstone["p_operation"]=UUID().uuidString; tombstone["p_expected"]=revisions[id] ?? 0; tombstone["local_hash"]="deleted"; queue.append(tombstone)
         }
         state["queue"]=queue; try persist()
         // Build the durable queue before network access, then recheck server permission before sending.
         try await refresh(); guard actor==accountID else { return }; try await flushFeedback()
-        queue=queue.filter { ($0["p_deleted"] as? Bool == true) || permits($0) }
+        queue=queue.filter { !(state["remoteDeletedIDs"] as? [String] ?? []).contains(($0["p_id"] as? String ?? "").lowercased()) && (($0["p_deleted"] as? Bool == true) || permits($0)) }
         state["queue"]=queue; try persist()
         while !queue.isEmpty {
             guard actor == accountID else { return }
@@ -461,6 +478,7 @@ struct CourtConnectSession: Codable {
             let hash=SHA256.hash(data:try JSONSerialization.data(withJSONObject:record,options:.sortedKeys)).map { String(format:"%02x",$0) }.joined()
             if hashes[record["p_id"] as? String ?? ""] != hash { pendingLibrary=library; break }
         }
+        completed=true
         status = "Permitted sporting records synchronised. Health and media stay on the device."
     }
 }
