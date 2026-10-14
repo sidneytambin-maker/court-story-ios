@@ -9,7 +9,7 @@ PHONE_ID = "com.inclusophy.tennistracker"
 GROUP_ID = "group.com.inclusophy.tennistracker"
 APP_NAME = "Court Story"
 BUILD = "35"
-CONNECT_DATA_TYPES = {'NSPrivacyCollectedDataTypeFitness', 'NSPrivacyCollectedDataTypeUserID', 'NSPrivacyCollectedDataTypeEmailsOrTextMessages', 'NSPrivacyCollectedDataTypeName', 'NSPrivacyCollectedDataTypeDeviceID', 'NSPrivacyCollectedDataTypeEmailAddress', 'NSPrivacyCollectedDataTypeOtherUserContent'}
+CONNECT_DATA_TYPES = {'NSPrivacyCollectedDataTypeFitness', 'NSPrivacyCollectedDataTypeUserID', 'NSPrivacyCollectedDataTypeEmailsOrTextMessages', 'NSPrivacyCollectedDataTypeName', 'NSPrivacyCollectedDataTypeDeviceID', 'NSPrivacyCollectedDataTypeOtherUserContent'}
 FORBIDDEN_SUFFIXES = {".json", ".db", ".sqlite", ".sqlite3", ".p8", ".p12", ".pem", ".swift", ".csv", ".log"}
 TEST_MARKERS = (b"-ui-testing-", b"-watch-manual-match", b"-test-notification-", b"TennisRegressionFixtures", b"TennisNotificationTestSupport")
 
