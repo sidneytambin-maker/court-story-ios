@@ -120,7 +120,7 @@ struct CourtConnectView: View {
             Button("Decline",role:.destructive) { connect.run { try await connect.decline(invitation); invitation="" } }
             Button("Cancel",role:.cancel) {}
         } message: {
-            Text((invitationPreview["name"] as? String ?? "Court Story member") + " Â· " + (invitationPreview["sport"] as? String ?? "Sport") + ". Player approval is required before sharing.")
+            Text((invitationPreview["name"] as? String ?? "Court Story member") + " - " + (invitationPreview["sport"] as? String ?? "Sport") + ". Player approval is required before sharing.")
         }
         .sheet(item:$selectedConnection) { selected in NavigationStack { ConnectPermissionView(connection:selected) } }
     }
@@ -128,7 +128,7 @@ struct CourtConnectView: View {
 struct ConnectSelection: Identifiable {
     let id: String; let value: [String:Any]
     init?(_ value: [String:Any]) { guard let id=value["id"] as? String else { return nil }; self.id=id; self.value=value }
-    @MainActor var label: String { ((value["player_account"] as? String)?.lowercased() == CourtConnect.shared.accountID ? (value["coach_name"] as? String ?? "Coach") : (value["player_name"] as? String ?? "Player")) + " Â· " + (value["sport"] as? String ?? "Sport") + " Â· " + (value["state"] as? String ?? "Pending") }
+    @MainActor var label: String { ((value["player_account"] as? String)?.lowercased() == CourtConnect.shared.accountID ? (value["coach_name"] as? String ?? "Coach") : (value["player_name"] as? String ?? "Player")) + " - " + (value["sport"] as? String ?? "Sport") + " - " + (value["state"] as? String ?? "Pending") }
 }
 struct ConnectRecord: Identifiable {
     let id: String; let value: [String:Any]
@@ -224,13 +224,13 @@ struct ConnectRecordView: View {
             Section("Sporting record") { Text(record.title); ForEach(record.body.keys.sorted(),id:\.self) { key in Text(Self.fieldLabel(key) + ": " + String(describing:record.body[key] ?? "")) } }
             Section("Participants and teams") {
                 ForEach(connect.participants.compactMap(ConnectSelection.init).filter { $0.value["record_id"] as? String == record.id }) { person in
-                    Text((person.value["display_name"] as? String ?? "Participant") + " Â· Team " + String((person.value["team"] as? Int ?? 0)+1))
+                    Text((person.value["display_name"] as? String ?? "Participant") + " - Team " + String((person.value["team"] as? Int ?? 0)+1))
                 }
             }
             Section("Coach feedback") {
                 ForEach(connect.feedback.compactMap(ConnectSelection.init).filter { $0.value["record_id"] as? String == record.id }) { item in
                     Text(item.value["text"] as? String ?? "")
-                    Text("Coach contribution Â· " + (item.value["state"] as? String ?? "pending"))
+                    Text("Coach contribution - " + (item.value["state"] as? String ?? "pending"))
                     if (record.value["owner_id"] as? String)?.lowercased() == connect.accountID {
                         Button("Approve suggestion") { connect.run { try await connect.rpc("cs_review_feedback",["p_id":item.id,"p_approve":true]); try await connect.refresh() } }
                         Button("Reject suggestion") { connect.run { try await connect.rpc("cs_review_feedback",["p_id":item.id,"p_approve":false]); try await connect.refresh() } }
@@ -303,7 +303,7 @@ struct ConnectPlayerDashboard: View {
                 Picker("Category",selection:$category) { Text("All categories").tag("All categories"); ForEach(CourtConnectProtocol.categories,id:\.self) { Text($0.capitalized).tag($0) } }
             }
             ForEach(rows.filter { (sport=="All approved sports" || $0.sport==sport) && (category=="All categories" || $0.category==category) }) { record in
-                NavigationLink { ConnectRecordView(record:record) } label: { VStack(alignment:.leading) { Text(record.title); Text(record.sport + " Â· " + record.category); Text(record.value["occurred_at"] as? String ?? "") } }
+                NavigationLink { ConnectRecordView(record:record) } label: { VStack(alignment:.leading) { Text(record.title); Text(record.sport + " - " + record.category); Text(record.value["occurred_at"] as? String ?? "") } }
             }
         }.navigationTitle(player.name)
         .onAppear { localProfile=connect.linkedPlayer(player.id) ?? "" }
