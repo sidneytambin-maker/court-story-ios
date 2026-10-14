@@ -7,3 +7,6 @@ verify_jwt = false
 [functions.dispatch-notifications]
 # Scheduler supplies a legacy anon JWT plus a separate private dispatch header.
 verify_jwt = true
+
+[auth]
+enable_anonymous_sign_ins = true

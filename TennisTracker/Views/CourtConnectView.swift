@@ -4,11 +4,8 @@ struct CourtConnectView: View {
     @EnvironmentObject private var store: TennisStore
     @ObservedObject private var connect = CourtConnect.shared
     @State private var playerSearch = ""
-    @State private var email = ""
-    @State private var signInCode = ""
     @State private var invitation = ""
     @State private var shareLink = ""
-    @State private var recipient = ""
     @State private var invitationRole = "player"
     @State private var selectedConnection: ConnectSelection?
     @State private var consent = false
@@ -20,15 +17,12 @@ struct CourtConnectView: View {
         ScrollView {
             VStack(alignment:.leading,spacing:20) {
                 Text("Your privacy").font(.headline).accessibilityAddTraits(.isHeader)
-                Text("Connect is optional. Signing in does not upload your library. Health data and media are never included. Keep personal information out of sporting notes you choose to share.").fixedSize(horizontal:false,vertical:true)
+                Text("Connect is optional. Enabling it does not upload your library. Health data and media are never included. Keep personal information out of sporting notes you choose to share.").fixedSize(horizontal:false,vertical:true)
                 Text(connect.status).fixedSize(horizontal:false,vertical:true).accessibilityIdentifier("connectStatus")
-                Text("Sign in with an email code").font(.headline).fixedSize(horizontal:false,vertical:true).accessibilityAddTraits(.isHeader)
-                Text("Email address").fixedSize(horizontal:false,vertical:true)
-                TextField("",text:$email).accessibilityLabel("Email address").textContentType(.emailAddress).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled().textFieldStyle(.roundedBorder).frame(minHeight:44)
-                Button { connect.run { try await connect.sendCode(email:email) } } label: { Text("Send sign-in code").fixedSize(horizontal:false,vertical:true).frame(maxWidth:.infinity,minHeight:44) }.buttonStyle(.borderedProminent)
-                Text("Email sign-in code").fixedSize(horizontal:false,vertical:true)
-                TextField("",text:$signInCode).accessibilityLabel("Email sign-in code").textContentType(.oneTimeCode).keyboardType(.numberPad).textFieldStyle(.roundedBorder).frame(minHeight:44)
-                Button { connect.run { try await connect.verify(email:email,code:signInCode) } } label: { Text("Sign in").fixedSize(horizontal:false,vertical:true).frame(maxWidth:.infinity,minHeight:44) }.buttonStyle(.borderedProminent)
+                Text("Connect through a shared link").font(.headline).fixedSize(horizontal:false,vertical:true).accessibilityAddTraits(.isHeader)
+                Text("No email or password needed. Your connection is saved securely on this device. Share an invitation using any messaging app, or paste a link you received.").fixedSize(horizontal:false,vertical:true)
+                Button { connect.run { try await connect.connectDevice() } } label: { Text("Enable Connect").fixedSize(horizontal:false,vertical:true).frame(maxWidth:.infinity,minHeight:44) }.buttonStyle(.borderedProminent)
+
             }.font(.body).padding()
         }.background(Color(uiColor:.systemBackground))
     }
@@ -37,15 +31,14 @@ struct CourtConnectView: View {
         if !connect.isSignedIn { signInForm } else {
         Form {
             Section {
-                Text("Connect is optional. Signing in does not upload your library. Health data and media are never included. Keep personal information out of sporting notes you choose to share.").fixedSize(horizontal:false,vertical:true)
+                Text("Connect is optional. Enabling it does not upload your library. Health data and media are never included. Keep personal information out of sporting notes you choose to share.").fixedSize(horizontal:false,vertical:true)
                 Text(connect.status).fixedSize(horizontal:false,vertical:true).accessibilityIdentifier("connectStatus")
             } header: { Text("Your privacy").foregroundStyle(Color(uiColor:.label)) }
                 Section("Invitations") {
                     Picker("Invite as",selection:$invitationRole) { Text("Player inviting coach").tag("player"); Text("Coach requesting player").tag("coach") }
                     Text("Sport: \(store.selectedSport.name)")
-                    TextField("Recipient email (optional)",text:$recipient).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
                     Button("Create invitation") {
-                        connect.run { shareLink = try await connect.invite(role:invitationRole,player:player,sport:store.selectedSport.id,recipient:recipient) }
+                        connect.run { shareLink = try await connect.invite(role:invitationRole,player:player,sport:store.selectedSport.id,recipient:"") }
                     }
                     if !shareLink.isEmpty {
                         Text("Expires after 48 hours. The player must approve sharing after acceptance.")
@@ -108,9 +101,8 @@ struct CourtConnectView: View {
                         Text(item.value["message"] as? String ?? "Connection updated")
                     }
                 }
-                Section("Account") {
-                    Button("Sign out") { connect.run { try await connect.signOut() } }
-                    Button("Delete Connect account and cloud data",role:.destructive) { deleteAccount=true }
+                Section("Manage sharing") {
+                    Button("Delete connections and shared cloud data",role:.destructive) { deleteAccount=true }
                 }
             }
         }
@@ -120,15 +112,15 @@ struct CourtConnectView: View {
         .disabled(connect.busy)
         .overlay { if connect.busy { ProgressView("Connecting") } }
         .onAppear { invitation = connect.pendingCode; if connect.isSignedIn { connect.run { try await connect.refresh() } } }
-        .confirmationDialog("Delete your Connect account and cloud data?",isPresented:$deleteAccount,titleVisibility:.visible) {
-            Button("Delete account and cloud data",role:.destructive) { connect.run { try await connect.deleteAccount() } }
+        .confirmationDialog("Delete your connections and shared cloud data?",isPresented:$deleteAccount,titleVisibility:.visible) {
+            Button("Delete connections and cloud data",role:.destructive) { connect.run { try await connect.deleteAccount() } }
         } message: { Text("This removes all your online connections, shared records and feedback. Your local sporting library stays on this device. Copies already saved by coaches cannot necessarily be erased.") }
         .alert("Connection invitation",isPresented:$reviewInvitation) {
             Button("Accept") { connect.run { try await connect.accept(invitation,player:player) } }
             Button("Decline",role:.destructive) { connect.run { try await connect.decline(invitation); invitation="" } }
             Button("Cancel",role:.cancel) {}
         } message: {
-            Text((invitationPreview["name"] as? String ?? "Court Story member") + " · " + (invitationPreview["sport"] as? String ?? "Sport") + ". Player approval is required before sharing.")
+            Text((invitationPreview["name"] as? String ?? "Court Story member") + " Â· " + (invitationPreview["sport"] as? String ?? "Sport") + ". Player approval is required before sharing.")
         }
         .sheet(item:$selectedConnection) { selected in NavigationStack { ConnectPermissionView(connection:selected) } }
     }
@@ -136,7 +128,7 @@ struct CourtConnectView: View {
 struct ConnectSelection: Identifiable {
     let id: String; let value: [String:Any]
     init?(_ value: [String:Any]) { guard let id=value["id"] as? String else { return nil }; self.id=id; self.value=value }
-    @MainActor var label: String { ((value["player_account"] as? String)?.lowercased() == CourtConnect.shared.accountID ? (value["coach_name"] as? String ?? "Coach") : (value["player_name"] as? String ?? "Player")) + " · " + (value["sport"] as? String ?? "Sport") + " · " + (value["state"] as? String ?? "Pending") }
+    @MainActor var label: String { ((value["player_account"] as? String)?.lowercased() == CourtConnect.shared.accountID ? (value["coach_name"] as? String ?? "Coach") : (value["player_name"] as? String ?? "Player")) + " Â· " + (value["sport"] as? String ?? "Sport") + " Â· " + (value["state"] as? String ?? "Pending") }
 }
 struct ConnectRecord: Identifiable {
     let id: String; let value: [String:Any]
@@ -232,13 +224,13 @@ struct ConnectRecordView: View {
             Section("Sporting record") { Text(record.title); ForEach(record.body.keys.sorted(),id:\.self) { key in Text(Self.fieldLabel(key) + ": " + String(describing:record.body[key] ?? "")) } }
             Section("Participants and teams") {
                 ForEach(connect.participants.compactMap(ConnectSelection.init).filter { $0.value["record_id"] as? String == record.id }) { person in
-                    Text((person.value["display_name"] as? String ?? "Participant") + " · Team " + String((person.value["team"] as? Int ?? 0)+1))
+                    Text((person.value["display_name"] as? String ?? "Participant") + " Â· Team " + String((person.value["team"] as? Int ?? 0)+1))
                 }
             }
             Section("Coach feedback") {
                 ForEach(connect.feedback.compactMap(ConnectSelection.init).filter { $0.value["record_id"] as? String == record.id }) { item in
                     Text(item.value["text"] as? String ?? "")
-                    Text("Coach contribution · " + (item.value["state"] as? String ?? "pending"))
+                    Text("Coach contribution Â· " + (item.value["state"] as? String ?? "pending"))
                     if (record.value["owner_id"] as? String)?.lowercased() == connect.accountID {
                         Button("Approve suggestion") { connect.run { try await connect.rpc("cs_review_feedback",["p_id":item.id,"p_approve":true]); try await connect.refresh() } }
                         Button("Reject suggestion") { connect.run { try await connect.rpc("cs_review_feedback",["p_id":item.id,"p_approve":false]); try await connect.refresh() } }
@@ -311,7 +303,7 @@ struct ConnectPlayerDashboard: View {
                 Picker("Category",selection:$category) { Text("All categories").tag("All categories"); ForEach(CourtConnectProtocol.categories,id:\.self) { Text($0.capitalized).tag($0) } }
             }
             ForEach(rows.filter { (sport=="All approved sports" || $0.sport==sport) && (category=="All categories" || $0.category==category) }) { record in
-                NavigationLink { ConnectRecordView(record:record) } label: { VStack(alignment:.leading) { Text(record.title); Text(record.sport + " · " + record.category); Text(record.value["occurred_at"] as? String ?? "") } }
+                NavigationLink { ConnectRecordView(record:record) } label: { VStack(alignment:.leading) { Text(record.title); Text(record.sport + " Â· " + record.category); Text(record.value["occurred_at"] as? String ?? "") } }
             }
         }.navigationTitle(player.name)
         .onAppear { localProfile=connect.linkedPlayer(player.id) ?? "" }

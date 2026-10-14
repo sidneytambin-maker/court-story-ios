@@ -13,11 +13,11 @@ final class CourtConnectUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Court Story Connect"].waitForExistence(timeout:8))
         return app
     }
-    func testOptionalSignInHasAccessibleFieldsAndReturnsToTracking() throws {
+    func testOptionalDeviceConnectionNeedsNoEmailAndReturnsToTracking() throws {
         let app=openConnect()
-        XCTAssertTrue(app.textFields["Email address"].exists)
-        XCTAssertTrue(app.textFields["Email sign-in code"].exists)
-        XCTAssertTrue(app.buttons["Send sign-in code"].exists)
+        XCTAssertFalse(app.textFields["Email address"].exists)
+        XCTAssertFalse(app.textFields["Email sign-in code"].exists)
+        XCTAssertTrue(app.buttons["Enable Connect"].exists)
         var issues: [String]=[]
         try app.performAccessibilityAudit { issue in
             issues.append(issue.compactDescription + ": " + (issue.element?.debugDescription ?? issue.detailedDescription))
@@ -29,10 +29,8 @@ final class CourtConnectUITests: XCTestCase {
         app.tabBars.buttons["Dashboard"].tap()
         XCTAssertTrue(app.navigationBars.firstMatch.exists)
     }
-    func testLargeTextSignInControlsRemainReachable() {
+    func testLargeTextDeviceConnectionRemainsReachable() {
         let app=openConnect(large:true)
-        XCTAssertTrue(revealPhoneElement(app.textFields["Email address"],in:app).isHittable)
-        XCTAssertTrue(revealPhoneElement(app.buttons["Send sign-in code"],in:app).isHittable)
-        XCTAssertTrue(revealPhoneElement(app.buttons["Sign in"],in:app).isHittable)
+        XCTAssertTrue(revealPhoneElement(app.buttons["Enable Connect"],in:app).isHittable)
     }
 }

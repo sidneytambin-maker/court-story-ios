@@ -94,8 +94,8 @@ struct CourtConnectSession: Codable {
         if result == errSecItemNotFound {
             var add = query; add[kSecValueData as String] = data
             add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-            guard SecItemAdd(add as CFDictionary,nil) == errSecSuccess else { throw CourtConnectError.message("Could not securely save sign-in.") }
-        } else if result != errSecSuccess { throw CourtConnectError.message("Could not securely save sign-in.") }
+            guard SecItemAdd(add as CFDictionary,nil) == errSecSuccess else { throw CourtConnectError.message("Could not securely save this device connection.") }
+        } else if result != errSecSuccess { throw CourtConnectError.message("Could not securely save this device connection.") }
         let changed = accountID != newSession.user.id.lowercased()
         session = newSession
         if changed { records = []; feedback = []; connections = []; loadState() }
@@ -121,7 +121,7 @@ struct CourtConnectSession: Codable {
         UIApplication.shared.unregisterForRemoteNotifications()
         SecItemDelete([kSecClass as String:kSecClassGenericPassword,kSecAttrService as String:keychainService] as CFDictionary)
         session=nil; state=[:]; records=[]; participants=[]; connections=[]; feedback=[]; notifications=[]; notificationSettings=[:]
-        status="Connect account and cloud data deleted. Your local sporting library is unchanged."
+        status="Connections and shared cloud data deleted. Your local sporting library is unchanged."
     }
     func receive(_ url: URL) -> Bool {
         guard !linkHost.isEmpty, let code = CourtConnectProtocol.code(url.absoluteString, host: linkHost) else { return false }
@@ -132,7 +132,7 @@ struct CourtConnectSession: Codable {
               let key = config["publishable_key"], !key.isEmpty, let url = URL(string: base + path) else {
             throw CourtConnectError.message("Court Story Connect service configuration is unavailable. Local tracking remains available.")
         }
-        if authenticated && session == nil { throw CourtConnectError.message("Sign in to Court Story Connect first.") }
+        if authenticated && session == nil { throw CourtConnectError.message("Enable Connect on this device first.") }
         var req = URLRequest(url: url); req.httpMethod = method; req.timeoutInterval = 30
         req.setValue(key, forHTTPHeaderField:"apikey"); req.setValue("application/json",forHTTPHeaderField:"Content-Type")
         if authenticated, let token = session?.access_token { req.setValue("Bearer " + token, forHTTPHeaderField:"Authorization") }
@@ -148,20 +148,18 @@ struct CourtConnectSession: Codable {
         guard (200..<300).contains(http.statusCode) else {
             let obj = (try? JSONSerialization.jsonObject(with:data)) as? [String:Any]
             if obj?["code"] as? String == "40001" { throw CourtConnectError.message("A record changed on another device. Refresh and review the conflict; your queued edit is retained.") }
-            throw CourtConnectError.message(http.statusCode == 429 ? "Please wait before trying again." : "The request was not accepted. Check sign-in, invitation expiry and sharing permission.")
+            throw CourtConnectError.message(http.statusCode == 429 ? "Please wait before trying again." : "The request was not accepted. Check your connection, invitation expiry and sharing permission.")
         }
         if data.isEmpty { return NSNull() }
         return try JSONSerialization.jsonObject(with:data,options:.fragmentsAllowed)
     }
     @discardableResult func rpc(_ name: String, _ parameters: [String:Any]) async throws -> Any { try await request("/rest/v1/rpc/"+name,body:parameters) }
-    func sendCode(email: String) async throws {
-        _ = try await request("/auth/v1/otp",body:["email":email,"create_user":true],authenticated:false)
-        status = "Check your email for the sign-in code. Signing in does not upload your records."
-    }
-    func verify(email: String, code: String) async throws {
-        let response = try await request("/auth/v1/verify",body:["email":email,"token":code,"type":"email"],authenticated:false)
+    func connectDevice() async throws {
+        guard session == nil else { return }
+        let response = try await request("/auth/v1/signup",body:[:],authenticated:false,retry:false)
         try saveSession(JSONDecoder().decode(CourtConnectSession.self,from:JSONSerialization.data(withJSONObject:response)))
-        try await refresh(); status = "Signed in. Choose a player and approve sharing to upload sporting records."
+        try await refresh()
+        status = "Ready to connect. Share an invitation or open one you received. Nothing is uploaded until you approve sharing."
     }
     private func allRows(_ table: String, order: String = "id") async throws -> [[String:Any]] {
         var rows: [[String:Any]] = []; var offset = 0

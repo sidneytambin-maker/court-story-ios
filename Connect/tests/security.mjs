@@ -15,7 +15,7 @@ const deny=async(fn)=>{await assert.rejects(fn)};
 const visible=async()=> (await db.query('select id from public.cs_records')).rows.map(r=>r.id);
 await as(0);await rpc('cs_register_profile',[player,'Synthetic player']);
 const record=randomUUID(), old='2020-01-01T00:00:00Z';
-await rpc('cs_put_record',[randomUUID(),record,player,'Tennis','match',old,{title:'Synthetic match',score:'6–4'},0,false,false]);
+await rpc('cs_put_record',[randomUUID(),record,player,'Tennis','match',old,{title:'Synthetic match',score:'6â€“4'},0,false,false]);
 await test('Owner sees own record',async()=>assert.deepEqual(await visible(),[record]));
 await as(1);
 await test('Unconnected account sees nothing',async()=>assert.deepEqual(await visible(),[]));
@@ -52,12 +52,12 @@ await test('Feedback capability cannot submit official contribution',async()=>de
 await as(2);await test('Coach cannot read another coach feedback',async()=>assert.equal((await db.query('select count(*)::int as n from public.cs_feedback')).rows[0].n,0));
 await as(0);await test('Player receives feedback',async()=>assert.equal((await db.query('select count(*)::int as n from public.cs_feedback')).rows[0].n,1));
 await rpc('cs_review_feedback',[feedback,true]);
-await test('Feedback approval does not rewrite score',async()=>assert.equal((await db.query('select body from public.cs_records where id=$1',[record])).rows[0].body.score,'6–4'));
+await test('Feedback approval does not rewrite score',async()=>assert.equal((await db.query('select body from public.cs_records where id=$1',[record])).rows[0].body.score,'6â€“4'));
 await rpc('cs_set_permission',[connections[0],'revoked',[],'all',null,null,true,'feedback']);
 await as(1);await test('Revocation immediately denies reads',async()=>assert.deepEqual(await visible(),[]));
 await test('Revocation denies feedback writes',async()=>deny(()=>rpc('cs_add_feedback',[randomUUID(),connections[0],record,'feedback','No'])));
 await as(2);await test('Revoking one coach preserves others',async()=>assert((await visible()).includes(record)));
-await as(0);const op=randomUUID();const args=[op,record,player,'Tennis','match',old,{score:'7–5'},1,false,false];const response=await rpc('cs_put_record',args);
+await as(0);const op=randomUUID();const args=[op,record,player,'Tennis','match',old,{score:'7â€“5'},1,false,false];const response=await rpc('cs_put_record',args);
 await test('Retry returns same receipt without duplicate',async()=>assert.deepEqual(await rpc('cs_put_record',args),response));
 await test('Operation content cannot be changed',async()=>deny(()=>rpc('cs_put_record',[op,record,player,'Tennis','match',old,{score:'9'},1,false,false])));
 await test('Stale revision conflicts',async()=>deny(()=>rpc('cs_put_record',[randomUUID(),record,player,'Tennis','match',old,{score:'9'},1,false,false])));
@@ -132,6 +132,37 @@ await test('Every Connect table including private queues enables RLS',async()=>{
  const rows=(await db.query("select c.relrowsecurity from pg_class c join pg_namespace n on n.oid=c.relnamespace where c.relkind='r' and (n.nspname='cs_private' or (n.nspname='public' and c.relname like 'cs_%'))")).rows;
  assert.equal(rows.length,14); assert(rows.every(r=>r.relrowsecurity));
 });
+
+// Device-only sessions carry a private authenticated identity, with no email.
+await db.exec('reset role');
+for(let n=0;n<3;n++){const id=randomUUID();accounts.push(id);await db.query('insert into auth.users values($1,null,null)',[id]);}
+const devicePlayer=randomUUID();
+await as(7);await rpc('cs_register_profile',[devicePlayer,'Device Player']);
+const bound=await rpc('cs_create_invitation',['player',devicePlayer,'Bound device test','protected@example.invalid']);
+const unbound=await rpc('cs_create_invitation',['player',devicePlayer,'Device sport',null]);
+await test('Device cannot accept its own invitation',async()=>deny(()=>rpc('cs_accept_invitation',[unbound.code,null])));
+await as(8);await rpc('cs_register_profile',[randomUUID(),'Device Coach']);
+await test('Device without email cannot preview old email-bound invitation',async()=>deny(()=>rpc('cs_preview_invitation',[bound.code])));
+await test('Device without email cannot accept old email-bound invitation',async()=>deny(()=>rpc('cs_accept_invitation',[bound.code,null])));
+await test('Device without email can preview shared link',async()=>assert.equal((await rpc('cs_preview_invitation',[unbound.code])).name,'Device Player'));
+const dc=await rpc('cs_accept_invitation',[unbound.code,null]);
+await test('Device link requires player approval',async()=>assert.deepEqual(await visible(),[]));
+await test('Device coach cannot approve its own access',async()=>deny(()=>rpc('cs_set_permission',[dc,'active',['match'],'all',null,null,true,'feedback'])));
+await as(7);await rpc('cs_set_permission',[dc,'active',['match','training','tournament','note','reflection','goal'],'all',null,null,true,'feedback']);
+const historical=[];
+for(const category of ['match','training','tournament']){const rid=randomUUID();historical.push(rid);await rpc('cs_put_record',[randomUUID(),rid,devicePlayer,'Device sport',category,old,{title:'Historical '+category},0,false,false]);}
+await as(8);await test('Device coach receives historical matches training and tournaments',async()=>assert.deepEqual(new Set(await visible()),new Set(historical)));
+const deviceFeedback=randomUUID();await rpc('cs_add_feedback',[deviceFeedback,dc,historical[0],'feedback','Review your return position']);
+await as(7);await test('Player receives separate coach feedback',async()=>assert.equal((await db.query('select text from public.cs_feedback where id=$1',[deviceFeedback])).rows[0].text,'Review your return position'));
+await rpc('cs_put_record',[randomUUID(),historical[0],devicePlayer,'Device sport','match',old,{title:'Reviewed historical match'},1,false,false]);
+const futureRecord=randomUUID();await rpc('cs_put_record',[randomUUID(),futureRecord,devicePlayer,'Device sport','tournament',new Date().toISOString(),{title:'New tournament'},0,false,false]);
+await as(8);
+await test('Coach sees player edits to historical records',async()=>assert.equal((await db.query('select body from public.cs_records where id=$1',[historical[0]])).rows[0].body.title,'Reviewed historical match'));
+await test('Existing device link includes new future records',async()=>assert((await visible()).includes(futureRecord)));
+await as(9);await test('Unconnected device cannot see another player history or future records',async()=>assert.deepEqual(await visible(),[]));
+await as(7);await rpc('cs_set_permission',[dc,'revoked',[],'all',null,null,true,'feedback']);
+await as(8);await test('Revocation removes device coach history and future access',async()=>assert.deepEqual(await visible(),[]));
+await test('Revoked device coach cannot add feedback',async()=>deny(()=>rpc('cs_add_feedback',[randomUUID(),dc,historical[0],'feedback','No access'])));
 
 console.log(`${passed} PostgreSQL security tests passed`);
 writeFileSync(new URL('./results.txt',import.meta.url),`${passed} PostgreSQL security assertions passed locally using PGlite. Synthetic accounts only. Cloud deployment and mobile flows not yet verified.\n`);
