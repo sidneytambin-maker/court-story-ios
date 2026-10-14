@@ -10,7 +10,7 @@ Deno.serve(async (request: Request) => {
     const userResponse = await fetch(url + "/auth/v1/user", { headers: { apikey: key, Authorization: authorization } });
     if (!userResponse.ok) return new Response("Sign in required", { status: 401 });
     const user = await userResponse.json();
-    if (!user.id || user.is_anonymous) return new Response("Verified account required", { status: 403 });
+    if (typeof user.id !== "string" || !user.id) return new Response("Valid device session required", { status: 403 });
     const deleted = await fetch(url + "/auth/v1/admin/users/" + encodeURIComponent(user.id), {
       method: "DELETE", headers: { apikey: key, Authorization: "Bearer " + key, "Content-Type": "application/json" }, body: JSON.stringify({ should_soft_delete: false })
     });

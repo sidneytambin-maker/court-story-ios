@@ -11,10 +11,10 @@ Deno.test("Account deletion uses verified caller identity and rejects failed aut
  Deno.env.set("SUPABASE_URL","https://synthetic.example.invalid");Deno.env.set("SUPABASE_SERVICE_ROLE_KEY","synthetic-test-key");
  const account=await load("../functions/delete-account/index.ts");
  let calls:string[]=[];
- globalThis.fetch=async(input,init)=>{const url=String(input);calls.push(url);if(url.endsWith("/auth/v1/user"))return Response.json({id:"verified-synthetic-user"});assert(url.endsWith("/auth/v1/admin/users/verified-synthetic-user"),"Must delete the authenticated account only");assert(init?.method==="DELETE","Must use deletion endpoint");return new Response(null,{status:204})};
+ globalThis.fetch=async(input,init)=>{const url=String(input);calls.push(url);if(url.endsWith("/auth/v1/user"))return Response.json({id:"verified-synthetic-user",is_anonymous:true,email:""});assert(url.endsWith("/auth/v1/admin/users/verified-synthetic-user"),"Must delete the authenticated account only");assert(init?.method==="DELETE","Must use deletion endpoint");return new Response(null,{status:204})};
  try {
   assert((await account(new Request("https://local.invalid",{method:"DELETE"}))).status===401,"Missing session denied");assert(calls.length===0,"Unauthenticated request must not contact admin API");
-  const response=await account(new Request("https://local.invalid?account=someone-else",{method:"DELETE",headers:{Authorization:"Bearer synthetic-user-session"}}));assert(response.status===204,"Verified deletion succeeds");assert(calls.length===2,"Verify identity before deleting");
+  const response=await account(new Request("https://local.invalid?account=someone-else",{method:"DELETE",headers:{Authorization:"Bearer synthetic-user-session"}}));assert(response.status===204,"Authenticated device deletion succeeds without email");assert(calls.length===2,"Verify identity before deleting");
   globalThis.fetch=async()=>new Response("private provider response",{status:401});assert((await account(new Request("https://local.invalid",{method:"DELETE",headers:{Authorization:"Bearer invalid"}}))).status===401,"Invalid session denied");
  } finally {globalThis.fetch=originalFetch;}
 });
