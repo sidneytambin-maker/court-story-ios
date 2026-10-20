@@ -80,6 +80,15 @@ struct TennisTrackerRootView: View {
                 #endif
             }
         }
+        #if DEBUG && targetEnvironment(simulator)
+        .onAppear {
+            if CourtConnectInvitationTestSupport.enabled,
+               let index=ProcessInfo.processInfo.arguments.firstIndex(of:"-ui-testing-connect-link"),
+               ProcessInfo.processInfo.arguments.indices.contains(index+1),
+               let url=URL(string:ProcessInfo.processInfo.arguments[index+1]),
+               CourtConnect.shared.receive(url), !store.needsOnboarding { showConnect=true }
+        }
+        #endif
         .onOpenURL { url in
             if CourtConnect.shared.receive(url) { if !store.needsOnboarding { showConnect=true } }
             else { router.open(url) }

@@ -17,11 +17,18 @@ enum CourtConnectProtocol {
         let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
         let candidate: String
         if let url = URL(string: text), url.scheme != nil {
-            guard url.scheme == "https", url.host == host, url.path == "/connect/invite", url.user == nil,
+            let allowedHosts = host == "court-story-connect.web.app" ? [host, "court-story-connect.firebaseapp.com"] : [host]
+            guard url.scheme == "https", allowedHosts.contains(url.host ?? ""), url.path == "/connect/invite", url.user == nil,
                   url.password == nil, url.port == nil, url.query == nil else { return nil }
             candidate = url.fragment ?? ""
         } else { candidate = text }
-        return candidate.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil ? candidate : nil
+        return candidate.range(of: "^[a-f0-9]{64}(/(accept|decline))?$", options: .regularExpression) != nil ? String(candidate.prefix(64)) : nil
+    }
+    static func response(_ input: String, host: String) -> String {
+        guard code(input,host:host) != nil else { return "" }
+        let text=input.trimmingCharacters(in:.whitespacesAndNewlines)
+        let value = text.contains(":") ? (URL(string:text)?.fragment ?? "") : text
+        return value.count > 64 ? String(value.dropFirst(65)) : ""
     }
     static func noteID(_ id: UUID) -> UUID { derivedID(id,category:"note") }
     static func derivedID(_ id: UUID, category: String) -> UUID {
@@ -70,6 +77,9 @@ struct CourtConnectSession: Codable {
             .appendingPathComponent("court-connect-" + (accountID ?? "signed-out") + ".json")
     }
     private init() {
+        #if DEBUG && targetEnvironment(simulator)
+        if CourtConnectInvitationTestSupport.enabled { return }
+        #endif
         var result: CFTypeRef?
         let query: [String:Any] = [kSecClass as String:kSecClassGenericPassword, kSecAttrService as String:keychainService,
                                   kSecReturnData as String:true, kSecMatchLimit as String:kSecMatchLimitOne]
@@ -84,10 +94,16 @@ struct CourtConnectSession: Codable {
         if let data = try? Data(contentsOf: stateURL), let saved = try? JSONSerialization.jsonObject(with: data) as? [String:Any] { state = saved }
     }
     private func persist() throws {
+        #if DEBUG && targetEnvironment(simulator)
+        if CourtConnectInvitationTestSupport.enabled { return }
+        #endif
         let data = try JSONSerialization.data(withJSONObject: state, options: [.sortedKeys])
         try data.write(to: stateURL, options: [.atomic, .completeFileProtection])
     }
     private func saveSession(_ newSession: CourtConnectSession) throws {
+        #if DEBUG && targetEnvironment(simulator)
+        if CourtConnectInvitationTestSupport.enabled { session=newSession; return }
+        #endif
         let query: [String:Any] = [kSecClass as String:kSecClassGenericPassword,kSecAttrService as String:keychainService]
         let data = try JSONEncoder().encode(newSession)
         let result = SecItemUpdate(query as CFDictionary, [kSecValueData as String:data] as CFDictionary)
@@ -125,9 +141,14 @@ struct CourtConnectSession: Codable {
     }
     func receive(_ url: URL) -> Bool {
         guard !linkHost.isEmpty, let code = CourtConnectProtocol.code(url.absoluteString, host: linkHost) else { return false }
-        pendingCode = code; UserDefaults.standard.set(code, forKey:"CourtConnectPendingInvitation"); return true
+        let response=CourtConnectProtocol.response(url.absoluteString,host:linkHost)
+        pendingCode = code + (response.isEmpty ? "" : "/" + response)
+        UserDefaults.standard.set(pendingCode, forKey:"CourtConnectPendingInvitation"); return true
     }
     private func request(_ path: String, method: String = "POST", body: [String:Any]? = nil, authenticated: Bool = true, retry: Bool = true) async throws -> Any {
+        #if DEBUG && targetEnvironment(simulator)
+        if CourtConnectInvitationTestSupport.enabled { return try CourtConnectInvitationTestSupport.request(path,body:body) }
+        #endif
         guard let base = config["supabase_url"], let origin = URL(string: base), origin.scheme == "https",
               let key = config["publishable_key"], !key.isEmpty, let url = URL(string: base + path) else {
             throw CourtConnectError.message("Court Story Connect service configuration is unavailable. Local tracking remains available.")
@@ -207,21 +228,27 @@ struct CourtConnectSession: Codable {
         guard let code = result?["code"] as? String else { throw CourtConnectError.message("Invitation was not created.") }
         return linkHost.isEmpty ? code : "https://"+linkHost+"/connect/invite#"+code
     }
-    func accept(_ input: String, player: PlayerProfile?) async throws {
+    func clearPending(_ code: String) {
+        guard CourtConnectProtocol.code(pendingCode,host:linkHost)==code else { return }
+        pendingCode=""; UserDefaults.standard.removeObject(forKey:"CourtConnectPendingInvitation")
+    }
+    @discardableResult func accept(_ input: String, player: PlayerProfile?) async throws -> String {
         guard let code = CourtConnectProtocol.code(input,host:linkHost) else { throw CourtConnectError.message("Use the complete invitation link or 64-character code.") }
         if let player { try await register(player) }
-        try await rpc("cs_accept_invitation",["p_code":code,"p_player":player?.id.uuidString as Any? ?? NSNull()])
-        pendingCode = ""; UserDefaults.standard.removeObject(forKey:"CourtConnectPendingInvitation")
-        try await refresh(); status = "Invitation accepted. Sharing starts only after player approval."
+        let receipt = try await rpc("cs_respond_invitation",["p_code":code,"p_response":"accept","p_player":player?.id.uuidString as Any? ?? NSNull()]) as? [String:Any] ?? [:]
+        guard let connectionID=receipt["connection_id"] as? String, !connectionID.isEmpty else { throw CourtConnectError.message("The invitation response could not be confirmed. Please try again.") }
+        clearPending(code)
+        try await refresh(); status = "Invitation accepted. The player can now approve sharing."
+        return connectionID
     }
     func preview(_ input: String) async throws -> [String:Any] {
         guard let code=CourtConnectProtocol.code(input,host:linkHost) else { throw CourtConnectError.message("Use the full invitation link or 64-character code.") }
-        return try await rpc("cs_preview_invitation",["p_code":code]) as? [String:Any] ?? [:]
+        return try await rpc("cs_review_invitation",["p_code":code]) as? [String:Any] ?? [:]
     }
     func decline(_ input: String) async throws {
         guard let code=CourtConnectProtocol.code(input,host:linkHost) else { throw CourtConnectError.message("Invalid invitation link or code.") }
-        try await rpc("cs_decline_invitation",["p_code":code]); pendingCode=""
-        UserDefaults.standard.removeObject(forKey:"CourtConnectPendingInvitation"); status="Invitation declined. Nothing is shared."
+        try await rpc("cs_respond_invitation",["p_code":code,"p_response":"decline"]); clearPending(code)
+        status="Invitation declined. Nothing is shared."
     }
     func saveNotifications(push: Bool,requests: Bool,sharing: Bool,feedback: Bool) async throws {
         var permitted=push

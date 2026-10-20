@@ -35,6 +35,7 @@ struct CourtCoachDashboard: View {
                 Section {
                     TennisDashboardHeader(name: store.workspaceOwner?.displayName ?? "Coach")
                     CourtWorkspaceSwitcher()
+                    NavigationLink("Connect",destination:CourtConnectView()).accessibilityHint("Accept an invitation or connect with a player.")
                 }
                 Section {
                     NavigationLink("Your players", destination: CourtRosterView())

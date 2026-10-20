@@ -38,6 +38,7 @@ struct DashboardView: View {
             TennisList {
                 Section {
                     CourtWorkspaceSwitcher()
+                    NavigationLink("Connect",destination:CourtConnectView()).accessibilityHint("Share with a coach or accept an invitation.")
                     if store.data.settings.theme == .tennis {
                         TennisDashboardHeader(name: store.selectedPlayer?.displayName ?? "Player")
                     } else {

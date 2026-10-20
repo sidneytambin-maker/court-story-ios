@@ -2,6 +2,34 @@ import XCTest
 @testable import TennisTracker
 
 @MainActor final class CourtConnectTests: XCTestCase {
+    func testInvitationResponsePreservesChoiceAndRejectsUnknownActions() {
+        let code=String(repeating:"a",count:64), host="court-story-connect.web.app"
+        for domain in [host,"court-story-connect.firebaseapp.com"] {
+            for action in ["accept","decline"] {
+                let link="https://\(domain)/connect/invite#\(code)/\(action)"
+                XCTAssertEqual(CourtConnectProtocol.code(link,host:host),code)
+                XCTAssertEqual(CourtConnectProtocol.response(link,host:host),action)
+                XCTAssertEqual(CourtConnectProtocol.response(code+"/"+action,host:host),action)
+            }
+        }
+        XCTAssertEqual(CourtConnectProtocol.response(code,host:host),"")
+        for suffix in ["/delete","/ACCEPT","/accept/decline","/accept?x=1"] {
+            XCTAssertNil(CourtConnectProtocol.code(code+suffix,host:host))
+            XCTAssertEqual(CourtConnectProtocol.response(code+suffix,host:host),"")
+        }
+        XCTAssertEqual(CourtConnectProtocol.response("https://evil.example/connect/invite#"+code+"/accept",host:host),"")
+    }
+
+    func testSecondaryHostIsRestrictedToProduction() {
+        let code=String(repeating:"a",count:64)
+        let link="https://court-story-connect.firebaseapp.com/connect/invite#"+code
+        XCTAssertEqual(CourtConnectProtocol.code(link,host:"court-story-connect.web.app"),code)
+        XCTAssertNil(CourtConnectProtocol.code(link,host:"another.example"))
+        for bad in [link.replacingOccurrences(of:"firebaseapp.com",with:"firebaseapp.com.evil.example"),link.replacingOccurrences(of:"https:",with:"http:"),link.replacingOccurrences(of:"/connect/invite",with:"/other"),link.replacingOccurrences(of:"#",with:"?code=")] {
+            XCTAssertNil(CourtConnectProtocol.code(bad,host:"court-story-connect.web.app"))
+        }
+    }
+
     func testInvitationParserRejectsWrongOriginAndMalformedCodes() {
         let code=String(repeating:"a",count:64), host="connect.example.invalid"
         XCTAssertEqual(CourtConnectProtocol.code("https://\(host)/connect/invite#\(code)",host:host),code)

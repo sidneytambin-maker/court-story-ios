@@ -13,6 +13,33 @@ final class CourtConnectUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Court Story Connect"].waitForExistence(timeout:8))
         return app
     }
+    private func openResponse(_ response: String, expired: Bool=false) -> XCUIApplication {
+        let app=XCUIApplication()
+        app.launchArguments=["-ui-testing-reset-store","-ui-testing-venue-dashboard","-ui-testing-connect-invitation","-ui-testing-connect-link","https://court-story-connect.firebaseapp.com/connect/invite#"+String(repeating:"a",count:64)+"/"+response]
+        if expired { app.launchArguments.append("-ui-testing-connect-expired") }
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Court Story Connect"].waitForExistence(timeout:10))
+        return app
+    }
+    func testWebAcceptCompletesWithoutAnotherAcceptOrEnableStep() {
+        let app=openResponse("accept")
+        XCTAssertTrue(app.staticTexts["Invitation accepted. The player can now approve sharing."].waitForExistence(timeout:10))
+        XCTAssertFalse(app.buttons["Enable Connect"].exists)
+        XCTAssertFalse(app.buttons["Accept invitation"].exists)
+    }
+    func testWebDeclineCompletesWithoutAnotherDeclineOrEnableStep() {
+        let app=openResponse("decline")
+        XCTAssertTrue(app.staticTexts["Invitation declined. Nothing is shared."].waitForExistence(timeout:10))
+        XCTAssertFalse(app.buttons["Enable Connect"].exists)
+        XCTAssertFalse(app.buttons["Decline invitation"].exists)
+    }
+    func testExpiredInvitationKeepsErrorAndRetryReachable() {
+        let app=openResponse("accept",expired:true)
+        XCTAssertTrue(app.staticTexts["This invitation has expired. Ask the sender for a new invitation."].waitForExistence(timeout:10))
+        XCTAssertTrue(app.buttons["Try again"].isHittable)
+        XCTAssertTrue(app.buttons["Not now"].isHittable)
+        XCTAssertFalse(app.staticTexts["Invitation accepted. The player can now approve sharing."].exists)
+    }
     func testOptionalDeviceConnectionNeedsNoEmailAndReturnsToTracking() throws {
         let app=openConnect()
         XCTAssertFalse(app.textFields["Email address"].exists)

@@ -37,7 +37,7 @@ struct SettingsView: View {
 
                 Section("Privacy and Sharing") {
                     NavigationLink("Court Story Connect") { CourtConnectView() }
-                        .accessibilityHint("Optional account, coach invitations and sporting record permissions.")
+                        .accessibilityHint("Share with a coach or accept an invitation. No email or password needed.")
                 }
 
                 Section("Tracking & Health") {

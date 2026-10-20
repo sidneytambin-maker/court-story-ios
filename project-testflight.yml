@@ -14,6 +14,7 @@ targets:
         aps-environment: production
         com.apple.developer.associated-domains:
           - applinks:court-story-connect.web.app
+          - applinks:court-story-connect.firebaseapp.com
     dependencies:
       - target: TennisTrackerWatchApp
         embed: true
@@ -25,7 +26,7 @@ targets:
       path: Distribution/Generated/iPhone-Info.plist
       properties:
         CFBundleShortVersionString: "0.1.0"
-        CFBundleVersion: "35"
+        CFBundleVersion: "36"
         TennisDistribution: TestFlight
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
@@ -34,7 +35,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.inclusophy.tennistracker
         MARKETING_VERSION: "0.1.0"
-        CURRENT_PROJECT_VERSION: "35"
+        CURRENT_PROJECT_VERSION: "36"
         CODE_SIGNING_ALLOWED: "YES"
         CODE_SIGNING_REQUIRED: "YES"
         SKIP_INSTALL: "NO"
@@ -43,7 +44,7 @@ targets:
       path: Distribution/Generated/Watch-Info.plist
       properties:
         CFBundleShortVersionString: "0.1.0"
-        CFBundleVersion: "35"
+        CFBundleVersion: "36"
         WKCompanionAppBundleIdentifier: com.inclusophy.tennistracker
         ITSAppUsesNonExemptEncryption: false
     entitlements:
@@ -52,7 +53,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.inclusophy.tennistracker.watchkitapp
         MARKETING_VERSION: "0.1.0"
-        CURRENT_PROJECT_VERSION: "35"
+        CURRENT_PROJECT_VERSION: "36"
         CODE_SIGNING_ALLOWED: "YES"
         CODE_SIGNING_REQUIRED: "YES"
   TennisTrackerWatchWidgets:
@@ -60,7 +61,7 @@ targets:
       path: Distribution/Generated/Widgets-Info.plist
       properties:
         CFBundleShortVersionString: "0.1.0"
-        CFBundleVersion: "35"
+        CFBundleVersion: "36"
         ITSAppUsesNonExemptEncryption: false
     entitlements:
       path: Distribution/Generated/Widgets.entitlements
@@ -68,7 +69,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.inclusophy.tennistracker.watchkitapp.widgets
         MARKETING_VERSION: "0.1.0"
-        CURRENT_PROJECT_VERSION: "35"
+        CURRENT_PROJECT_VERSION: "36"
         CODE_SIGNING_ALLOWED: "YES"
         CODE_SIGNING_REQUIRED: "YES"
 schemes:

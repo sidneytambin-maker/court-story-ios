@@ -130,7 +130,7 @@ await test('Cloud data deletion removes registered push tokens',async()=>assert.
 await db.exec('reset role');
 await test('Every Connect table including private queues enables RLS',async()=>{
  const rows=(await db.query("select c.relrowsecurity from pg_class c join pg_namespace n on n.oid=c.relnamespace where c.relkind='r' and (n.nspname='cs_private' or (n.nspname='public' and c.relname like 'cs_%'))")).rows;
- assert.equal(rows.length,14); assert(rows.every(r=>r.relrowsecurity));
+ assert.equal(rows.length,15); assert(rows.every(r=>r.relrowsecurity));
 });
 
 // Device-only sessions carry a private authenticated identity, with no email.
@@ -164,6 +164,22 @@ await as(7);await rpc('cs_set_permission',[dc,'revoked',[],'all',null,null,true,
 await as(8);await test('Revocation removes device coach history and future access',async()=>assert.deepEqual(await visible(),[]));
 await test('Revoked device coach cannot add feedback',async()=>deny(()=>rpc('cs_add_feedback',[randomUUID(),dc,historical[0],'feedback','No access'])));
 
+await as(0);await rpc('cs_register_profile',[player,'Synthetic player']);const retryInvite=await rpc('cs_create_invitation',['player',player,'Retry acceptance',null]);
+await as(5);const receipt=await rpc('cs_respond_invitation',[retryInvite.code,'accept',null]);
+await test('Lost acceptance response returns the same receipt',async()=>assert.deepEqual(await rpc('cs_respond_invitation',[retryInvite.code,'accept',null]),receipt));
+await test('Answered invitation can be reviewed by responding device',async()=>assert.equal((await rpc('cs_review_invitation',[retryInvite.code])).response,'accept'));
+await test('Acceptance cannot be changed to decline',async()=>deny(()=>rpc('cs_respond_invitation',[retryInvite.code,'decline',null])));
+await as(6);await test('Another device cannot retrieve response receipt',async()=>deny(()=>rpc('cs_review_invitation',[retryInvite.code])));
+await test('Another device cannot replay accepted invitation',async()=>deny(()=>rpc('cs_respond_invitation',[retryInvite.code,'accept',null])));
+await test('Response receipts are private',async()=>deny(()=>db.query('select * from cs_private.invitation_responses')));
+await as(0);await rpc('cs_set_permission',[receipt.connection_id,'revoked',[],'all',null,null,true,'feedback']);
+await as(5);await test('Acceptance retry does not reactivate revoked sharing',async()=>{assert.deepEqual(await rpc('cs_respond_invitation',[retryInvite.code,'accept',null]),receipt);assert.equal((await db.query('select state from public.cs_connections where id=$1',[receipt.connection_id])).rows[0].state,'revoked')});
+await as(0);const retryDecline=await rpc('cs_create_invitation',['player',player,'Retry decline',null]);
+await as(5);await rpc('cs_respond_invitation',[retryDecline.code,'decline',null]);
+await test('Lost decline response can be retried safely',async()=>assert.equal((await rpc('cs_respond_invitation',[retryDecline.code,'decline',null])).response,'decline'));
+await test('Decline cannot be changed to acceptance',async()=>deny(()=>rpc('cs_respond_invitation',[retryDecline.code,'accept',null])));
+await test('Unknown invitation response rejected',async()=>deny(()=>rpc('cs_respond_invitation',[retryDecline.code,'approve',null])));
 console.log(`${passed} PostgreSQL security tests passed`);
 writeFileSync(new URL('./results.txt',import.meta.url),`${passed} PostgreSQL security assertions passed locally using PGlite. Synthetic accounts only. Cloud deployment and mobile flows not yet verified.\n`);
+
 await db.close();

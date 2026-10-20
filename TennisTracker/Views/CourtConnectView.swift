@@ -12,10 +12,72 @@ struct CourtConnectView: View {
     @State private var deleteAccount = false
     @State private var invitationPreview: [String:Any] = [:]
     @State private var reviewInvitation = false
+    @State private var attemptedInvitation = ""
     private var player: PlayerProfile? { store.workspaceOwner }
+    private func previewInvitation() {
+        guard !connect.busy else { return }
+        let incoming=invitation
+        attemptedInvitation=incoming
+        connect.run {
+            if !connect.isSignedIn { try await connect.connectDevice() }
+            let preview=try await connect.preview(incoming)
+            guard invitation == incoming else { return }
+            invitationPreview=preview
+            let response=CourtConnectProtocol.response(incoming,host:connect.linkHost)
+            if response.isEmpty { reviewInvitation=true }
+            else { try await respond(incoming,response:response) }
+        }
+    }
+    private func respond(_ incoming: String, response: String) async throws {
+        if response == "decline" { try await connect.decline(incoming) }
+        else if response == "accept" {
+            let id=try await connect.accept(incoming,player:player)
+            if let row=connect.connections.first(where: { $0["id"] as? String == id }),
+               (row["player_account"] as? String)?.lowercased()==connect.accountID {
+                selectedConnection=ConnectSelection(row)
+            }
+        } else { return }
+        if invitation == incoming { invitation=""; reviewInvitation=false }
+    }
+    private var invitationEntry: some View {
+        VStack(alignment:.leading,spacing:12) {
+            Text("Have an invitation?").font(.headline).accessibilityAddTraits(.isHeader)
+            PasteButton(payloadType: String.self) { values in
+                guard let value=values.first else { return }
+                invitation=value; previewInvitation()
+            }.accessibilityLabel("Paste invitation")
+            TextField("Invitation link or code",text:$invitation,axis:.vertical)
+                .textInputAutocapitalization(.never).autocorrectionDisabled()
+            Button("Review invitation") { previewInvitation() }.disabled(invitation.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty)
+        }
+    }
+    private var invitationReview: some View {
+        Form {
+            Section("Connection invitation") {
+                Text(invitationPreview["name"] as? String ?? "Court Story member").font(.title2)
+                Text(invitationPreview["role"] as? String == "player" ? "Would like you to be their coach." : "Would like to coach you.")
+                Text("Sport: " + (invitationPreview["sport"] as? String ?? "Sport"))
+                Text("No records are shared by accepting. The player chooses what to share next. Health data and media stay private.")
+                Text(connect.status).accessibilityIdentifier("connectStatus")
+            }
+            Section {
+                Button("Accept invitation") {
+                    let incoming=invitation
+                    connect.run { try await respond(incoming,response:"accept") }
+                }.buttonStyle(.borderedProminent)
+                Button("Decline invitation",role:.destructive) {
+                    let incoming=invitation
+                    connect.run { try await respond(incoming,response:"decline") }
+                }
+                Button("Not now") { if let code=CourtConnectProtocol.code(invitation,host:connect.linkHost) { connect.clearPending(code) }; invitation=""; reviewInvitation=false }
+            }
+        }
+    }
     private var signInForm: some View {
         ScrollView {
             VStack(alignment:.leading,spacing:20) {
+                if !invitation.isEmpty { Text("Your invitation is ready").font(.title2); Text("Review who sent it, then accept or decline. Nothing is shared yet.") }
+                invitationEntry
                 Text("Your privacy").font(.headline).accessibilityAddTraits(.isHeader)
                 Text("Connect is optional. Enabling it does not upload your library. Health data and media are never included. Keep personal information out of sporting notes you choose to share.").fixedSize(horizontal:false,vertical:true)
                 Text(connect.status).fixedSize(horizontal:false,vertical:true).accessibilityIdentifier("connectStatus")
@@ -28,7 +90,15 @@ struct CourtConnectView: View {
     }
     var body: some View {
         Group {
-        if !connect.isSignedIn { signInForm } else {
+        if reviewInvitation { invitationReview } else if !invitation.isEmpty && !CourtConnectProtocol.response(invitation,host:connect.linkHost).isEmpty {
+            Form {
+                Section("Connection invitation") {
+                    Text(connect.status).accessibilityIdentifier("connectStatus")
+                    Button("Try again") { previewInvitation() }
+                    Button("Not now") { if let code=CourtConnectProtocol.code(invitation,host:connect.linkHost) { connect.clearPending(code) }; invitation="" }
+                }
+            }
+        } else if !connect.isSignedIn { signInForm } else {
         Form {
             Section {
                 Text("Connect is optional. Enabling it does not upload your library. Health data and media are never included. Keep personal information out of sporting notes you choose to share.").fixedSize(horizontal:false,vertical:true)
@@ -46,9 +116,7 @@ struct CourtConnectView: View {
                         Button("Copy invitation") { UIPasteboard.general.string = shareLink; connect.status = "Invitation copied." }
                         Text(shareLink).textSelection(.enabled)
                     }
-                    TextField("Invitation link or code",text:$invitation,axis:.vertical).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    Button("Review invitation") { connect.run { invitationPreview = try await connect.preview(invitation); reviewInvitation = true } }
-                    Button("Decline invitation",role:.destructive) { connect.run { try await connect.decline(invitation); invitation="" } }
+                    invitationEntry
                 }
                 Section("Connections and approval") {
                     if connect.connections.isEmpty { Text("No connections yet.") }
@@ -111,17 +179,21 @@ struct CourtConnectView: View {
         .toolbar(.hidden,for:.tabBar)
         .disabled(connect.busy)
         .overlay { if connect.busy { ProgressView("Connecting") } }
-        .onAppear { invitation = connect.pendingCode; if connect.isSignedIn { connect.run { try await connect.refresh() } } }
+        .task(id:connect.pendingCode) {
+            if !connect.pendingCode.isEmpty {
+                invitation=connect.pendingCode
+                if connect.isSignedIn || !CourtConnectProtocol.response(invitation,host:connect.linkHost).isEmpty { previewInvitation() }
+            } else if connect.isSignedIn && !connect.busy { connect.run { try await connect.refresh() } }
+        }
+        .onChange(of:connect.busy) { _, busy in
+            if !busy && !connect.pendingCode.isEmpty && connect.pendingCode != attemptedInvitation {
+                invitation=connect.pendingCode
+                if connect.isSignedIn || !CourtConnectProtocol.response(invitation,host:connect.linkHost).isEmpty { previewInvitation() }
+            }
+        }
         .confirmationDialog("Delete your connections and shared cloud data?",isPresented:$deleteAccount,titleVisibility:.visible) {
             Button("Delete connections and cloud data",role:.destructive) { connect.run { try await connect.deleteAccount() } }
         } message: { Text("This removes all your online connections, shared records and feedback. Your local sporting library stays on this device. Copies already saved by coaches cannot necessarily be erased.") }
-        .alert("Connection invitation",isPresented:$reviewInvitation) {
-            Button("Accept") { connect.run { try await connect.accept(invitation,player:player) } }
-            Button("Decline",role:.destructive) { connect.run { try await connect.decline(invitation); invitation="" } }
-            Button("Cancel",role:.cancel) {}
-        } message: {
-            Text((invitationPreview["name"] as? String ?? "Court Story member") + " - " + (invitationPreview["sport"] as? String ?? "Sport") + ". Player approval is required before sharing.")
-        }
         .sheet(item:$selectedConnection) { selected in NavigationStack { ConnectPermissionView(connection:selected) } }
     }
 }
@@ -139,6 +211,7 @@ struct ConnectRecord: Identifiable {
     var category: String { value["category"] as? String ?? "" }
 }
 struct ConnectPermissionView: View {
+    @EnvironmentObject private var store: TennisStore
     let connection: ConnectSelection
     @ObservedObject private var connect = CourtConnect.shared
     @Environment(\.dismiss) private var dismiss
@@ -166,7 +239,8 @@ struct ConnectPermissionView: View {
                     Toggle("Automatically share future records",isOn:$future)
                     Picker("Coach access",selection:$capability) { Text("View only").tag("view"); Text("Coach feedback").tag("feedback"); Text("Suggest contributions for approval").tag("contribute") }
                 }
-                Button("Approve and save sharing") { save("active") }
+                Button("Approve and start sharing") { save("active") }
+                Text("This approves uploading the selected sporting records from this device. You can pause sharing or change these choices at any time.")
                 Button("Keep private / pause connection") { save("paused") }
                 Button("Revoke access",role:.destructive) { save("revoked") }
                 Text("Revocation immediately stops server access. Copies previously saved by a coach cannot necessarily be erased remotely.")
@@ -185,7 +259,20 @@ struct ConnectPermissionView: View {
             }
         }
     }
-    private func save(_ state: String) { connect.run { try await connect.permission(id:connection.id,state:state,categories:Array(categories),history:history,start:start,end:end,future:future,capability:capability) } }
+    private func save(_ state: String) {
+        connect.run {
+            if state == "active" {
+                guard let player=store.workspaceOwner, player.id.uuidString.lowercased()==(connection.value["player_id"] as? String)?.lowercased() else {
+                    throw CourtConnectError.message("Switch to the player profile named in this connection before sharing.")
+                }
+                try await connect.permission(id:connection.id,state:state,categories:Array(categories),history:history,start:start,end:end,future:future,capability:capability)
+                try await connect.enableUploads(for:player,library:store.data)
+            } else {
+                try await connect.permission(id:connection.id,state:state,categories:Array(categories),history:history,start:start,end:end,future:future,capability:capability)
+            }
+            dismiss()
+        }
+    }
 }
 struct ConnectNotificationSettingsView: View {
     @ObservedObject private var connect=CourtConnect.shared
