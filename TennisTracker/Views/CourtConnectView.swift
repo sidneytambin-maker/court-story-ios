@@ -13,6 +13,7 @@ struct CourtConnectView: View {
     @State private var invitationPreview: [String:Any] = [:]
     @State private var reviewInvitation = false
     @State private var attemptedInvitation = ""
+    @State private var initialized = false
     private var player: PlayerProfile? { store.workspaceOwner }
     private func previewInvitation() {
         guard !connect.busy else { return }
@@ -27,6 +28,12 @@ struct CourtConnectView: View {
             if response.isEmpty { reviewInvitation=true }
             else { try await respond(incoming,response:response) }
         }
+    }
+    private func chooseResponse(_ response: String) {
+        guard let code=CourtConnectProtocol.code(invitation,host:connect.linkHost) else { return }
+        invitation=code+"/"+response
+        if let url=URL(string:"https://"+connect.linkHost+"/connect/invite#"+invitation) { _=connect.receive(url) }
+        previewInvitation()
     }
     private func respond(_ incoming: String, response: String) async throws {
         if response == "decline" { try await connect.decline(incoming) }
@@ -90,11 +97,15 @@ struct CourtConnectView: View {
     }
     var body: some View {
         Group {
-        if reviewInvitation { invitationReview } else if !invitation.isEmpty && !CourtConnectProtocol.response(invitation,host:connect.linkHost).isEmpty {
+        if reviewInvitation { invitationReview } else if !invitation.isEmpty && (!connect.isSignedIn || !CourtConnectProtocol.response(invitation,host:connect.linkHost).isEmpty) {
             Form {
                 Section("Connection invitation") {
                     Text(connect.status).accessibilityIdentifier("connectStatus")
-                    Button("Try again") { previewInvitation() }
+                    if CourtConnectProtocol.response(invitation,host:connect.linkHost).isEmpty {
+                        Text("Choose your response. Court Story will check the invitation securely. No email or password is needed, and no sporting records are uploaded.")
+                        Button("Accept invitation") { chooseResponse("accept") }.buttonStyle(.borderedProminent)
+                        Button("Decline invitation",role:.destructive) { chooseResponse("decline") }
+                    } else { Button("Try again") { previewInvitation() } }
                     Button("Not now") { if let code=CourtConnectProtocol.code(invitation,host:connect.linkHost) { connect.clearPending(code) }; invitation="" }
                 }
             }
@@ -180,10 +191,12 @@ struct CourtConnectView: View {
         .disabled(connect.busy)
         .overlay { if connect.busy { ProgressView("Connecting") } }
         .task(id:connect.pendingCode) {
+            let first = !initialized
+            initialized=true
             if !connect.pendingCode.isEmpty {
                 invitation=connect.pendingCode
                 if connect.isSignedIn || !CourtConnectProtocol.response(invitation,host:connect.linkHost).isEmpty { previewInvitation() }
-            } else if connect.isSignedIn && !connect.busy { connect.run { try await connect.refresh() } }
+            } else if first && connect.isSignedIn && !connect.busy { connect.run { try await connect.refresh() } }
         }
         .onChange(of:connect.busy) { _, busy in
             if !busy && !connect.pendingCode.isEmpty && connect.pendingCode != attemptedInvitation {

@@ -13,13 +13,27 @@ final class CourtConnectUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Court Story Connect"].waitForExistence(timeout:8))
         return app
     }
-    private func openResponse(_ response: String, expired: Bool=false) -> XCUIApplication {
+    private func openResponse(_ response: String, expired: Bool=false, fromCoach: Bool=false) -> XCUIApplication {
         let app=XCUIApplication()
-        app.launchArguments=["-ui-testing-reset-store","-ui-testing-venue-dashboard","-ui-testing-connect-invitation","-ui-testing-connect-link","https://court-story-connect.firebaseapp.com/connect/invite#"+String(repeating:"a",count:64)+"/"+response]
+        app.launchArguments=["-ui-testing-reset-store","-ui-testing-venue-dashboard","-ui-testing-connect-invitation","-ui-testing-connect-link","https://court-story-connect.firebaseapp.com/connect/invite#"+String(repeating:"a",count:64)+(response.isEmpty ? "" : "/"+response)]
         if expired { app.launchArguments.append("-ui-testing-connect-expired") }
+        if fromCoach { app.launchArguments.append("-ui-testing-connect-from-coach") }
         app.launch()
         XCTAssertTrue(app.navigationBars["Court Story Connect"].waitForExistence(timeout:10))
         return app
+    }
+    func testFirstUseInvitationHasAcceptAndDeclineWithoutEnableStep() {
+        let app=openResponse("")
+        XCTAssertTrue(app.buttons["Accept invitation"].waitForExistence(timeout:10))
+        XCTAssertTrue(app.buttons["Decline invitation"].exists)
+        XCTAssertFalse(app.buttons["Enable Connect"].exists)
+        app.buttons["Accept invitation"].tap()
+        XCTAssertTrue(app.staticTexts["Invitation accepted. The player can now approve sharing."].waitForExistence(timeout:10))
+    }
+    func testCoachInvitationLeadsToPlayerSharingChoice() {
+        let app=openResponse("accept",fromCoach:true)
+        XCTAssertTrue(revealPhoneElement(app.buttons["Approve and start sharing"],in:app).waitForExistence(timeout:10))
+        XCTAssertFalse(app.staticTexts["Sharing permission saved."].exists)
     }
     func testWebAcceptCompletesWithoutAnotherAcceptOrEnableStep() {
         let app=openResponse("accept")
