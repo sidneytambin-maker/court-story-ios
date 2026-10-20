@@ -1,0 +1,43 @@
+name: Invitation journey regression
+on:
+  push:
+    branches: [codex/court-story-connect]
+    paths:
+      - 'TennisTracker/**/CourtConnect*'
+      - 'TennisTracker/**/ConnectInvitation*'
+      - 'TennisTrackerTests/*Connect*'
+      - 'TennisTrackerUITests/CourtConnectUITests.swift'
+      - '.github/workflows/connect-invitation-validation.yml'
+permissions:
+  contents: read
+jobs:
+  invitation:
+    runs-on: macos-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - run: xcodegen generate --spec project-tests.yml
+      - name: Native invitation unit and UI regressions
+        run: |
+          set -euo pipefail
+          ID=$(python3 Scripts/create_apple_test_simulator.py small-phone)
+          xcrun simctl bootstatus "$ID" -b
+          xcodebuild test -project TennisTrackeriOS.xcodeproj -scheme TennisTracker -destination "id=$ID" -parallel-testing-enabled NO -configuration Debug -only-testing:TennisTrackerTests/CourtConnectTests -only-testing:TennisTrackerTests/ConnectInvitationConfirmationTests -only-testing:TennisTrackerUITests/CourtConnectUITests -resultBundlePath InvitationTests.xcresult CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" 2>&1 | tee InvitationTests.log
+      - name: Export invitation test evidence
+        if: always()
+        run: |
+          if [ -d InvitationTests.xcresult ]; then
+            mkdir -p InvitationReview
+            xcrun xcresulttool get test-results summary --path InvitationTests.xcresult > InvitationReview/summary.json
+            xcrun xcresulttool export attachments --path InvitationTests.xcresult --output-path InvitationReview/screenshots
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: invitation-journey-results
+          path: |
+            InvitationTests.log
+            InvitationReview
+            InvitationTests.xcresult
+          retention-days: 7

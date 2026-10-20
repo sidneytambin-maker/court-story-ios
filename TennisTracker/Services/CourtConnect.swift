@@ -78,6 +78,11 @@ struct CourtConnectSession: Codable {
     }
     private init() {
         #if DEBUG && targetEnvironment(simulator)
+        if ProcessInfo.processInfo.arguments.contains("-ui-testing-reset-store") {
+            UserDefaults.standard.removeObject(forKey:"CourtConnectPendingInvitation")
+            UserDefaults.standard.removeObject(forKey:"CourtConnectOpenPending")
+            SecItemDelete([kSecClass as String:kSecClassGenericPassword,kSecAttrService as String:keychainService] as CFDictionary)
+        }
         if CourtConnectInvitationTestSupport.enabled { return }
         #endif
         var result: CFTypeRef?

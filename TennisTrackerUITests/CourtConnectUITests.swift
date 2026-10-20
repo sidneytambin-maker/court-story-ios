@@ -1,6 +1,7 @@
 import XCTest
 
 final class CourtConnectUITests: XCTestCase {
+    override func record(_ issue: XCTIssue) { print(XCUIApplication().debugDescription); super.record(issue) }
     override func setUpWithError() throws { continueAfterFailure=false }
     private func openConnect(large: Bool=false) -> XCUIApplication {
         let app=XCUIApplication()
@@ -28,22 +29,28 @@ final class CourtConnectUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Decline invitation"].exists)
         XCTAssertFalse(app.buttons["Enable Connect"].exists)
         app.buttons["Accept invitation"].tap()
-        XCTAssertTrue(app.staticTexts["Invitation accepted. The player can now approve sharing."].waitForExistence(timeout:10))
+        XCTAssertTrue(app.staticTexts["Invitation accepted"].waitForExistence(timeout:10))
     }
     func testCoachInvitationLeadsToPlayerSharingChoice() {
         let app=openResponse("accept",fromCoach:true)
-        XCTAssertTrue(revealPhoneElement(app.buttons["Approve and start sharing"],in:app).waitForExistence(timeout:10))
+        XCTAssertTrue(app.staticTexts["Invitation accepted"].waitForExistence(timeout:10))
+        XCTAssertTrue(app.buttons["Choose what to share"].waitForExistence(timeout:10))
+        app.buttons["Choose what to share"].tap()
+        XCTAssertTrue(app.navigationBars["Sharing permission"].waitForExistence(timeout:10))
+        XCTAssertTrue(revealPhoneElement(app.buttons["Approve and start sharing"],in:app).exists)
         XCTAssertFalse(app.staticTexts["Sharing permission saved."].exists)
     }
     func testWebAcceptCompletesWithoutAnotherAcceptOrEnableStep() {
         let app=openResponse("accept")
-        XCTAssertTrue(app.staticTexts["Invitation accepted. The player can now approve sharing."].waitForExistence(timeout:10))
+        XCTAssertTrue(app.staticTexts["Invitation accepted"].waitForExistence(timeout:10))
+        XCTAssertTrue(app.staticTexts["You agreed to receive Synthetic sender’s Tennis data."].exists)
+        XCTAssertFalse(app.buttons["View player’s data"].exists)
         XCTAssertFalse(app.buttons["Enable Connect"].exists)
         XCTAssertFalse(app.buttons["Accept invitation"].exists)
     }
     func testWebDeclineCompletesWithoutAnotherDeclineOrEnableStep() {
         let app=openResponse("decline")
-        XCTAssertTrue(app.staticTexts["Invitation declined. Nothing is shared."].waitForExistence(timeout:10))
+        XCTAssertTrue(app.staticTexts["Invitation declined"].waitForExistence(timeout:10))
         XCTAssertFalse(app.buttons["Enable Connect"].exists)
         XCTAssertFalse(app.buttons["Decline invitation"].exists)
     }
@@ -52,7 +59,7 @@ final class CourtConnectUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["This invitation has expired. Ask the sender for a new invitation."].waitForExistence(timeout:10))
         XCTAssertTrue(app.buttons["Try again"].isHittable)
         XCTAssertTrue(app.buttons["Not now"].isHittable)
-        XCTAssertFalse(app.staticTexts["Invitation accepted. The player can now approve sharing."].exists)
+        XCTAssertFalse(app.staticTexts["Invitation accepted"].exists)
     }
     func testOptionalDeviceConnectionNeedsNoEmailAndReturnsToTracking() throws {
         let app=openConnect()
