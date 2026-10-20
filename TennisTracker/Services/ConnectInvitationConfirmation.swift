@@ -32,6 +32,8 @@ struct ConnectInvitationConfirmation {
             let future=(row["future_sharing"] as? Bool)==true ? "New permitted records will update automatically." : "Future records are not included."
             let feedback=["feedback","contribute"].contains(row["capability"] as? String ?? "") ? (owner ? "Your coach can add coaching feedback." : "You can add coaching feedback to shared records.") : "Access is view only; coaching feedback is not enabled."
             details="Shared: \(included). \(historyText) \(future) \(feedback) Health data, media and records marked private are excluded."
+        } else if state == "active" {
+            details="No sporting categories are selected, so no records are available. The player can change sharing choices at any time."
         } else if state == "revoked" || state == "paused" {
             details="Sharing is currently \(state). This acceptance does not restore access."
         } else {

@@ -3,6 +3,9 @@ import XCTest
 final class CourtConnectUITests: XCTestCase {
     override func record(_ issue: XCTIssue) { print(XCUIApplication().debugDescription); super.record(issue) }
     override func setUpWithError() throws { continueAfterFailure=false }
+    private func saveScreen(_ app: XCUIApplication, name: String) {
+        let attachment=XCTAttachment(screenshot:app.screenshot()); attachment.name=name; attachment.lifetime = .keepAlways; add(attachment)
+    }
     private func openConnect(large: Bool=false) -> XCUIApplication {
         let app=XCUIApplication()
         app.launchArguments=["-ui-testing-reset-store","-ui-testing-venue-dashboard"]
@@ -35,6 +38,7 @@ final class CourtConnectUITests: XCTestCase {
         let app=openResponse("accept",fromCoach:true)
         XCTAssertTrue(app.staticTexts["Invitation accepted"].waitForExistence(timeout:10))
         XCTAssertTrue(app.buttons["Choose what to share"].waitForExistence(timeout:10))
+        saveScreen(app,name:"Player acceptance and sharing choices")
         app.buttons["Choose what to share"].tap()
         XCTAssertTrue(app.navigationBars["Sharing permission"].waitForExistence(timeout:10))
         XCTAssertTrue(revealPhoneElement(app.buttons["Approve and start sharing"],in:app).exists)
@@ -47,12 +51,14 @@ final class CourtConnectUITests: XCTestCase {
         XCTAssertFalse(app.buttons["View player’s data"].exists)
         XCTAssertFalse(app.buttons["Enable Connect"].exists)
         XCTAssertFalse(app.buttons["Accept invitation"].exists)
+        saveScreen(app,name:"Invitation accepted - pending player approval")
     }
     func testWebDeclineCompletesWithoutAnotherDeclineOrEnableStep() {
         let app=openResponse("decline")
         XCTAssertTrue(app.staticTexts["Invitation declined"].waitForExistence(timeout:10))
         XCTAssertFalse(app.buttons["Enable Connect"].exists)
         XCTAssertFalse(app.buttons["Decline invitation"].exists)
+        saveScreen(app,name:"Invitation declined")
     }
     func testExpiredInvitationKeepsErrorAndRetryReachable() {
         let app=openResponse("accept",expired:true)
