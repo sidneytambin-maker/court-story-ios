@@ -298,7 +298,7 @@ final class TennisTrackerAccessibilityUITests: XCTestCase {
     func testDashboardCountsTrainingDoublesOnceAndShowsCoach() {
         launchRegressionData()
         let doubles = resultSummary("Doubles matches")
-        for _ in 0..<6 { if doubles.exists && doubles.isHittable { break }; app.swipeUp() }
+        revealPhoneElement(doubles, in: app, showing: .top)
         XCTAssertTrue(doubles.waitForExistence(timeout: 5))
         XCTAssertTrue((doubles.value as? String)?.contains("3 matches. 1 win, 2 losses, 0 draws") == true)
         XCTAssertTrue((doubles.value as? String)?.contains("Includes 3 matches played during training") == true)
@@ -321,7 +321,7 @@ final class TennisTrackerAccessibilityUITests: XCTestCase {
             attachment.lifetime = .keepAlways
             add(attachment)
             let doubles = resultSummary("Doubles matches")
-            for _ in 0..<6 { if doubles.exists && doubles.isHittable { break }; app.swipeUp() }
+            revealPhoneElement(doubles, in: app, showing: .top)
             XCTAssertTrue(doubles.exists)
             XCTAssertTrue((doubles.value as? String)?.contains("3 matches. 1 win, 2 losses, 0 draws") == true)
             let detail = XCTAttachment(screenshot: app.screenshot())

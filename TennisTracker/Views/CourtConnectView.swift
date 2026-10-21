@@ -88,7 +88,9 @@ struct CourtConnectView: View {
             }.accessibilityLabel("Paste invitation")
             TextField("Invitation link or code",text:$invitation,axis:.vertical)
                 .textInputAutocapitalization(.never).autocorrectionDisabled()
-            Button("Review invitation") { previewInvitation() }.disabled(invitation.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty)
+            if !invitation.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty {
+                Button("Review invitation") { previewInvitation() }
+            }
         }
     }
     private var invitationReview: some View {
